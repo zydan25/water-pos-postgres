@@ -1,0 +1,555 @@
+{% extends 'base.html' %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+/* ── KPI cards ── */
+.kpi { border-radius:16px; padding:18px 20px; color:#fff; position:relative; overflow:hidden; }
+.kpi .kpi-icon { position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:3rem; opacity:.18; }
+.kpi .kpi-val  { font-size:1.9rem; font-weight:900; line-height:1; }
+.kpi .kpi-lbl  { font-size:.78rem; opacity:.82; margin-top:3px; }
+.kpi-blue   { background:linear-gradient(135deg,#1a56db,#3b82f6); }
+.kpi-green  { background:linear-gradient(135deg,#059669,#34d399); }
+.kpi-orange { background:linear-gradient(135deg,#d97706,#fbbf24); }
+.kpi-red    { background:linear-gradient(135deg,#dc2626,#f87171); }
+
+/* ── Smart search ── */
+#smart-results {
+  position:absolute; top:100%; right:0; left:0; z-index:1000;
+  background:#fff; border:1.5px solid #1a56db; border-radius:0 0 14px 14px;
+  max-height:360px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,.12);
+}
+.smart-item { padding:10px 14px; cursor:pointer; border-bottom:1px solid #f0f0f0; transition:.1s; }
+.smart-item:hover { background:#f0f4ff; }
+.smart-item:last-child { border-bottom:none; }
+.smart-item .si-name   { font-weight:700; font-size:.9rem; }
+.smart-item .si-sub    { font-size:.78rem; color:#6b7280; }
+.smart-item .si-amount { font-weight:900; color:#dc2626; font-size:.95rem; }
+.smart-item .si-paid   { font-weight:700; color:#059669; font-size:.82rem; }
+
+/* ── Payment form card ── */
+.pay-form-card { border-radius:18px; border:2px solid #e0e8ff; }
+.pay-form-card.has-invoice { border-color:#1a56db; }
+.inv-preview { background:#f0f4ff; border-radius:12px; padding:14px 16px; }
+.inv-preview .inv-name { font-weight:800; font-size:1rem; }
+.inv-preview .inv-no   { font-size:.78rem; color:#6b7280; }
+
+/* ── Payments list ── */
+.pay-row-pending  { border-right:4px solid #fbbf24; }
+.pay-row-paid     { border-right:4px solid #34d399; }
+.pay-row-partial  { border-right:4px solid #fb923c; }
+.method-badge { border-radius:20px; padding:2px 10px; font-size:.75rem; font-weight:700; border:1px solid; }
+.method-cash     { background:#f0fdf4; color:#166534; border-color:#bbf7d0; }
+.method-transfer { background:#eff6ff; color:#1e40af; border-color:#bfdbfe; }
+.method-cheque   { background:#faf5ff; color:#6b21a8; border-color:#e9d5ff; }
+.method-other    { background:#f9fafb; color:#374151; border-color:#e5e7eb; }
+
+/* ── Status dots ── */
+.dot { width:9px; height:9px; border-radius:50%; display:inline-block; flex-shrink:0; }
+.dot-green  { background:#22c55e; }
+.dot-orange { background:#f97316; }
+.dot-red    { background:#ef4444; }
+
+/* ── Tab buttons ── */
+.seg-btn { border:1.5px solid #e5e7eb; background:#fff; padding:7px 16px; font-weight:600; font-size:.85rem; cursor:pointer; transition:.15s; }
+.seg-btn:first-child { border-radius:10px 0 0 10px; }
+.seg-btn:last-child  { border-radius:0 10px 10px 0; }
+.seg-btn.active { background:#1a56db; color:#fff; border-color:#1a56db; }
+.tab-section { display:none; }
+.tab-section.active { display:block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <!-- ══ Header ══ -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+      <h4 class="mb-0"><i class="bi bi-cash-coin text-primary me-2"></i>مركز التحصيل والسداد</h4>
+      <div class="text-muted small">تسجيل سريع — بحث ذكي — إصدار وصل فوري</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-primary" href="{{ url_for('collection_trip') }}">
+        <i class="bi bi-map me-1"></i>جولة تحصيل
+      </a>
+      <a class="btn btn-outline-danger" href="{{ url_for('arrears_report') }}">
+        <i class="bi bi-exclamation-triangle me-1"></i>المتأخرات
+      </a>
+    </div>
+  </div>
+
+  <!-- ══ KPI Row ══ -->
+  <div class="row g-3 mb-4">
+    <div class="col-4 col-md-3">
+      <div class="kpi kpi-blue">
+        <div class="kpi-icon"><i class="bi bi-receipt"></i></div>
+        <div class="kpi-val">{{ stats.invoice_count }}</div>
+        <div class="kpi-lbl">فاتورة معروضة</div>
+      </div>
+    </div>
+    <div class="col-4 col-md-3">
+      <div class="kpi kpi-green">
+        <div class="kpi-icon"><i class="bi bi-check-circle"></i></div>
+        <div class="kpi-val">{{ stats.payment_count }}</div>
+        <div class="kpi-lbl">سداد مسجّل</div>
+      </div>
+    </div>
+    <div class="col-4 col-md-3">
+      <div class="kpi kpi-orange">
+        <div class="kpi-icon"><i class="bi bi-wallet2"></i></div>
+        <div class="kpi-val">{{ "%.0f"|format(stats.payment_total or 0) }}</div>
+        <div class="kpi-lbl">إجمالي المحصّل</div>
+      </div>
+    </div>
+    <!--<div class="col-4 col-md-3">
+      <div class="kpi kpi-red">
+        <div class="kpi-icon"><i class="bi bi-hourglass-split"></i></div>
+        <div class="kpi-val">{{ "%.0f"|format(stats.remaining_total or 0) }}</div>
+        <div class="kpi-lbl">إجمالي المتبقي</div>
+      </div>
+    </div>-->
+  </div>
+
+  <div class="row g-3">
+    <!-- ══ Left: Smart Payment Form ══ -->
+    <div class="col-lg-5">
+      <div class="card pay-form-card p-4" id="pay-card">
+
+        <h5 class="mb-3"><i class="bi bi-lightning-fill text-warning me-1"></i>تسجيل سداد سريع</h5>
+
+        <!-- Smart Search -->
+        <div class="position-relative mb-3">
+          <label class="form-label fw-bold">بحث ذكي عن المشترك أو الفاتورة</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input class="form-control form-control-lg" id="smart-search" placeholder="الاسم، رقم الحساب، رقم الفاتورة...">
+            <button class="btn btn-outline-secondary" type="button" id="clear-search" style="display:none;">✕</button>
+          </div>
+          <div id="smart-results" style="display:none;"></div>
+        </div>
+
+        <!-- Invoice preview (hidden until selected) -->
+        <div id="inv-preview-wrap" style="display:none;" class="mb-3">
+          <div class="inv-preview">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <div class="inv-name" id="prev-name">—</div>
+                <div class="inv-no" id="prev-no">—</div>
+                <div class="small text-muted mt-1" id="prev-addr"></div>
+              </div>
+              <button class="btn btn-sm btn-outline-secondary" type="button" id="clear-invoice">تغيير</button>
+            </div>
+            <div class="row g-2 mt-2 text-center">
+              <div class="col-4">
+                <div class="small text-muted">الإجمالي</div>
+                <div class="fw-bold" id="prev-total">—</div>
+              </div>
+              <div class="col-4">
+                <div class="small text-muted">مسدد</div>
+                <div class="fw-bold text-success" id="prev-paid">—</div>
+              </div>
+              <div class="col-4">
+                <div class="small text-muted">المتبقي</div>
+                <div class="fw-bold text-danger fs-5" id="prev-remaining">—</div>
+              </div>
+            </div>
+            <!-- Mini progress -->
+            <div class="progress mt-2" style="height:6px;border-radius:4px;">
+              <div class="progress-bar bg-success" id="prev-progress" style="width:0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Payment Form -->
+        <form method="post" action="{{ url_for('payment_center_add') }}" enctype="multipart/form-data" id="pay-form">
+          <input type="hidden" name="invoice_id" id="selected-invoice-id">
+
+          <div class="vstack gap-3">
+            <!-- Amount -->
+            <div>
+              <label class="form-label fw-bold">المبلغ <span class="text-danger">*</span></label>
+              <div class="input-group input-group-lg">
+                <input class="form-control" name="amount" id="amount-input"
+                       type="number" step="any"
+                       placeholder="0" required>
+                <span class="input-group-text fw-bold">{{ setting('currency_name','ريال') }}</span>
+              </div>
+              <div class="d-flex gap-2 mt-1" id="quick-amounts" style="display:none!important;"></div>
+            </div>
+
+            <!-- Method -->
+           <!-- <div>
+              <label class="form-label fw-bold">طريقة الدفع</label>
+              <div class="row g-2">
+                {% for val, icon, lbl in [('نقداً','💵','نقداً'),('تحويل','🏦','تحويل'),('شيك','📋','شيك'),('أخرى','💳','أخرى')] %}
+                <div class="col-3">
+                  <input type="radio" class="btn-check" name="method" id="m-{{ val }}" value="{{ val }}" {% if val=='نقداً' %}checked{% endif %}>
+                  <label class="btn btn-outline-secondary w-100 p-2" for="m-{{ val }}" style="font-size:.8rem;">
+                    <div>{{ icon }}</div>{{ lbl }}
+                  </label>
+                </div>
+                {% endfor %}
+              </div>
+            </div>-->
+            <input type="hidden" name="account_id" value="{{ default_cash_account_id }}">
+            <input type="hidden" name="wallet_id" value="">
+
+            <!-- Notes -->
+            <div>
+              <label class="form-label fw-bold">ملاحظة</label>
+              <input class="form-control" name="notes" placeholder="اختياري">
+            </div>
+             <div class="alert alert-info py-2 mb-0">
+              <strong>تنبيه:</strong> يتم ترحيل السداد تلقائياً على حساب الموظف/الصندوق المناسب حسب الصلاحية.
+            </div>
+
+            <!-- Attachment -->
+           <!-- <div>
+              <label class="form-label fw-bold">مرفق (اختياري)</label>
+              <input class="form-control" name="attachment" type="file" accept="image/*,.pdf">
+            </div>-->
+
+            <!-- Submit buttons -->
+            <div class="d-grid gap-2">
+              <button class="btn btn-primary btn-lg" type="submit" name="after_save" value="stay" id="submit-btn" disabled>
+                <i class="bi bi-check-lg me-1"></i>تسجيل السداد
+              </button>
+              <button class="btn btn-warning text-dark btn-lg" type="submit" name="after_save" value="thermal" id="submit-thermal-btn" disabled>
+                <i class="bi bi-receipt-cutoff me-1"></i>تسجيل + طباعة وصل حراري
+              </button>
+            </div>
+          </div>
+        </form>
+
+      </div>
+    </div>
+
+    <!-- ══ Right: Tabs (Invoices + Payments) ══ -->
+    <div class="col-lg-7">
+
+      <!-- Search + Tabs header -->
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div class="d-flex gap-1">
+          <button class="seg-btn active" onclick="switchTab('tab-invoices', this)">
+            🧾 الفواتير <span class="badge bg-primary ms-1">{{ invoices|length }}</span>
+          </button>
+          <button class="seg-btn" onclick="switchTab('tab-payments', this)">
+            💰 السدادات <span class="badge bg-success ms-1">{{ payments|length }}</span>
+          </button>
+        </div>
+        <form method="get" class="d-flex gap-2">
+          <input class="form-control form-control-sm" name="q" value="{{ q }}"
+                 placeholder="🔍 بحث..." style="width:180px;">
+          {% if q %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('payment_center') }}">✕</a>{% endif %}
+          <button class="btn btn-sm btn-outline-primary">بحث</button>
+        </form>
+      </div>
+
+      <!-- ── Tab: Invoices ── -->
+      <div class="tab-section active" id="tab-invoices">
+        <div class="card p-0 overflow-hidden">
+          <div class="table-responsive" style="max-height:620px;overflow-y:auto;">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th>الفاتورة</th>
+                  <th>المشترك</th>
+                  <th class="text-center">الإجمالي</th>
+                  <th class="text-center">مسدد</th>
+                  <th class="text-center">متبقي</th>
+                  <th style="width:120px;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for inv in invoices %}
+                {% set pct = ((inv.paid_amount / inv.total_amount * 100)|int) if inv.total_amount else 0 %}
+                <tr class="{% if inv.remaining_amount <= 0 %}pay-row-paid{% elif inv.paid_amount > 0 %}pay-row-partial{% else %}pay-row-pending{% endif %}"
+                    style="cursor:pointer;" onclick="selectInvoiceFromRow({{ inv.id }}, '{{ inv.subscriber_name|replace("'","\\'")|e }}', '{{ inv.invoice_no }}', {{ inv.total_amount or 0 }}, {{ inv.paid_amount or 0 }}, {{ inv.remaining_amount or 0 }}, '{{ inv.account_number }}', '{{ (inv.address or '')|replace("'","\\'")|e }}')">
+                  <td>
+                    <div class="fw-bold small">{{ inv.invoice_no }}</div>
+                    <div class="text-muted" style="font-size:.72rem;">{{ inv.month_label }}</div>
+                  </td>
+                  <td>
+                    <div class="fw-semibold small">{{ inv.subscriber_name }}</div>
+                    <div class="text-muted" style="font-size:.72rem;">{{ inv.account_number }}</div>
+                  </td>
+                  <td class="text-center small">{{ "%.0f"|format(inv.total_amount or 0) }}</td>
+                  <td class="text-center small text-success fw-semibold">{{ "%.0f"|format(inv.paid_amount or 0) }}</td>
+                  <td class="text-center">
+                    {% if inv.remaining_amount <= 0 %}
+                    <span class="badge bg-success">مسدد ✓</span>
+                    {% else %}
+                    <span class="fw-bold text-danger small">{{ "%.0f"|format(inv.remaining_amount) }}</span>
+                    {% endif %}
+                  </td>
+                  <td onclick="event.stopPropagation()">
+                    <div class="d-flex gap-1">
+                      {% if inv.remaining_amount > 0 %}
+                      <button class="btn btn-sm btn-primary py-0 px-2"
+                              onclick="selectInvoiceFromRow({{ inv.id }}, '{{ inv.subscriber_name|replace("'","\\'")|e }}', '{{ inv.invoice_no }}', {{ inv.total_amount or 0 }}, {{ inv.paid_amount or 0 }}, {{ inv.remaining_amount or 0 }}, '{{ inv.account_number }}', '{{ (inv.address or '')|replace("'","\\'")|e }}')">
+                        سداد
+                      </button>
+                      {% endif %}
+                      <a class="btn btn-sm btn-outline-secondary py-0 px-2"
+                         href="{{ url_for('invoice_detail', invoice_id=inv.id) }}" target="_blank">↗</a>
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-center py-5 text-muted">
+                  <i class="bi bi-receipt fs-1 d-block opacity-25 mb-2"></i>
+                  لا توجد فواتير{% if q %} لـ "{{ q }}"{% endif %}
+                </td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Tab: Payments ── -->
+      <div class="tab-section" id="tab-payments">
+        <div class="card p-0 overflow-hidden">
+          <div class="table-responsive" style="max-height:620px;overflow-y:auto;">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th>التاريخ</th>
+                  <th>المشترك</th>
+                  <th>الفاتورة</th>
+                  <th class="text-center">المبلغ</th>
+                  <th class="text-center">الطريقة</th>
+                  <th>المنشئ</th>
+                  <th style="width:50px;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in payments %}
+                <tr>
+                  <td class="small text-muted">
+                    {{ (p.payment_date or '')[:10] }}<br>
+                    <span style="font-size:.7rem;">{{ (p.payment_date or '')[11:16] }}</span>
+                  </td>
+                  <td>
+                    <div class="fw-semibold small">{{ p.subscriber_name or '—' }}</div>
+                    <div class="text-muted" style="font-size:.72rem;">{{ p.account_number or '' }}</div>
+                  </td>
+                  <td class="small">{{ p.invoice_no or '—' }}</td>
+                  <td class="text-center fw-bold text-success">{{ "%.0f"|format(p.amount or 0) }}</td>
+                  <td class="text-center">
+                    {% set m = p.method or '' %}
+                    <span class="method-badge {% if 'نقد' in m %}method-cash{% elif 'تحويل' in m %}method-transfer{% elif 'شيك' in m %}method-cheque{% else %}method-other{% endif %}">
+                      {{ m or '—' }}
+                    </span>
+                  </td>
+                  <td class="small text-muted">{{ p.created_by_name or '—' }}</td>
+                  <td>
+                    <a class="btn btn-sm btn-outline-dark py-0 px-2"
+                       href="{{ url_for('thermal_receipt', payment_id=p.id) }}" target="_blank"
+                       title="وصل حراري">
+                      <i class="bi bi-receipt-cutoff"></i>
+                    </a>
+                  </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="text-center py-5 text-muted">
+                  <i class="bi bi-cash-stack fs-1 d-block opacity-25 mb-2"></i>
+                  لا توجد سدادات مسجّلة
+                </td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if payments %}
+          <div class="border-top px-3 py-2 bg-light d-flex justify-content-between align-items-center">
+            <div class="small text-muted">{{ payments|length }} سداد</div>
+            <div class="fw-bold text-success">إجمالي: {{ "%.0f"|format(stats.payment_total or 0) }} {{ setting('currency_name','ريال') }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ══ Tab switching ══
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+  btn.classList.add('active');
+}
+
+// ══ Smart search ══
+const searchInput   = document.getElementById('smart-search');
+const resultsBox    = document.getElementById('smart-results');
+const clearSearchBtn= document.getElementById('clear-search');
+let searchTimer = null;
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const q = searchInput.value.trim();
+  clearSearchBtn.style.display = q ? '' : 'none';
+  if (q.length < 2) { resultsBox.style.display='none'; return; }
+  searchTimer = setTimeout(() => doSearch(q), 280);
+});
+
+searchInput.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { clearSearch(); }
+});
+
+document.addEventListener('click', e => {
+  if (!searchInput.contains(e.target) && !resultsBox.contains(e.target)) {
+    resultsBox.style.display = 'none';
+  }
+});
+
+clearSearchBtn.addEventListener('click', clearSearch);
+
+async function doSearch(q) {
+  try {
+    const r = await fetch(`/api/subscribers/search?q=${encodeURIComponent(q)}`);
+    const data = await r.json();
+    renderResults(data);
+  } catch { resultsBox.style.display='none'; }
+}
+
+function renderResults(items) {
+  if (!items.length) {
+    resultsBox.innerHTML = '<div class="smart-item text-muted text-center py-3">لا توجد نتائج</div>';
+    resultsBox.style.display = 'block';
+    return;
+  }
+  resultsBox.innerHTML = items.map(s => {
+    const remaining = parseFloat(s.overdue_balance||0);
+    const hasArrears = remaining > 0;
+    return `<div class="smart-item" onclick="selectSubscriber(${s.id}, '${escHtml(s.name)}', '${escHtml(s.account_number)}')">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <div class="si-name">${escHtml(s.name)}</div>
+          <div class="si-sub">${s.account_number}${s.phone ? ' • '+s.phone : ''}${s.address ? ' • '+s.address : ''}</div>
+        </div>
+        ${hasArrears ? `<div class="text-end"><div class="si-amount">${Math.round(remaining).toLocaleString('ar')}</div><div class="si-paid">متبقي</div></div>` : '<span class="badge bg-success">مسدد</span>'}
+      </div>
+    </div>`;
+  }).join('');
+  resultsBox.style.display = 'block';
+}
+
+function escHtml(s) {
+  return (s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function selectSubscriber(id, name, account) {
+  resultsBox.style.display = 'none';
+  searchInput.value = name + ' — ' + account;
+  clearSearchBtn.style.display = '';
+  // Fetch unpaid invoices for this subscriber
+  try {
+    const r = await fetch(`/api/invoices/unpaid?subscriber_id=${id}`);
+    const invs = await r.json();
+    if (invs.length === 0) {
+      alert('لا توجد فواتير غير مسددة لهذا المشترك');
+      return;
+    }
+    if (invs.length === 1) {
+      const inv = invs[0];
+      selectInvoiceFromRow(inv.id, inv.subscriber_name||name, inv.invoice_no,
+        inv.total_amount, inv.paid_amount, inv.remaining_amount, inv.account_number, inv.address||'');
+    } else {
+      // Show invoice picker
+      showInvoicePicker(invs, name);
+    }
+  } catch(e) { console.error(e); }
+}
+
+function showInvoicePicker(invs, name) {
+  resultsBox.innerHTML = `<div class="p-2 small fw-bold text-muted border-bottom">اختر الفاتورة — ${escHtml(name)}</div>` +
+    invs.map(inv => `<div class="smart-item" onclick="selectInvoiceFromRow(${inv.id},'${escHtml(inv.subscriber_name||name)}','${inv.invoice_no}',${inv.total_amount||0},${inv.paid_amount||0},${inv.remaining_amount||0},'${inv.account_number||''}','${escHtml(inv.address||'')}')">
+      <div class="d-flex justify-content-between">
+        <div>
+          <div class="si-name">${inv.invoice_no}</div>
+          <div class="si-sub">${inv.month_label||''}</div>
+        </div>
+        <div class="text-end">
+          <div class="si-amount">${Math.round(inv.remaining_amount||0).toLocaleString('ar')}</div>
+          <div class="si-paid">متبقي</div>
+        </div>
+      </div>
+    </div>`).join('');
+  resultsBox.style.display = 'block';
+}
+
+function selectInvoiceFromRow(id, name, no, total, paid, remaining, account, address) {
+  document.getElementById('selected-invoice-id').value = id;
+  document.getElementById('prev-name').textContent = name;
+  document.getElementById('prev-no').textContent   = no + ' — ' + account;
+  document.getElementById('prev-addr').textContent = address || '';
+  document.getElementById('prev-total').textContent     = Math.round(total||0).toLocaleString('ar');
+  document.getElementById('prev-paid').textContent      = Math.round(paid||0).toLocaleString('ar');
+  document.getElementById('prev-remaining').textContent = Math.round(remaining||0).toLocaleString('ar');
+  
+  const pct = total ? Math.round(paid/total*100) : 0;
+  document.getElementById('prev-progress').style.width = pct + '%';
+  document.getElementById('inv-preview-wrap').style.display = '';
+  document.getElementById('pay-card').classList.add('has-invoice');
+  
+  // حساب القيمة المقربة وتطبيقها على القيمة والحد الأقصى معاً
+  const amtInput = document.getElementById('amount-input');
+  const roundedRemaining = Math.round(remaining || 0);
+  
+  amtInput.value = roundedRemaining;
+  amtInput.max   = roundedRemaining; // تم الإصلاح هنا (تقريب الحد الأقصى)
+  amtInput.setAttribute('step', 'any');
+  
+  // أزرار المبالغ السريعة
+  const qa = document.getElementById('quick-amounts');
+  qa.style.display = '';
+  const fractions = remaining > 0
+    ? [remaining, remaining*0.5, remaining*0.25].filter(v=>v>0)
+    : [];
+  qa.innerHTML = fractions.map((v,i) =>
+    `<button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('amount-input').value=${Math.round(v)}">
+      ${i===0?'الكامل':i===1?'النصف':'الربع'} (${Math.round(v).toLocaleString('ar')})
+    </button>`
+  ).join('');
+  
+  // تفعيل الأزرار
+  const hasDue = remaining > 0;
+  document.getElementById('submit-btn').disabled        = !hasDue;
+  document.getElementById('submit-thermal-btn').disabled = !hasDue;
+  
+  // الانتقال السلس للنموذج
+  document.getElementById('pay-card').scrollIntoView({behavior:'smooth', block:'nearest'});
+  resultsBox.style.display = 'none';
+  if (!searchInput.value) searchInput.value = name;
+}
+
+function clearSearch() {
+  searchInput.value = '';
+  clearSearchBtn.style.display = 'none';
+  resultsBox.style.display = 'none';
+}
+
+document.getElementById('clear-invoice').addEventListener('click', () => {
+  document.getElementById('selected-invoice-id').value = '';
+  document.getElementById('inv-preview-wrap').style.display = 'none';
+  document.getElementById('pay-card').classList.remove('has-invoice');
+  document.getElementById('submit-btn').disabled        = true;
+  document.getElementById('submit-thermal-btn').disabled = true;
+  document.getElementById('quick-amounts').style.display = 'none';
+  clearSearch();
+});
+
+// ── Handle thermal redirect ──
+document.getElementById('pay-form').addEventListener('submit', function(e) {
+  const btn = e.submitter;
+  if (btn && btn.value === 'thermal') {
+    const invId = document.getElementById('selected-invoice-id').value;
+    // Will be handled server-side via hidden field
+  }
+});
+</script>
+{% endblock %}

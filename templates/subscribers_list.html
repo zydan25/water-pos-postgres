@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+.sub-status-active   { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; border-radius:20px; padding:2px 10px; font-size:.78rem; font-weight:700; }
+.sub-status-inactive { background:#f3f4f6; color:#6b7280; border:1px solid #e5e7eb; border-radius:20px; padding:2px 10px; font-size:.78rem; font-weight:700; }
+.filter-chip { border-radius:20px; padding:4px 14px; font-size:.82rem; font-weight:600; border:1.5px solid #e5e7eb; background:white; cursor:pointer; transition:.15s; }
+.filter-chip.active,.filter-chip:hover { border-color:#1a56db; background:#f0f4ff; color:#1a56db; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+
+  <!-- Header bar -->
+  <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-3">
+    <div>
+      <h4 class="mb-0"><i class="bi bi-people-fill text-primary me-2"></i>المشتركون</h4>
+      <div class="text-muted small">{{ subscribers|length }} مشترك{% if q %} — نتائج: "{{ q }}"{% endif %}</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+      <!-- Search -->
+      <form class="d-flex gap-2" method="get">
+        <input class="form-control" name="q" value="{{ q }}" placeholder="🔍 الاسم، رقم الحساب، الجوال، العداد" style="min-width:220px;">
+        <input type="hidden" name="status" value="{{ request.args.get('status','') }}">
+        <button class="btn btn-outline-primary">بحث</button>
+        {% if q %}<a class="btn btn-outline-secondary" href="{{ url_for('subscribers') }}">✕</a>{% endif %}
+      </form>
+      <!-- Actions -->
+      <a class="btn btn-primary" href="{{ url_for('subscriber_new') }}">
+        <i class="bi bi-plus-lg me-1"></i>مشترك جديد
+      </a>
+      <div class="dropdown">
+        <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+          <i class="bi bi-gear me-1"></i>أدوات
+        </button>
+        <ul class="dropdown-menu dropdown-menu-start">
+          <li><a class="dropdown-item" href="{{ url_for('export_subscribers') }}"><i class="bi bi-file-excel me-2 text-success"></i>تصدير Excel</a></li>
+          <li><a class="dropdown-item" href="{{ url_for('import_data') }}"><i class="bi bi-upload me-2 text-primary"></i>استيراد</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="{{ url_for('arrears_report') }}"><i class="bi bi-exclamation-triangle me-2 text-danger"></i>تقرير المتأخرات</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status filter chips -->
+  <div class="d-flex gap-2 flex-wrap mb-3">
+    <a class="filter-chip {% if not request.args.get('status') %}active{% endif %}" href="?q={{ q }}">الكل ({{ subscribers|length }})</a>
+    <a class="filter-chip {% if request.args.get('status')=='active' %}active{% endif %}" href="?q={{ q }}&status=active">
+      ✅ النشطون ({{ subscribers|selectattr('active')|list|length }})
+    </a>
+    <a class="filter-chip {% if request.args.get('status')=='inactive' %}active{% endif %}" href="?q={{ q }}&status=inactive">
+      ⏸️ المتوقفون ({{ subscribers|rejectattr('active')|list|length }})
+    </a>
+    <a class="filter-chip {% if request.args.get('status')=='arrears' %}active{% endif %}" href="{{ url_for('arrears_report') }}">
+      ⚠️ المتأخرون
+    </a>
+  </div>
+
+  <!-- Table -->
+  <div class="card p-0 overflow-hidden">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" id="sub-table">
+        <thead class="table-light">
+          <tr>
+            <th style="width:120px;">رقم الحساب</th>
+            <th>الاسم</th>
+            <th>رقم العداد</th>
+            <th>الجوال</th>
+            <th>القرية</th><th>العنوان</th>
+            <th class="text-center">سعر الوحدة</th>
+            <th class="text-center">رسوم الاشتراك</th>
+            <th class="text-center">الحالة</th>
+            <th style="width:180px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in subscribers %}
+            <td class="fw-bold font-monospace">{{ s.account_number }}</td>
+            <td>
+              <div class="fw-semibold">{{ s.name }}</div>
+            </td>
+            <td class="small text-muted">{{ s.meter_number or '—' }}</td>
+            <td>
+              {% if s.phone %}
+              <a href="tel:{{ s.phone }}" class="text-decoration-none small">{{ s.phone }}</a>
+              {% else %}—{% endif %}
+            </td>
+            <td class="small text-muted">{{ s.village or '—' }}</td>
+            <td class="small text-muted">{{ s.address or '—' }}</td>
+            <td class="text-center small">{{ "%.0f"|format((s.default_unit_price or 0)|float) }}</td>
+            <td class="text-center small">{{ "%.0f"|format((s.default_subscription_fee or 0)|float) }}</td>
+            <td class="text-center">
+              {% if s.active %}
+              <span class="sub-status-active">نشط</span>
+              {% else %}
+              <span class="sub-status-inactive">متوقف</span>
+              {% endif %}
+            </td>
+            <td class="text-nowrap">
+              <div class="d-flex gap-1">
+                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('subscriber_edit', subscriber_id=s.id) }}" title="تعديل">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('invoice_new') }}?subscriber_id={{ s.id }}" title="فاتورة جديدة">
+                  <i class="bi bi-receipt-cutoff"></i>
+                </a>
+                <a class="btn btn-sm btn-outline-info" href="{{ url_for('reports') }}?subscriber_id={{ s.id }}" title="تقرير">
+                  <i class="bi bi-graph-up"></i>
+                </a>
+                {% if user_role in ['Admin','admin'] %}
+                <form method="post" action="{{ url_for('subscriber_delete', subscriber_id=s.id) }}"
+                      class="d-inline" onsubmit="return confirm('حذف المشترك {{ s.name }}؟ سيُحذف مع فواتيره!')">
+                  <button class="btn btn-sm btn-outline-danger" title="حذف"><i class="bi bi-trash"></i></button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="9" class="text-center py-5 text-muted">
+              <i class="bi bi-people fs-1 opacity-25 d-block mb-2"></i>
+              {% if q %}لا توجد نتائج لـ "{{ q }}"{% else %}لا يوجد مشتركون بعد{% endif %}
+              <div class="mt-3">
+                <a class="btn btn-primary btn-sm" href="{{ url_for('subscriber_new') }}">إضافة أول مشترك</a>
+                {% if q %}<a class="btn btn-outline-secondary btn-sm ms-2" href="{{ url_for('subscribers') }}">عرض الكل</a>{% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <!-- Footer summary -->
+    {% if subscribers %}
+    <div class="border-top px-3 py-2 d-flex justify-content-between align-items-center bg-light">
+      <div class="small text-muted">{{ subscribers|length }} مشترك — {{ subscribers|selectattr('active')|list|length }} نشط</div>
+      <a class="btn btn-sm btn-outline-success" href="{{ url_for('export_subscribers') }}">
+        <i class="bi bi-download me-1"></i>تصدير Excel
+      </a>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

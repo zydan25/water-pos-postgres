@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>غير متصل - نظام فواتير المياه</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, Tahoma, Arial, sans-serif;
+      background: linear-gradient(135deg, #1a56db 0%, #0ea5e9 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      text-align: center;
+      padding: 20px;
+    }
+    .card {
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(10px);
+      border-radius: 24px;
+      padding: 48px 36px;
+      max-width: 420px;
+      width: 100%;
+      border: 1px solid rgba(255,255,255,0.25);
+    }
+    .icon { font-size: 72px; margin-bottom: 24px; }
+    h1 { font-size: 28px; font-weight: 800; margin-bottom: 12px; }
+    p  { font-size: 16px; opacity: 0.85; line-height: 1.7; margin-bottom: 32px; }
+    .btn {
+      background: white;
+      color: #1a56db;
+      border: none;
+      border-radius: 14px;
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+    .dots { margin-top: 32px; opacity: 0.6; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">💧</div>
+    <h1>لا يوجد اتصال بالإنترنت</h1>
+    <p>
+      تعذّر الوصول إلى نظام فواتير المياه.<br>
+      تحقق من اتصالك بالشبكة ثم حاول مجدداً.
+    </p>
+    <button class="btn" onclick="window.location.reload()">🔄 إعادة المحاولة</button>
+    <div class="dots">نظام إدارة وفواتير المياه • PWA</div>
+  </div>
+</body>
+</html>

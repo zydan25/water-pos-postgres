@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+@media print {
+  .no-print { display:none!important; }
+  .card { border:1px solid #ccc!important; box-shadow:none!important; }
+  body { font-size:12px; }
+}
+.bracket-1   { border-right:4px solid #ffc107; }
+.bracket-2-3 { border-right:4px solid #fd7e14; }
+.bracket-4-6 { border-right:4px solid #dc3545; }
+.bracket-6\+ { border-right:4px solid #6f1d1b; }
+.sub-row td  { font-size:.83rem; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+
+  <!-- Header -->
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 no-print">
+    <div>
+      <h4 class="mb-0"><i class="bi bi-exclamation-triangle text-danger me-2"></i>تقرير المتأخرات المتقدم</h4>
+      <div class="text-muted small">{{ today }} — {{ org }}</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-dark" href="?q={{ q }}&bracket={{ bracket }}&print=1" target="_blank">
+        <i class="bi bi-printer me-1"></i>طباعة
+      </a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('reports') }}">التقارير</a>
+    </div>
+  </div>
+
+  <!-- Print header (hidden on screen) -->
+  <div class="text-center mb-3 d-none d-print-block">
+    <h3>{{ org }}</h3>
+    <h5>{{ project }} — تقرير المتأخرات</h5>
+    <div class="text-muted">{{ today }}</div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="card p-3 mb-3 no-print">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label fw-bold">بحث</label>
+        <input class="form-control" name="q" value="{{ q }}" placeholder="الاسم، رقم الحساب، رقم الفاتورة">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label fw-bold">شريحة التأخر</label>
+        <select class="form-select" name="bracket">
+          <option value="all"  {% if bracket=='all'  %}selected{% endif %}>جميع المتأخرين</option>
+          <option value="1"    {% if bracket=='1'    %}selected{% endif %}>شهر واحد</option>
+          <option value="2-3"  {% if bracket=='2-3'  %}selected{% endif %}>2 – 3 أشهر</option>
+          <option value="4-6"  {% if bracket=='4-6'  %}selected{% endif %}>4 – 6 أشهر</option>
+          <option value="6+"   {% if bracket=='6+'   %}selected{% endif %}>أكثر من 6 أشهر ⚠️</option>
+        </select>
+      </div>
+      <div class="col-md-2 d-grid">
+        <button class="btn btn-primary">عرض</button>
+      </div>
+      <div class="col-md-2 d-grid">
+        <a class="btn btn-outline-secondary" href="{{ url_for('arrears_report') }}">مسح الفلتر</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="card p-3 text-center h-100">
+        <div class="small text-muted">إجمالي المديونية</div>
+        <div class="h4 fw-bold text-danger mb-0">{{ "%.0f"|format(grand_total) }}</div>
+        <div class="small text-muted">{{ currency }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card p-3 text-center h-100">
+        <div class="small text-muted">عدد المتأخرين</div>
+        <div class="h4 fw-bold mb-0">{{ grand_count }}</div>
+        <div class="small text-muted">مشترك</div>
+      </div>
+    </div>
+    <div class="col-12 col-md-6">
+      <div class="card p-3 h-100">
+        <div class="small text-muted fw-bold mb-2">توزيع الشرائح</div>
+        <div class="row g-2 text-center">
+          {% for b, label, color in [('1','شهر','warning'),('2-3','2-3 أشهر','orange'),('4-6','4-6 أشهر','danger'),('6+','+6 أشهر','dark')] %}
+          <div class="col-3">
+            <div class="fw-bold text-{{ color }} fs-5">{{ bracket_stats[b].count }}</div>
+            <div class="small text-muted">{{ label }}</div>
+            <div class="small fw-bold">{{ "%.0f"|format(bracket_stats[b].total) }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bracket legend bars -->
+  <div class="row g-2 mb-3 no-print">
+    {% for b, label, color, bg in [('1','1 شهر','#ffc107','#fff8e1'),('2-3','2-3 أشهر','#fd7e14','#fff3e0'),('4-6','4-6 أشهر','#dc3545','#fce4ec'),('6+','+6 أشهر','#6f1d1b','#f8d7da')] %}
+    {% set total_b = bracket_stats[b].total %}
+    {% set pct = ((total_b / grand_total * 100)|round(1)) if grand_total else 0 %}
+    <div class="col-md-3">
+      <div class="rounded-3 p-2" style="background:{{ bg }};border-right:4px solid {{ color }};">
+        <div class="fw-bold small">{{ label }}</div>
+        <div class="d-flex justify-content-between small">
+          <span>{{ bracket_stats[b].count }} مشترك</span>
+          <span>{{ pct }}%</span>
+        </div>
+        <div class="progress mt-1" style="height:5px;">
+          <div class="progress-bar" style="width:{{ pct }}%;background:{{ color }};"></div>
+        </div>
+        <div class="small fw-bold mt-1">{{ "%.0f"|format(total_b) }} {{ currency }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Results table -->
+  {% if result %}
+  <div class="card p-0 overflow-hidden">
+    <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+      <div class="fw-bold">{{ result|length }} مشترك متأخر</div>
+      <div class="small text-muted no-print">الجدول مرتب حسب الأعلى تأخراً</div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th>المشترك</th>
+            <th>رقم الحساب</th>
+            <th>الهاتف</th>
+            <th class="text-center">عدد الأشهر</th>
+            <th class="text-center">الشريحة</th>
+            <th class="text-end">إجمالي المديونية</th>
+            <th class="no-print"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in result %}
+          {% set b = entry.bracket %}
+          <tr class="bracket-{{ b }} fw-semibold"
+              data-bs-toggle="collapse"
+              data-bs-target="#detail-{{ entry.subscriber_id }}"
+              style="cursor:pointer;">
+            <td>{{ loop.index }}</td>
+            <td>{{ entry.subscriber_name }}</td>
+            <td>{{ entry.account_number }}</td>
+            <td>
+              {% if entry.phone %}
+              <a href="tel:{{ entry.phone }}" class="text-decoration-none no-print">{{ entry.phone }}</a>
+              <span class="d-none d-print-inline">{{ entry.phone }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="text-center">
+              <span class="badge rounded-pill
+                {% if b == '1' %}bg-warning text-dark
+                {% elif b == '2-3' %}bg-orange text-white
+                {% elif b == '4-6' %}bg-danger
+                {% else %}bg-dark{% endif %}"
+                style="{% if b=='2-3' %}background:#fd7e14!important;{% endif %}">
+                {{ entry.months_count }} شهر
+              </span>
+            </td>
+            <td class="text-center">
+              <span class="small fw-bold
+                {% if b=='1' %}text-warning
+                {% elif b=='2-3' %}text-warning
+                {% elif b=='4-6' %}text-danger
+                {% else %}text-dark{% endif %}">
+                {% if b=='1' %}متأخر شهر
+                {% elif b=='2-3' %}متأخر 2-3 أشهر
+                {% elif b=='4-6' %}متأخر 4-6 أشهر
+                {% else %}⚠️ متأخر +6 أشهر{% endif %}
+              </span>
+            </td>
+            <td class="text-end fw-bold text-danger">{{ "%.0f"|format(entry.total_remaining) }} {{ currency }}</td>
+            <td class="no-print">
+              <div class="d-flex gap-1">
+                <a class="btn btn-sm btn-outline-warning"
+                   href="{{ url_for('thermal_pay', invoice_id=entry.invoices[-1].id) }}"
+                   onclick="event.stopPropagation()">
+                  <i class="bi bi-receipt-cutoff"></i>
+                </a>
+                <a class="btn btn-sm btn-outline-secondary"
+                   href="{{ url_for('reports') }}?subscriber_id={{ entry.subscriber_id }}"
+                   onclick="event.stopPropagation()">
+                  <i class="bi bi-eye"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          <!-- Expandable detail rows -->
+          <tr class="collapse sub-row" id="detail-{{ entry.subscriber_id }}">
+            <td colspan="8" class="p-0">
+              <div class="p-3" style="background:#f8f9fa;">
+                <div class="small fw-bold text-muted mb-2">تفاصيل الفواتير المتأخرة:</div>
+                <table class="table table-sm table-bordered mb-0 bg-white">
+                  <thead>
+                    <tr class="table-light">
+                      <th>رقم الفاتورة</th>
+                      <th>التاريخ</th>
+                      <th>الشهر</th>
+                      <th>الإجمالي</th>
+                      <th>المسدد</th>
+                      <th>المتبقي</th>
+                      <th class="no-print"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for inv in entry.invoices %}
+                    <tr>
+                      <td>{{ inv.invoice_no }}</td>
+                      <td>{{ inv.invoice_date }}</td>
+                      <td>{{ inv.month_label }}</td>
+                      <td>{{ "%.0f"|format(inv.total_amount) }}</td>
+                      <td>{{ "%.0f"|format(inv.paid_amount) }}</td>
+                      <td class="fw-bold text-danger">{{ "%.0f"|format(inv.remaining_amount) }}</td>
+                      <td class="no-print">
+                        <a class="btn btn-xs btn-outline-warning py-0 px-2"
+                           href="{{ url_for('thermal_pay', invoice_id=inv.id) }}">سداد+وصل</a>
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="table-light fw-bold">
+          <tr>
+            <td colspan="6" class="text-center">الإجمالي ({{ result|length }} مشترك)</td>
+            <td class="text-end text-danger">{{ "%.0f"|format(result|sum(attribute='total_remaining')) }} {{ currency }}</td>
+            <td class="no-print"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="card p-5 text-center text-muted">
+    <i class="bi bi-check-circle-fill text-success fs-1 mb-3"></i>
+    <h5>لا توجد متأخرات</h5>
+    <div>جميع الفواتير مسددة أو لا توجد نتائج لمعايير البحث المحددة.</div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

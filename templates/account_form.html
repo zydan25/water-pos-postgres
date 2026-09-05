@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container" style="max-width:900px;">
+  <div class="card border-0 shadow-sm rounded-4 p-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div>
+        <h4 class="mb-1">تعديل الحساب</h4>
+        <div class="text-muted small">{{ account.code }} — {{ account.name }}</div>
+      </div>
+      <a class="btn btn-outline-secondary" href="{{ url_for('accounts_tree') }}">عودة للشجرة</a>
+    </div>
+
+    <form method="post" class="row g-3" id="account-edit-form">
+      <div class="col-md-6">
+        <label class="form-label">الأب</label>
+        <select class="form-select" name="parent_id" id="account-parent" required>
+          <option value="" disabled {% if not account.parent_id %}selected{% endif %}>اختر الحساب الأب</option>
+          {% for item in flat_accounts %}
+            {% if item.id != account.id %}
+              <option value="{{ item.id }}" {% if item.id == account.parent_id %}selected{% endif %}>{{ item.label | default(item.name, true) }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-6">
+        <label class="form-label">اسم الحساب</label>
+        <input class="form-control" name="name" id="account-name" value="{{ account.name }}" required>
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label">رمز الحساب</label>
+        <input class="form-control" name="code" id="account-code" value="{{ account.code }}" placeholder="سيُولّد تلقائياً عند تغيير الأب">
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label">نوع الحساب</label>
+        <input type="hidden" name="node_type" id="account-node-type" value="{{ account.node_type }}">
+        <div class="form-control bg-light" id="account-node-type-display">{{ account.node_type }}</div>
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label">الحالة</label>
+        <select class="form-select" name="active">
+          <option value="1" {% if account.active %}selected{% endif %}>نشط</option>
+          <option value="0" {% if not account.active %}selected{% endif %}>موقوف</option>
+        </select>
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label">قابل للاختيار</label>
+        <select class="form-select" name="is_postable">
+          <option value="1" {% if account.is_postable %}selected{% endif %}>نعم</option>
+          <option value="0" {% if not account.is_postable %}selected{% endif %}>لا</option>
+        </select>
+      </div>
+
+      <div class="col-12 d-flex gap-2 flex-wrap">
+        <button class="btn btn-primary">حفظ التعديلات</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('accounts_tree') }}">إلغاء</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  const typeLabels = {
+    cash: 'صندوق',
+    receivable: 'عميل',
+    payable: 'مورد',
+    employee: 'موظف',
+    income: 'إيراد',
+    expense: 'مصروف',
+    branch: 'فرع',
+    root: 'رئيسي',
+    account: 'حساب'
+  };
+
+  const parentSelect = document.getElementById('account-parent');
+  const codeInput = document.getElementById('account-code');
+  const typeInput = document.getElementById('account-node-type');
+  const typeDisplay = document.getElementById('account-node-type-display');
+
+  async function refreshDraft() {
+    const parentId = parentSelect.value;
+    if (!parentId) {
+      typeInput.value = 'account';
+      typeDisplay.textContent = 'account';
+      return;
+    }
+    try {
+      const res = await fetch(`/api/v1/accounting/accounts/next-code/?parent_id=${encodeURIComponent(parentId)}`);
+      const data = await res.json();
+      if (data && !data.error) {
+        if (data.code) codeInput.value = data.code;
+        typeInput.value = data.node_type || 'account';
+        typeDisplay.textContent = typeLabels[data.node_type] || data.node_type || 'account';
+      }
+    } catch (e) {
+      typeDisplay.textContent = 'تعذر التحديث';
+    }
+  }
+
+  parentSelect.addEventListener('change', refreshDraft);
+})();
+</script>
+{% endblock %}

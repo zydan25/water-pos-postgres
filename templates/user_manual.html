@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+    /* ── تنسيقات صفحة دليل المستخدم ── */
+    .manual-header {
+        background: linear-gradient(135deg, #1a56db, #0284c7);
+        color: #fff;
+        border-radius: 18px;
+        padding: 28px 32px;
+        margin-bottom: 26px;
+        box-shadow: 0 6px 18px rgba(26, 86, 219, .18);
+    }
+    .manual-header h1 { font-weight: 800; }
+    .guide-card {
+        border-radius: 16px;
+        border: 1px solid var(--app-border, #e5e7eb);
+        background: var(--app-surface, #fff);
+        padding: 20px 22px;
+        height: 100%;
+    }
+    .guide-icon {
+        width: 46px; height: 46px; border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.4rem; margin-bottom: 12px;
+    }
+    .icon-invoice  { background: #fee2e2; color: #dc2626; }
+    .icon-subscriber { background: #dbeafe; color: #1a56db; }
+    .icon-collect  { background: #d1fae5; color: #059669; }
+    .icon-report   { background: #fef3c7; color: #d97706; }
+    .guide-steps { padding-right: 20px; margin-top: 12px; }
+    .guide-steps li { margin-bottom: 8px; color: var(--app-muted, #4b5563); font-size: .9rem; }
+
+    .manual-section {
+        margin-top: 22px;
+        border: 1px solid var(--app-border, #e5e7eb);
+        border-radius: 16px;
+        background: var(--app-surface, #fff);
+        overflow: hidden;
+    }
+    .manual-section .sec-title {
+        display: flex; align-items: center; gap: 10px;
+        background: var(--app-surface-2, #f8fafc);
+        border-bottom: 1px solid var(--app-border, #e5e7eb);
+        padding: 14px 20px;
+        font-weight: 800;
+    }
+    .manual-section .sec-body { padding: 18px 20px; }
+    .manual-section ol { padding-right: 22px; }
+    .manual-section ol > li { margin-bottom: 10px; line-height: 1.9; }
+    .manual-section .sub-note,
+    .manual-section blockquote {
+        background: var(--app-surface-2, #f4f7fb);
+        border-right: 4px solid var(--app-primary, #1a56db);
+        border-radius: 10px;
+        padding: 10px 14px;
+        margin: 10px 0;
+        color: var(--app-muted, #475569);
+        font-size: .92rem;
+    }
+    .manual-section code.badge-route {
+        background: rgba(13,110,253,.08);
+        color: var(--app-primary, #0d6efd);
+        border-radius: 8px;
+        padding: 2px 8px;
+        font-size: .85rem;
+        direction: ltr;
+        display: inline-block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-2">
+
+    <div class="manual-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+            <h1 class="fw-bold fs-3 mb-2">📖 دليل استخدام النظام</h1>
+            <p class="mb-0 small opacity-85" dir="rtl">
+                دليل عملي خطوة بخطوة لإدارة المشتركين والفواتير والقراءات والتحصيل والمحاسبة والتقارير.
+            </p>
+        </div>
+        <a href="{{ url_for('index') }}" class="btn btn-light btn-sm rounded-pill px-3 fw-bold text-dark">
+            <i class="bi bi-arrow-right me-1"></i> العودة للوحة التحكم
+        </a>
+    </div>
+
+    <!-- بطاقات مختصرة -->
+    <div class="row g-3 mb-2">
+
+        <div class="col-md-6 col-lg-3">
+            <div class="guide-card">
+                <div class="guide-icon icon-invoice"><i class="bi bi-file-earmark-text"></i></div>
+                <h6 class="fw-bold mb-2">إدارة الفواتير</h6>
+                <ul class="guide-steps">
+                    <li>إنشاء فاتورة من كل صفحة المشترك أو «فاتورة جديدة».</li>
+                    <li>أدخل القراءة السابقة والحالية لاحتساب الاستهلاك.</li>
+                    <li>حوّل القراءات الجماعية إلى فواتير بضغطة واحدة.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-3">
+            <div class="guide-card">
+                <div class="guide-icon icon-subscriber"><i class="bi bi-people"></i></div>
+                <h6 class="fw-bold mb-2">إدارة المشتركين</h6>
+                <ul class="guide-steps">
+                    <li>أضف مشتركاً جديداً من «+ مشترك» في لوحة التحكم.</li>
+                    <li>أدخل الاسم ورقم الحساب والعداد والعنوان.</li>
+                    <li>حدد السعر الافتراضي ورسوم الاشتراك لكل مشترك.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-3">
+            <div class="guide-card">
+                <div class="guide-icon icon-collect"><i class="bi bi-cash-stack"></i></div>
+                <h6 class="fw-bold mb-2">السداد والتحصيل</h6>
+                <ul class="guide-steps">
+                    <li>سجّل السداد من «تسجيل سداد» أو «قطع سند».</li>
+                    <li>ابدأ جولة تحصيل يومية بجرد المستحقات.</li>
+                    <li>استخدم أوراق التحصيل والقراءات اليدوية اليومية.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-3">
+            <div class="guide-card">
+                <div class="guide-icon icon-report"><i class="bi bi-printer"></i></div>
+                <h6 class="fw-bold mb-2">الطباعة والتقارير</h6>
+                <ul class="guide-steps">
+                    <li>اطبع فاتورة منفردة أو 3 فواتير في كل صفحة.</li>
+                    <li>احفظ جميع فواتير فترة محددة كملف PDF.</li>
+                    <li>تابع المتأخرات والتقرير اليومي وكشف الحساب.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- بداية الأقسام التفصيلية -->
+
+    <div class="manual-section">
+        <div class="sec-title"><i class="bi bi-box-arrow-in-right text-primary"></i> أولاً: الدخول إلى النظام</div>
+        <div class="sec-body">
+            <ol>
+                <li>افتح متصفح الإنترنت (Chrome / Edge) وأدخل عنوان النظام الذي زوّدك به المسؤول.</li>
+                <li>اكتب <b>اسم المستخدم</b> و<b>كلمة المرور</b> واضغط «دخول».</li>
+                <li>ستنتقل تلقائياً إلى لوحة التحكم الرئيسية (للمدير) أو لوحة الموظف (للمحصّلين والموظفين).</li>
+                <li>بعد انتهاء العمل اضغط على «خروج» من قائمة «الإدارة» لتأمين الحساب.</li>
+            </ol>
+            <blockquote>بيانات الدخول الافتراضية للنظام الجديد: المستخدم <b>zydan</b> وكلمة المرور <b>774952665</b> — يجب تغيير كلمة المرور فور التسليم من صفحة الإعدادات.</blockquote>
+        </div>
+    </div>
+
+    <div class="manual-section">
+        <div class="sec-title"><i class="bi bi-speedometer2 text-primary"></i> ثانياً: لوحة التحكم الرئيسية</div>
+        <div class="sec-body">
+            <ol>
+                <li>تظهر لك مؤشرات عامة: عدد المشتركين، عدد الفواتير، المحصَّل هذا الشهر، والمتبقي الإجمالي.</li>
+                <li>قسم <b>الإجراءات السريعة</b> يحتوي أزراراً مباشرة: فاتورة، قطع سند، مشترك.</li>
+                <li>شبكة الأزرار توصل مباشرة إلى: تسجيل سداد، جولة تحصيل، الموظفين، المشتركين، المتأخرات، طباعة بالتاريخ، التقرير اليومي، ودليل الاستخدام.</li>
+                <li>قسم <b>أعلى المديونيات</b> يعرض أكبر المدينين للعمل عليهم أولاً.</li>
+                <li>الرسم البياني يلخص استهلاك وتحصيل آخر 12 شهراً.</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="manual-section">
+        <div class="sec-title"><i class="bi bi-people text-primary"></i> ثالثاً: إدارة المشتركين</div>
+        <div class="sec-body">
+            <ol>
+                <li>من شريط العلوي اختر «الحسابات والمشتركين ← المشتركين» أو من لوحة التحكم زر «المشتركين».</li>
+                <li>لإضافة مشترك جديد اضغط <b>«+ مشترك»</b> وأدخل: الاسم الكامل، رقم الحساب، رقم العداد، الهاتف، القرية/العنوان، السعر الافتراضي للمتر، ورسوم الاشتراك.</li>
+                <li>للتعديل اضغط أيقونة التعديل بجانب المشترك، وللتعطيل اضغط «حذف» (لا يحذف بياناته بل يوقف تفعيله).</li>
+                <li>استخدم صندوق البحث للوصول السريع برقم الحساب أو الاسم.</li>
+            </ol>
+            <blockquote>افتح أي مشترك لعرض سجل فواتيره وسداده، أو لإنشاء فاتورة جديدة له مباشرة.</blockquote>
+        </div>
+    </div>
+
+    <div class="manual-section">
+        <div class="sec-title"><i class="bi bi-receipt text-primary"></i> رابعاً: الفواتير والقراءات</div>
+        <div class="sec-body">
+            <h6 class="fw-bold">1) إنشاء فاتورة منفردة</h6>
+            <ol>
+                <li>من «قائمة الفواتير ← فاتورة جديدة» اختر المشترك.</li>
+                <li>أدخل <b>القراءة السابقة</b> و<b>القراءة الحالية</b>، ويظهر تاريخا «من … إلى …» تلقائياً من أحدث قراءة معروفة.</li>
+                <li>تحقّق من السعر ورسوم الاشتراك وأرصدة الافتتاح ثم احفظ الفاتورة.</li>
+                <li>بعد الحفظ يمكنك: الطباعة، إرسال واتساب، تسجيل سداد، أو إرفاق ملفات.</li>
+            </ol>
+            <h6 class="fw-bold mt-3">2) الإدخال والإنشاء الجماعي (الأسهل للفواتير الشهرية)</h6>
+            <ol>
+                <li>من «الفواتير ← إدخال القراءات الجماعية» أدخل قراءة كل مشترك مع تاريخ القراءة.</li>
+                <li>من «الفواتير ← إنشاء الفواتير الجماعية» حدّد التاريخ واضغط إنشاء: يُنشئ النظام فاتورة لكل قراءة غير مُفوترة.</li>
+            </ol>
+            <h6 class="fw-bold mt-3">3) تعديل أو حذف</h6>
+            <p class="small mb-0">من قائمة الفواتير اضغط رقم الفاتورة لعرض التفاصيل ثم اختر تعديل أو حذف. لا يمكن تكرار نفس الشهر لنفس المشترك (المنع مفعّل افتراضياً).</p>
+        </div>
+    </div>
+
+    <div class="manual-section">
+        <div class="sec-title"><i class="bi bi-printer text-primary"></i> خامساً: الطباعة</div>
+        <div class="sec-body">
+            <ol>
+                <li><b>طباعة فاتورة منفردة:</b> من تفاصيل الفاتورة اضغط «طباعة» — تظهر بحجم كامل جاهزة للطباعة.</li>
+                <li><b>طباعة جماعية 3 فواتير في صفحة A4:</b> من «طباعة بالتاريخ» حدّد من/إلى ثم «عرض الطباعة» — تظهر فواتير العدد المطلوب 3 في كل صفحة مع زر طباعة.</li>
+                <li><b>حفظ ملف PDF:</b> من نفس صفحة «طباعة بالتاريخ» اضغط الزر الأخضر <b>«حفظ جميع الفواتير (PDF)»</b> لتنزيل ملف واحد بالتاريخ والاسم.</li>
+                <li><b>تصدير الفواتير:</b> من «تصدير الفواتير» تنزّل نسخة ملف للفترة المحددة (Excel/CSV).</li>
+            </ol>
+            <blockquote>طباعة أكثر من فاتورة لطباعة شرائح؟ استخدم «طباعة بالتاريخ» التي تضع حتى 3 فواتير في الورقة الواحدة لتوفير الورق والحبر.</blockquote>
+        </div>
+    </div>
+
+    <div class="manual-section">
+        <div class="sec-title"><i class="bi bi-cash-coin text-primary"></i> سادساً: السداد والتحصيل</div>
+        <div class="sec-body">
+            <h6 class="fw-bold">1) تسجيل سداد فاتورة</h6>
+            <ol>
+                <li>افتح الفاتورة أو استخدم «تسجيل سداد» من لوحة التحكم.</li>
+                <li>أدخل المبلغ وطريقة الدفع (نقداً / تحويل / من الصندوق) واحفظ.</li>
+                <li>يتحدّث النظام تلقائياً: المتبقي، نسبة التحصيل، السجلات المحاسبية، وسجل حركات الصندوق.</li>
+            </ol>
+            <h6 class="fw-bold mt-3">2) جولة التحصيل اليومية</h6>
+            <ol>
+                <li>من «جولة تحصيل» تبدأ جولة بتاريخ اليوم وتجمع زيارات للمشتركين المستحقين.</li>
+                <li>سجّل لكل زيارة الحالة والمبلغ المحصَّل، وأغلق الجولة في نهاية اليوم.</li>
+            </ol>
+            <h6 class="fw-bold mt-3">3) التحصيل اليدوي</h6>
+            <ol>
+                <li>من قائمة «التحصيل ← التحصيل اليدوي» تجد أوراق القراءات اليومية وأوراق تحصيل اليوم حسب القرية.</li>
+                <li>استخدم «التحصيل اليدوي ← سداد جماعي» لإدخال مبالغ المشتركين دفعة واحدة.</li>
+            </ol>
+            <blockquote>تتاح الجولة يومياً للمحصّلين؛ والمدير يستطيع مراجعة كل الجولات من «رقابة الأنشطة» و«تقرير المحصّل».</blockquote>
+        </div>
+    </div>
+
+    <div class="manual-section">
+        <div class="sec-title"><i class="bi bi-bar-chart-line text-primary"></i> سابعاً: التقارير</div>
+        <div class="sec-body">
+            <ol>
+                <li><b>تقرير المتأخرات:</b> من قائمة «التقارير» لمتابعة الديون وترتيب المدينين.</li>
+                <li><b>تقرير المحصّل اليومي:</b> جرد ما تحصّله كل محصّل في اليوم.</li>
+                <li><b>كشف حساب عميل:</b> سجل كامل بفواتير وسدادات أي مشترك لطباعته أو إرساله.</li>
+                <li><b>تقارير العملاء:</b> إحصائيات وتحليل الاستهلاك والتحصيل، مع تصدير PDF.</li>
+                <li><b>التقارير المحاسبية ودفتر اليومية:</b> للمحاسبين: أرصدة الحسابات، القيود، والسندات.</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="manual-section">
+        <div class="sec-title"><i class="bi bi-journal-text text-primary"></i> ثامناً: المحاسبة (للمدير والمحاسب)</div>
+        <div class="sec-body">
+            <ol>
+                <li><b>شجرة الحسابات:</b> من «الحسابات» لعرض وإنشاء الحسابات المحاسبية.</li>
+                <li><b>السندات:</b> قطع سند (قبض/صرف/تحويل) بين حسابين وطباعته.</li>
+                <li><b>دفتر اليومية:</b> عرض كل القيود وإنشاء قيود يدوية عند الحاجة.</li>
+                <li>أي سداد فوترة يُرحَّل محاسبياً تلقائياً (صندوق/ذمم/إيراد) — لا حاجة لإدخال يدوي.</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="manual-section">
+        <div class="sec-title"><i class="bi bi-whatsapp text-primary"></i> تاسعاً: إرسال الفواتير عبر واتساب</div>
+        <div class="sec-body">
+            <ol>
+                <li>من تفاصيل الفاتورة اضغط «إرسال واتساب» — يرسل النظام كشف/فاتورة برسالة نصية، مع إمكانية إرسال الملف PDF.</li>
+                <li>«إرسال كل الفواتير» من صفحة الفواتير يرسل لكل مشترك رسالته دفعة واحدة.</li>
+                <li>يجب ضبط رقم المرسل ورابط الواجهة في صفحة «الإعدادات» من قبل المسؤول.</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="manual-section">
+        <div class="sec-title"><i class="bi bi-gear text-primary"></i> عاشراً: الإعدادات العامة</div>
+        <div class="sec-body">
+            <ol>
+                <li>من «الإدارة ← الإعدادات»: اسم المشروع والمنظمة، سعر المتر الافتراضي، رسوم الاشتراك، اسم العملة.</li>
+                <li>حدد رقم بداية الفواتير، عدد الفواتير في صفحة PDF، ورقم المرسل للواتساب.</li>
+                <li>اختر المظهر (فاتح/داكن/أزرق)، وخيار منع تكرار فاتورة الشهر.</li>
+                <li>اضغط «حفظ» — تُطبّق التعديلات على النظام فوراً (اسم المشروع يظهر في الشريط العلوي والفاتورة).</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="manual-section">
+        <div class="sec-title"><i class="bi bi-upload text-primary"></i> الحادي عشر: الاستيراد والتصدير والنسخ الاحتياطي</div>
+        <div class="sec-body">
+            <ol>
+                <li><b>استيراد بيانات:</b> من «الإدارة ← استيراد البيانات» ارفع ملف (Excel/XML/CSV) واضغط استيراد بعد مراجعة المعاينة.</li>
+                <li><b>تصدير المشتركين:</b> من «تصدير المشتركين» أو «تصدير الفواتير» تنزل نسخة ملف للاحتفاظ بها.</li>
+                <li><b>نسخة احتياطية كاملة:</b> من «نسخ قاعدة البيانات» تنزّل ملفاً كاملاً، ومن «استعادة» تعيد رفعها عند الحاجة.</li>
+            </ol>
+            <blockquote>تُنصح بإجراء نسخ احتياطي أسبوعي لقاعدة البيانات وحفظها خارج الجهاز.</blockquote>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 bg-light p-3 mb-2">
+        <div class="d-flex align-items-center gap-2 text-secondary small">
+            <i class="bi bi-question-circle-fill text-primary fs-5"></i>
+            <div>
+                <b>هل تحتاج مساعدة؟</b> تحدّث مع مسؤول النظام لضبط بيانات الدخول، واخرج بأمان عند الانتهاء من زر «خروج». جميع العمليات المالية تُسجَّل في «رقابة الأنشطة» لمتابعة من قام بها ومتى.
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,470 @@
+{% extends 'base.html' %}
+{% block title %}السندات - نظام المحاسبة{% endblock %}
+{% block head %}
+<style>
+    @media (max-width: 576px) {
+        .vch-title { font-size: 1.1rem; }
+        .vch-table th, .vch-table td { font-size: .78rem; padding: .35rem .25rem; }
+        .vch-table .btn { font-size: .7rem; padding: .15rem .3rem; }
+    }
+    .acc-tree { padding: .25rem; font-size: .9rem; }
+    .acc-tree .acc-node { padding: .4rem .5rem; border-radius: .4rem; display:flex; align-items:center; gap:.4rem; }
+    .acc-tree .acc-node .caret { width:16px; text-align:center; cursor:pointer; color:#666; font-size:.8rem; transition: transform .15s; flex-shrink:0; }
+    .acc-tree .acc-node .caret.open { transform: rotate(90deg); }
+    .acc-tree .acc-node .acc-code { color:#888; font-family: monospace; font-size:.8rem; margin-left:.35rem; }
+    .acc-tree .acc-node .acc-balance { color:#555; font-size:.75rem; font-weight:normal; margin-right:auto; }
+    .acc-tree .acc-node.parent {
+        font-weight:600; color:#64748b; background:#f1f5f9; cursor:not-allowed; opacity:.92;
+    }
+    .acc-tree .acc-node.parent:hover { background:#e2e8f0; }
+    .acc-tree .acc-node.leaf {
+        cursor:pointer; color:#0f172a; border: 1px solid transparent;
+    }
+    .acc-tree .acc-node.leaf:hover { background: #dbeafe; border-color:#93c5fd; }
+    .acc-tree .acc-node.leaf.active { background:#2563eb; color:#fff; }
+    .acc-tree .acc-node.leaf.active .acc-code, .acc-tree .acc-node.leaf.active .acc-balance { color:rgba(255,255,255,.85); }
+    .acc-tree .acc-children { margin-right: 1.25rem; border-right: 2px dashed #e2e8f0; padding-right: .5rem; display:none; }
+    .acc-tree .acc-children.open { display:block; }
+    .acc-search { position: sticky; top:0; background:#fff; padding:.4rem; border-bottom:1px solid #e5e7eb; z-index:1; }
+    .voucher-badge { min-width: 64px; text-align: center; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+            <h3 class="vch-title mb-0">السندات المحاسبية</h3>
+            <div class="text-muted small">كل الحركات تعتمد على شجرة الحسابات وسندات القبض والصرف.</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-primary btn-sm" onclick="openModal()"><i class="bi bi-plus-lg"></i> <span class="d-none d-sm-inline">سند جديد</span><span class="d-sm-none">جديد</span></button>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('accounting_reports') }}"><i class="bi bi-bar-chart"></i> التقارير المحاسبية</a>
+            <a class="btn btn-outline-dark btn-sm" href="{{ url_for('accounting_journal') }}"><i class="bi bi-journal-bookmark"></i> القيود</a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <div class="small text-muted">إجمالي السندات</div>
+                    <div class="display-6 fw-bold" id="kpi-count">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <div class="small text-muted">إجمالي القبض</div>
+                    <div class="display-6 fw-bold text-success" id="kpi-receipt">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <div class="small text-muted">إجمالي الصرف</div>
+                    <div class="display-6 fw-bold text-danger" id="kpi-payment">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle vch-table">
+                    <thead>
+                        <tr>
+                            <th>النوع</th>
+                            <th>المبلغ</th>
+                            <th>من → إلى</th>
+                            <th class="d-none d-md-table-cell">التاريخ</th>
+                            <th class="d-none d-md-table-cell">المرجع</th>
+                            <th class="d-none d-lg-table-cell">المصدر</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="vouchers-body">
+                        <tr><td colspan="7"><div class="page-loader"><div class="spinner-border" role="status"></div><span class="loader-text">جارٍ التحميل...</span></div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="vchModal" tabindex="-1" style="display:none;background:rgba(0,0,0,.5);">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 id="v-title" class="mb-0">سند جديد</h5>
+        <button type="button" class="btn-close" onclick="closeModal()"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="v-id">
+        <div class="row mb-3">
+            <div class="col-6">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="voucherType" id="type-receipt" value="receipt" checked onchange="setVoucherType('receipt')">
+                    <label class="form-check-label text-success fw-bold" for="type-receipt">قبض</label>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="voucherType" id="type-payment" value="payment" onchange="setVoucherType('payment')">
+                    <label class="form-check-label text-danger fw-bold" for="type-payment">صرف</label>
+                </div>
+            </div>
+        </div>
+        <input type="hidden" id="v-type" value="receipt">
+        <div class="row mb-3">
+            <div class="col-6">
+                <label class="form-label" id="from-label">من حساب</label>
+                <div class="position-relative">
+                    <input type="text" id="from-display" class="form-control mb-2" placeholder="اضغط لاختيار حساب فرعي..." readonly onclick="toggleTree('from')" style="cursor:pointer;">
+                    <div id="from-tree" class="acc-tree" style="display:block;position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #e5e7eb;border-radius:.5rem;max-height:360px;overflow:auto;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:100;"></div>
+                </div>
+                <small class="text-muted d-block">الحسابات الرئيسية غير قابلة للاختيار.</small>
+            </div>
+            <div class="col-6">
+                <label class="form-label" id="to-label">إلى حساب</label>
+                <div class="position-relative">
+                    <input type="text" id="to-display" class="form-control mb-2" placeholder="اضغط لاختيار حساب فرعي..." readonly onclick="toggleTree('to')" style="cursor:pointer;">
+                    <div id="to-tree" class="acc-tree" style="display:block;position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #e5e7eb;border-radius:.5rem;max-height:360px;overflow:auto;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:100;"></div>
+                </div>
+            </div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-6">
+                <label class="form-label">المبلغ</label>
+                <input type="number" id="v-amount" class="form-control" placeholder="المبلغ" min="0.01" step="0.01">
+            </div>
+            <div class="col-6">
+                <label class="form-label">المرجع</label>
+                <input type="text" id="v-ref" class="form-control" placeholder="المرجع">
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">البيان</label>
+            <textarea id="v-desc" class="form-control" placeholder="البيان" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">إلغاء</button>
+        <button class="btn btn-primary" onclick="saveVoucher()">حفظ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let accounts = [];
+let selectedFrom = null;
+let selectedTo = null;
+let currentTree = null;
+let vouchers = [];
+
+function fmt(n){ return Number(n || 0).toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:2}); }
+
+function closeModal(){ document.getElementById('vchModal').style.display='none'; }
+function openModal(){
+    document.getElementById('vchModal').style.display='block';
+    document.getElementById('v-title').textContent='سند جديد';
+    document.getElementById('v-id').value='';
+    document.getElementById('v-amount').value='';
+    document.getElementById('v-ref').value='';
+    document.getElementById('v-desc').value='';
+    selectedFrom = null;
+    selectedTo = null;
+    setVoucherType('receipt');
+}
+
+function setVoucherType(type){
+    document.getElementById('v-type').value = type;
+    document.getElementById('type-receipt').checked = (type === 'receipt');
+    document.getElementById('type-payment').checked = (type === 'payment');
+    if(type === 'receipt'){
+        document.getElementById('from-label').textContent = 'من حساب (العميل / المصدر)';
+        document.getElementById('to-label').textContent = 'إلى حساب (الصندوق / الموظف)';
+    } else {
+        document.getElementById('from-label').textContent = 'من حساب (الصندوق / الموظف)';
+        document.getElementById('to-label').textContent = 'إلى حساب (المصروف / الجهة)';
+    }
+    renderTrees();
+}
+
+async function loadAccounts(){
+    const r = await fetch('/api/v1/accounting/accounts/tree/');
+    const d = await r.json();
+    accounts = d.results || d || [];
+    renderTrees();
+}
+
+function renderTrees(){
+    document.getElementById('from-tree').innerHTML = buildTreeShell();
+    document.getElementById('to-tree').innerHTML = buildTreeShell();
+}
+
+function buildTreeShell(){
+    return `
+      <div class="acc-search">
+        <input type="text" class="form-control form-control-sm" placeholder="بحث عن حساب..." oninput="filterTree(this)">
+      </div>
+      ${buildAccountTreeHTML(accounts, 0)}
+      <div class="p-2 small text-muted" style="border-top:1px solid #eee;">يمكن اختيار الحسابات الفرعية فقط.</div>`;
+}
+
+function buildAccountTreeHTML(nodes, depth){
+    if(!nodes || !nodes.length) return '';
+    let html = '';
+    nodes.forEach(acc => {
+        const hasChildren = acc.children && acc.children.length;
+        const balance = fmt(acc.balance || 0);
+        const codeHtml = acc.code ? `<span class="acc-code">[${acc.code}]</span>` : '';
+        const balanceHtml = `<span class="acc-balance">${balance}</span>`;
+        if(hasChildren){
+            html += `
+              <div class="acc-row" data-code="${(acc.code||'').toLowerCase()}" data-name="${(acc.name||'').toLowerCase()}">
+                <div class="acc-node parent">
+                    <span class="caret" onclick="event.stopPropagation(); toggleNode(this)">▶</span>
+                    <i class="bi bi-folder-fill text-warning"></i>
+                    <span>${acc.name}</span>
+                    ${codeHtml}
+                    ${balanceHtml}
+                </div>
+                <div class="acc-children ${depth===0 ? 'open' : ''}">
+                    ${buildAccountTreeHTML(acc.children, depth+1)}
+                </div>
+              </div>`;
+        } else {
+            const icon = acc.node_type === 'cash' ? '💰'
+                : acc.node_type === 'receivable' ? '👤'
+                : acc.node_type === 'employee' ? '👷'
+                : acc.node_type === 'payable' ? '🏭'
+                : acc.node_type === 'income' ? '📈'
+                : acc.node_type === 'expense' ? '📉' : '📄';
+            html += `
+              <div class="acc-row" data-code="${(acc.code||'').toLowerCase()}" data-name="${(acc.name||'').toLowerCase()}">
+                <div class="acc-node leaf" onclick="selectItem(event, '${acc.id}', ${JSON.stringify(acc.name).replace(/"/g,'&quot;')})">
+                    <span>${icon}</span>
+                    <span>${acc.name}</span>
+                    ${codeHtml}
+                    ${balanceHtml}
+                </div>
+              </div>`;
+        }
+    });
+    return html;
+}
+
+function toggleTree(side){
+    currentTree = side;
+    const tree = document.getElementById(side + '-tree');
+    const other = document.getElementById((side === 'from' ? 'to' : 'from') + '-tree');
+    if(other) other.style.display = 'block';
+    tree.style.display = 'block';
+}
+
+function toggleNode(caretEl){
+    const children = caretEl.closest('.acc-node').nextElementSibling;
+    if(!children) return;
+    const isOpen = children.classList.toggle('open');
+    caretEl.classList.toggle('open', isOpen);
+}
+
+function selectItem(e, id, name){
+    e.stopPropagation();
+    const treeEl = document.getElementById(currentTree + '-tree');
+    treeEl.querySelectorAll('.acc-node.leaf.active').forEach(n => n.classList.remove('active'));
+    e.currentTarget.classList.add('active');
+    document.getElementById(currentTree + '-display').value = name;
+    if(currentTree === 'from') selectedFrom = id; else selectedTo = id;
+    setTimeout(() => { treeEl.style.display = 'none'; }, 120);
+}
+
+function filterTree(input){
+    const q = (input.value || '').toLowerCase().trim();
+    const tree = input.closest('.acc-tree');
+    tree.querySelectorAll('.acc-row').forEach(row => {
+        const code = row.dataset.code || '';
+        const name = row.dataset.name || '';
+        const match = !q || code.includes(q) || name.includes(q);
+        row.style.display = match ? '' : 'none';
+    });
+    if(q){
+        tree.querySelectorAll('.acc-children').forEach(c => {
+            const hasVisible = Array.from(c.querySelectorAll('.acc-row')).some(r => r.style.display !== 'none');
+            c.classList.toggle('open', hasVisible);
+            const caret = c.previousElementSibling && c.previousElementSibling.querySelector('.caret');
+            if(caret) caret.classList.toggle('open', hasVisible);
+        });
+    }
+}
+
+document.addEventListener('click', function(e){
+    ['from','to'].forEach(side => {
+        const tree = document.getElementById(side+'-tree');
+        const input = document.getElementById(side+'-display');
+        if(!tree || !input) return;
+        if(tree.style.display === 'block' && !tree.contains(e.target) && e.target !== input){
+            tree.style.display = 'none';
+        }
+    });
+});
+
+async function loadVouchers(){
+    const r = await fetch('/api/v1/accounting/vouchers/');
+    const d = await r.json();
+    vouchers = d.results || d || [];
+    document.getElementById('kpi-count').textContent = vouchers.length;
+    document.getElementById('kpi-receipt').textContent = fmt(vouchers.filter(v => v.voucher_type === 'receipt').reduce((a, v) => a + Number(v.amount || 0), 0));
+    document.getElementById('kpi-payment').textContent = fmt(vouchers.filter(v => v.voucher_type === 'payment').reduce((a, v) => a + Number(v.amount || 0), 0));
+
+    const tbody = document.getElementById('vouchers-body');
+    tbody.innerHTML = vouchers.map(v => {
+        const shortNum = v.voucher_no.length > 12 ? '...' + v.voucher_no.slice(-8) : v.voucher_no;
+        const badge = v.voucher_type === 'receipt' ? 'success' : 'danger';
+        return `<tr>
+        <td>
+            <span class="badge bg-${badge} voucher-badge">${v.voucher_type === 'receipt' ? 'قبض' : 'صرف'}</span>
+            <div class="text-muted" style="font-size:.68rem">${shortNum}</div>
+        </td>
+        <td class="fw-bold text-nowrap">${fmt(v.amount)}</td>
+        <td style="font-size:.82rem;">
+            ${v.from_account_name || '-'} <span class="text-muted">→</span> ${v.to_account_name || '-'}
+        </td>
+        <td class="d-none d-md-table-cell">${(v.voucher_date || '').toString().split('T')[0] || '-'}</td>
+        <td class="d-none d-md-table-cell">${v.reference || '-'}</td>
+        <td class="d-none d-lg-table-cell">${v.source_type || '-'}</td>
+        <td class="text-nowrap">
+            <button class="btn btn-sm btn-outline-secondary px-1 py-0" onclick="printVoucher(${v.id})" title="طباعة"><i class="bi bi-printer"></i></button>
+            <button class="btn btn-sm btn-outline-primary px-1 py-0" onclick="editVoucher(${v.id})" title="تعديل"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-sm btn-outline-danger px-1 py-0" onclick="deleteVoucher(${v.id})" title="حذف"><i class="bi bi-trash"></i></button>
+        </td>
+    </tr>`}).join('') || '<tr><td colspan="7" class="text-muted text-center">لا توجد سندات</td></tr>';
+}
+
+async function editVoucher(id){
+    const r = await fetch('/api/v1/accounting/vouchers/' + id + '/');
+    const v = await r.json();
+    document.getElementById('v-id').value = v.id;
+    setVoucherType(v.voucher_type);
+    document.getElementById('v-amount').value = v.amount;
+    document.getElementById('v-ref').value = v.reference || '';
+    document.getElementById('v-desc').value = v.description || '';
+    document.getElementById('v-title').textContent = 'تعديل سند';
+    document.getElementById('vchModal').style.display='block';
+    selectedFrom = v.from_account_id;
+    selectedTo = v.to_account_id;
+    document.getElementById('from-display').value = v.from_account_name || '';
+    document.getElementById('to-display').value = v.to_account_name || '';
+}
+
+async function saveVoucher(){
+    const id = document.getElementById('v-id').value;
+    const body = {
+        voucher_type: document.getElementById('v-type').value,
+        voucher_date: new Date().toISOString().slice(0,10),
+        amount: document.getElementById('v-amount').value,
+        from_account_id: selectedFrom,
+        to_account_id: selectedTo,
+        reference: document.getElementById('v-ref').value,
+        description: document.getElementById('v-desc').value,
+    };
+    if(!body.from_account_id || !body.to_account_id){
+        alert('يرجى اختيار الحسابات الفرعية');
+        return;
+    }
+    const url = id ? '/api/v1/accounting/vouchers/' + id + '/' : '/api/v1/accounting/vouchers/';
+    const method = id ? 'PUT' : 'POST';
+    try {
+        const res = await fetch(url, {
+            method,
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if(!res.ok){
+            alert('خطأ: ' + (data.error || 'تعذر حفظ السند'));
+            return;
+        }
+        closeModal();
+        loadVouchers();
+    } catch(e){
+        alert('خطأ في الاتصال: ' + e.message);
+    }
+}
+
+async function deleteVoucher(id){
+    if(!confirm('هل أنت متأكد من حذف/إلغاء هذا السند؟')) return;
+    const res = await fetch('/api/v1/accounting/vouchers/' + id + '/', {method: 'DELETE'});
+    const data = await res.json();
+    if(!res.ok){
+        alert('خطأ: ' + (data.error || 'تعذر الحذف'));
+        return;
+    }
+    loadVouchers();
+}
+
+function printVoucher(id){
+    const v = vouchers.find(x => x.id === id);
+    if(!v){ alert('السند غير موجود'); return; }
+    const typeAr = v.voucher_type === 'receipt' ? 'قبض' : 'صرف';
+    const amount = fmt(v.amount);
+    const dateText = (v.voucher_date || '').toString().slice(0,10);
+    const w = window.open('', '_blank', 'width=900,height=700');
+    w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>سند ${typeAr} - ${v.voucher_no}</title>
+    <style>
+        @page { size: A5; margin: 10mm; }
+        body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; color:#0f172a; padding:0; margin:0; }
+        .page { padding: 0; }
+        .head { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; border-bottom:3px double #1e3a8a; padding-bottom:.6rem; margin-bottom:1rem; }
+        .head .right { text-align:left; }
+        .title { font-size:1.3rem; font-weight:800; color:${v.voucher_type==='receipt'?'#16a34a':'#dc2626'}; }
+        .number { font-size:.9rem; font-weight:600; }
+        .row2 { display:grid; grid-template-columns: 1fr 1fr; gap: .5rem 1rem; margin: .8rem 0; font-size:.85rem; }
+        .field { display:flex; gap:.4rem; padding:.4rem .6rem; border-bottom:1px solid #cbd5e1; }
+        .field .label { color:#64748b; min-width:80px; }
+        .field .value { font-weight:600; }
+        .amount-box { background:${v.voucher_type==='receipt'?'#dcfce7':'#fee2e2'}; border:1px solid ${v.voucher_type==='receipt'?'#86efac':'#fca5a5'}; border-radius:.5rem; padding:.7rem 1rem; text-align:center; margin: 1rem 0; }
+        .amount-box .lbl { font-size:.8rem; color:#475569; }
+        .amount-box .val { font-size:1.6rem; font-weight:800; }
+        .desc { padding:.6rem; background:#f8fafc; border-radius:.4rem; margin-bottom:1rem; min-height:50px; font-size:.85rem; }
+        .footer { margin-top: 1.5rem; padding-top:.5rem; border-top:1px dashed #cbd5e1; text-align:center; font-size:.7rem; color:#64748b; }
+        @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    </style></head><body><div class="page">
+        <div class="head">
+            <div>
+                <div class="title">سند ${typeAr}</div>
+                <div class="number">رقم: ${v.voucher_no}</div>
+                <div class="meta">${dateText}</div>
+            </div>
+            <div class="right">
+                <div class="number">المرجع: ${v.reference || '-'}</div>
+                <div class="meta">${v.created_by_name || '-'}</div>
+            </div>
+        </div>
+        <div class="row2">
+            <div class="field"><span class="label">من حساب</span><span class="value">${v.from_account_name || '-'}</span></div>
+            <div class="field"><span class="label">إلى حساب</span><span class="value">${v.to_account_name || '-'}</span></div>
+        </div>
+        <div class="amount-box">
+            <div class="lbl">المبلغ</div>
+            <div class="val">${amount}</div>
+        </div>
+        <div>
+            <div style="font-weight:600; margin-bottom:.3rem; font-size:.85rem;">البيان:</div>
+            <div class="desc">${v.description || '-'}</div>
+        </div>
+        <div class="footer">برمجة وتصميم يمن كود للتقنيات الذكية · 774952665</div>
+    </div>
+    <script>window.onload=()=>{window.print();}<\/script>
+    </body></html>`);
+    w.document.close();
+}
+
+loadAccounts();
+loadVouchers();
+</script>
+{% endblock %}

@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 7mm;
+  }
+
+  html, body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    font-size: 10px !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .report-card {
+    box-shadow: none !important;
+    border: 1px solid #cbd5e1 !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .village-box {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-header {
+    border: 1px solid #cbd5e1 !important;
+    background: #fff !important;
+  }
+
+  /* مهم جدًا: إلغاء تأثير responsive عند الطباعة */
+  .table-responsive {
+    overflow: visible !important;
+    display: block !important;
+    width: 100% !important;
+  }
+
+  .sheet-table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+  }
+
+  .sheet-table th,
+  .sheet-table td {
+    vertical-align: middle !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    word-break: break-word !important;
+    color: #000 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  .sheet-table th {
+    background: #f8fafc !important;
+    font-weight: 700 !important;
+  }
+
+  /* منع Bootstrap من إخفاء أو قص أي شيء في الطباعة */
+  .card, .card-body, .container-fluid {
+    overflow: visible !important;
+  }
+
+  /* أعمدة الطباعة */
+  .col-m { width: 4% !important; }
+  .col-account { width: 12% !important; }
+  .col-meter { width: 10% !important; }
+  .col-village { width: 12% !important; }
+  .col-name { width: 24% !important; }
+  .col-prev { width: 10% !important; }
+  .col-current { width: 10% !important; }
+  .col-notes { width: 18% !important; }
+
+  .blank-line {
+    color: #666 !important;
+    letter-spacing: 2px;
+  }
+}
+
+.report-header {
+  border: 1px solid #cbd5e1;
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: #fff;
+}
+
+.section-title {
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+
+.sheet-table th,
+.sheet-table td {
+  vertical-align: middle;
+}
+
+.sheet-table td {
+  height: 28px;
+}
+
+.blank-line {
+  color: #999;
+  letter-spacing: 3px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="card p-3 mb-3 no-print shadow-sm rounded-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <div class="small text-muted">{{ organization_name }}</div>
+        <h4 class="mb-0 section-title">كشف قراءة</h4>
+        <div class="text-muted small">
+          القراءة السابقة والحالية مأخوذتان من آخر فاتورة مسجلة.
+        </div>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-primary" id="downloadReadingsPdf">PDF واحد</button>
+        <button type="button" class="btn btn-outline-primary" id="downloadReadingsZip">PDF لكل قرية</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('manual_collection.manual_collection_home') }}">رجوع</a>
+      </div>
+    </div>
+
+    <div class="row g-2 mt-3">
+      <div class="col-md-3">
+        <div class="p-2 bg-light rounded-3 text-center">
+          <div class="small text-muted">القرية</div>
+          <div class="fw-bold">{{ village or 'كل القرى' }}</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-2 bg-light rounded-3 text-center">
+          <div class="small text-muted">عدد القرى</div>
+          <div class="fw-bold">{{ villages|length }}</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-2 bg-light rounded-3 text-center">
+          <div class="small text-muted">عدد المشتركين</div>
+          <div class="fw-bold">{{ total_subscribers }}</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-2 bg-light rounded-3 text-center">
+          <div class="small text-muted">تاريخ الطباعة</div>
+          <div class="fw-bold">{{ print_date }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% for village_name, rows in villages.items() %}
+  <div class="card report-card rounded-4 mb-3 village-box">
+    <div class="report-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <div class="small text-muted">{{ project_name }}</div>
+        <div class="h5 mb-0">{{ village_name }}</div>
+        <div class="small text-muted">عدد المشتركين: {{ rows|length }}</div>
+      </div>
+      <div class="text-end small">
+        <div>القرية: {{ village_name }}</div>
+        <div>التاريخ: {{ print_date }}</div>
+      </div>
+    </div>
+
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered mb-0 text-center sheet-table">
+          <thead class="table-light">
+            <tr>
+              <th class="col-m">م</th>
+              <th class="col-account">رقم الحساب</th>
+              <th class="col-meter">رقم العداد</th>
+              <th class="col-village">القرية</th>
+              <th class="col-name">اسم المشترك</th>
+              <th class="col-prev">القراءة السابقة</th>
+              <th class="col-current">الحالية</th>
+              <th class="col-notes">ملاحظات / توقيع</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              {% set prev_reading = row.previous_reading if row.previous_reading is not none else row.last_reading %}
+              {% set curr_reading = row.current_reading if row.current_reading is not none else none %}
+              <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ row.account_number or '-' }}</td>
+                <td>{{ row.meter_number or '-' }}</td>
+                <td>{{ row.village or row.address or row.village_name or '-' }}</td>
+                <td class="text-start">{{ row.name or row.full_name or '-' }}</td>
+                <td>{% if prev_reading is not none %}{{ "%.0f"|format(prev_reading) }}{% endif %}</td>
+                <td>{% if curr_reading is not none %}{{ "%.0f"|format(curr_reading) }}{% endif %}</td>
+                <td class="text-start blank-line">........................................</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function downloadPdf(url, filename) {
+  try {
+    const resp = await fetch(url, { credentials: 'same-origin' });
+    if (!resp.ok) throw new Error(await resp.text());
+    const blob = await resp.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch (err) {
+    alert('تعذر تنزيل الملف: ' + err.message);
+  }
+}
+const villageValue = "{{ village|default('')|replace('"', '\\\\"') }}";
+document.getElementById('downloadReadingsPdf')?.addEventListener('click', () => {
+  const url = `{{ url_for('manual_collection.manual_collection_readings_pdf') }}` + (villageValue ? `?village=${encodeURIComponent(villageValue)}&mode=pdf` : '?mode=pdf');
+  downloadPdf(url, `كشف_قراءة_${villageValue || 'جميع_القرى'}.pdf`);
+});
+document.getElementById('downloadReadingsZip')?.addEventListener('click', () => {
+  const url = `{{ url_for('manual_collection.manual_collection_readings_pdf') }}` + (villageValue ? `?village=${encodeURIComponent(villageValue)}&mode=zip` : '?mode=zip');
+  downloadPdf(url, `كشف_قراءة_${villageValue || 'جميع_القرى'}.zip`);
+});
+</script>
+{% endblock %}

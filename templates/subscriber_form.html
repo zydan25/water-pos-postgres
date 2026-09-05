@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+.form-section { background:#f8faff; border-right:3px solid #1a56db; border-radius:0 10px 10px 0; padding:16px 20px; margin-bottom:16px; }
+.form-section-title { font-weight:800; color:#1a56db; font-size:.9rem; text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px; }
+.required-star { color:#dc2626; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container" style="max-width:860px;">
+
+  <!-- Header -->
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <div style="background:{% if mode=='new' %}#1a56db{% else %}#059669{% endif %};color:white;border-radius:14px;padding:12px 16px;font-size:1.4rem;">
+      {% if mode=='new' %}➕{% else %}✏️{% endif %}
+    </div>
+    <div>
+      <h4 class="mb-0">{{ 'إضافة مشترك جديد' if mode=='new' else 'تعديل بيانات المشترك' }}</h4>
+      {% if mode=='edit' %}
+      <div class="text-muted small">{{ subscriber.account_number }} — {{ subscriber.name }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <form method="post" id="sub-form">
+
+    <!-- Section 1: Basic info -->
+    <div class="form-section">
+      <div class="form-section-title"><i class="bi bi-person-vcard me-1"></i>البيانات الأساسية</div>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label fw-bold">رقم الحساب <span class="required-star">*</span></label>
+          <input class="form-control" name="account_number"
+                 value="{{ subscriber.account_number or '' }}"
+                 placeholder="سيُولَّد تلقائياً إن تُرك فارغاً"
+                 {% if mode=='edit' %}readonly style="background:#f0f4ff;"{% endif %}>
+          <div class="form-text">
+            {% if mode=='new' %}
+              يمكنك تركه فارغاً وسيتم توليده تلقائياً.
+            {% else %}
+              رقم الحساب ثابت بعد إنشاء المشترك.
+            {% endif %}
+          </div>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label fw-bold">الاسم الكامل <span class="required-star">*</span></label>
+          <input class="form-control" name="name"
+                 value="{{ subscriber.name or '' }}"
+                 placeholder="اسم المشترك" required autofocus>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-bold">الحالة</label>
+          <select class="form-select" name="active">
+          {% set active = subscriber.active if subscriber is not none and 'active' in subscriber else 1 %}
+
+<option value="1" {% if active|int != 0 %}selected{% endif %}>✅ نشط</option>
+<option value="0" {% if active|int == 0 %}selected{% endif %}>⏸️ متوقف</option>
+                  </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">رقم العداد</label>
+          <input class="form-control" name="meter_number"
+                 value="{{ subscriber.meter_number or '' }}"
+                 placeholder="مثال: M-123456">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">رقم الجوال</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-phone"></i></span>
+            <input class="form-control" name="phone" type="tel"
+                   value="{{ subscriber.phone or '' }}"
+                   placeholder="9677XXXXXXXX">
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">القرية / المنطقة</label>
+          <input class="form-control" name="village"
+                 value="{{ subscriber.village or '' }}"
+                 placeholder="مثال: مشورة">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">العنوان</label>
+          <input class="form-control" name="address"
+                 value="{{ subscriber.address or '' }}"
+                 placeholder="المدينة - الحي">
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Billing -->
+    <div class="form-section">
+      <div class="form-section-title"><i class="bi bi-cash-coin me-1"></i>إعدادات الفوترة</div>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label fw-bold">سعر الوحدة الافتراضي</label>
+          <div class="input-group">
+            <input class="form-control" name="default_unit_price" type="number"
+                   step="0.01" min="0.01"
+                   value="{{ subscriber.default_unit_price or '' }}"
+                   placeholder="{{ setting('default_unit_price') or '3500' }}">
+            <span class="input-group-text">{{ setting('currency_name','ريال') }}</span>
+          </div>
+          <div class="form-text">اتركه فارغاً لاستخدام الافتراضي: {{ setting('default_unit_price') }}</div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">رسوم الاشتراك الشهرية</label>
+          <div class="input-group">
+            <input class="form-control" name="default_subscription_fee" type="number"
+                   step="0.01" min="0.01"
+                   value="{{ subscriber.default_subscription_fee or '' }}"
+                   placeholder="{{ setting('default_subscription_fee') or '500' }}">
+            <span class="input-group-text">{{ setting('currency_name','ريال') }}</span>
+          </div>
+          <div class="form-text">اتركه فارغاً لاستخدام الافتراضي: {{ setting('default_subscription_fee') }}</div>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+          <div class="rounded-3 p-3 w-100" style="background:#e8f4fd;">
+            <div class="small text-muted">الرسوم الكلية المتوقعة / شهر</div>
+            <div class="fw-bold" id="monthly-est">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: بيانات الفاتورة الافتتاحية -->
+    <div class="form-section">
+      <div class="form-section-title"><i class="bi bi-receipt-cutoff me-1"></i>بيانات آخر فاتورة / الرصيد الافتتاحي</div>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label fw-bold">آخر قراءة</label>
+          <input class="form-control" name="last_reading" type="number" step="0.01" min="0"
+                 value="{{ subscriber.last_reading if subscriber is not none and subscriber.last_reading is not none else '' }}"
+                 placeholder="اختياري">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">المستحق السابق</label>
+          <input class="form-control" name="last_due_amount" type="number" step="0.01" min="0"
+                 value="{{ subscriber.last_due_amount if subscriber is not none and subscriber.last_due_amount is not none else '' }}"
+                 placeholder="اختياري">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">المسدد السابق</label>
+          <input class="form-control" name="last_paid_amount" type="number" step="0.01" min="0"
+                 value="{{ subscriber.last_paid_amount if subscriber is not none and subscriber.last_paid_amount is not none else '' }}"
+                 placeholder="اختياري">
+          <div class="form-text">يُستخدم هذا الرصيد عند إنشاء أول فاتورة للمشترك إن لم توجد فواتير سابقة.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Notes -->
+    <div class="form-section">
+      <div class="form-section-title"><i class="bi bi-journal-text me-1"></i>ملاحظات</div>
+      <textarea class="form-control" name="notes" rows="3"
+                placeholder="أي ملاحظات إضافية...">{{ subscriber.notes or '' }}</textarea>
+    </div>
+
+    <!-- Actions -->
+    <div class="d-flex gap-3 flex-wrap">
+      <button class="btn btn-primary btn-lg px-5" type="submit">
+        <i class="bi bi-check-lg me-1"></i>
+        {{ 'إضافة المشترك' if mode=='new' else 'حفظ التعديلات' }}
+      </button>
+      <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('subscribers') }}">
+        <i class="bi bi-arrow-right me-1"></i>رجوع
+      </a>
+      {% if mode=='edit' %}
+      <a class="btn btn-outline-info ms-auto" href="{{ url_for('reports') }}?subscriber_id={{ subscriber.id }}">
+        <i class="bi bi-graph-up me-1"></i>تقرير المشترك
+      </a>
+      {% endif %}
+    </div>
+
+  </form>
+</div>
+
+<script>
+// Live monthly estimate
+function updateEstimate() {
+  const up  = parseFloat(document.querySelector('[name=default_unit_price]').value)  || {{ setting('default_unit_price',3500)|float }};
+  const fee = parseFloat(document.querySelector('[name=default_subscription_fee]').value) || {{ setting('default_subscription_fee',500)|float }};
+  document.getElementById('monthly-est').textContent = (fee).toLocaleString('ar') + ' {{ setting("currency_name","ريال") }} (رسوم ثابتة)';
+}
+document.querySelector('[name=default_unit_price]')?.addEventListener('input', updateEstimate);
+document.querySelector('[name=default_subscription_fee]')?.addEventListener('input', updateEstimate);
+updateEstimate();
+
+// Prevent double submit
+document.getElementById('sub-form').addEventListener('submit', function() {
+  const btn = this.querySelector('[type=submit]');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الحفظ...';
+});
+</script>
+{% endblock %}

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="notranslate" translate="no">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Language" content="ar">
+  <meta name="google" content="notranslate">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>فاتورة {{ invoice.invoice_no }}</title>
+  <style>
+    @page { size: A4; margin: 4mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "DejaVu Sans", Tahoma, Arial, sans-serif;
+      direction: rtl;
+      color: #000;
+      background: #fff;
+      font-size: 14px;
+    }
+    .page { padding: 0; }
+    @media print {
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="padding:10px 14px; background:#f0f4ff; border-bottom:1px solid #d0d8ff; text-align:center;">
+    <button onclick="window.print()" style="padding:8px 18px;border:none;border-radius:8px;background:#1a56db;color:#fff;font-weight:700;cursor:pointer;">🖨️ طباعة</button>
+    <a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}" style="padding:8px 18px;border-radius:8px;background:#e5e7eb;color:#111;text-decoration:none;display:inline-block;font-weight:700;margin-inline-start:8px;">إغلاق</a>
+  </div>
+
+  {% set card_zoom = 1 %}
+  {% include "_invoice_card.html" %}
+</body>
+</html>

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}كشف حساب عميل{% endblock %}
+{% block head %}
+<style>
+  .stmt-card{border:0;border-radius:1.25rem;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+  .stmt-pill{border-radius:1rem;background:#f8fafc;border:1px solid #e2e8f0;padding:1rem}
+  .stmt-pill .val{font-size:1.4rem;font-weight:900;line-height:1}
+  .stmt-pill .lbl{font-size:.78rem;color:#64748b}
+  .mini-badge{border-radius:999px;padding:.2rem .55rem;font-size:.72rem;font-weight:700}
+  .invoice-row{background:#fff}
+  .pay-row{background:#f8fbff}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+      <h4 class="mb-0"><i class="bi bi-file-earmark-text text-primary me-2"></i>كشف حساب عميل</h4>
+      <div class="text-muted small">صفحة مستقلة لعرض حركة العميل من الفواتير والتسديدات والإجماليات.</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('reports') if is_admin else '#' }}">التقارير المحاسبية</a>
+  </div>
+
+  <div class="card stmt-card p-3 mb-3">
+    <form method="get" class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label">العميل</label>
+        <select class="form-select" name="subscriber_id" required>
+          <option value="">— اختر العميل —</option>
+          {% for s in subscribers %}
+            <option value="{{ s.id }}" {% if payload and payload.subscriber and payload.subscriber.id == s.id %}selected{% endif %}>
+              {{ s.name }} — {{ s.account_number }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">من</label>
+        <input type="date" class="form-control" name="start" value="{{ start }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">إلى</label>
+        <input type="date" class="form-control" name="end" value="{{ end }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">بحث</label>
+        <input type="text" class="form-control" name="q" value="{{ q }}" placeholder="اسم أو رقم">
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-primary w-100">عرض الكشف</button>
+      </div>
+    </form>
+  </div>
+
+  {% if payload and payload.subscriber %}
+    <div class="row g-3 mb-3">
+      <div class="col-6 col-lg-3">
+        <div class="stmt-pill">
+          <div class="val">{{ "%.0f"|format(payload.summary.invoices_total or 0) }}</div>
+          <div class="lbl">إجمالي الفواتير</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="stmt-pill">
+          <div class="val text-success">{{ "%.0f"|format(payload.summary.payments_total or 0) }}</div>
+          <div class="lbl">إجمالي التسديدات</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="stmt-pill">
+          <div class="val text-danger">{{ "%.0f"|format(payload.summary.remaining_total or 0) }}</div>
+          <div class="lbl">المتبقي</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="stmt-pill">
+          <div class="val">{{ "%.0f"|format(payload.summary.consumption_total or 0) }}</div>
+          <div class="lbl">إجمالي الاستهلاك</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card stmt-card p-3 mb-3">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+        <div>
+          <div class="fw-bold fs-5">{{ payload.subscriber.name }}</div>
+          <div class="text-muted small">{{ payload.subscriber.account_number }}</div>
+        </div>
+        <div class="text-end">
+          <div class="mini-badge bg-light border">من {{ start }} إلى {{ end }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card stmt-card p-3 mb-3">
+      <div class="fw-bold mb-2">الفواتير</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+          <thead>
+            <tr>
+              <th>التاريخ</th>
+              <th>الفاتورة</th>
+              <th>الاستهلاك</th>
+              <th>الإجمالي</th>
+              <th>المدفوع</th>
+              <th>المتبقي</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for inv in payload.invoices %}
+            <tr class="invoice-row">
+              <td>{{ inv.invoice_date or '-' }}</td>
+              <td>{{ inv.invoice_no }}</td>
+              <td>{{ "%.0f"|format(inv.consumption or 0) }}</td>
+              <td>{{ "%.0f"|format(inv.total_amount or 0) }}</td>
+              <td class="text-success">{{ "%.0f"|format(inv.paid_amount or 0) }}</td>
+              <td class="text-danger">{{ "%.0f"|format(inv.remaining_amount or 0) }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6" class="text-center text-muted py-4">لا توجد فواتير في هذه الفترة.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card stmt-card p-3">
+      <div class="fw-bold mb-2">التسديدات</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+          <thead>
+            <tr>
+              <th>التاريخ</th>
+              <th>رقم الفاتورة</th>
+              <th>المبلغ</th>
+              <th>الطريقة</th>
+              <th>ملاحظات</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for pay in payload.payments %}
+            <tr class="pay-row {% if pay.amount < 0 %}table-warning{% endif %}">
+              <td>{{ pay.payment_date or '-' }}</td>
+              <td>{{ pay.invoice_no or '-' }}</td>
+              <td class="{% if pay.amount < 0 %}text-danger{% else %}text-success{% endif %} fw-bold">{{ "%.0f"|format(pay.amount or 0) }}</td>
+              <td>{{ pay.method or '-' }}</td>
+              <td>
+                {{ pay.notes or '-' }}
+                {% if pay.is_reversal %}
+                  <span class="badge text-bg-warning ms-1">عكس</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5" class="text-center text-muted py-4">لا توجد تسديدات في هذه الفترة.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <div class="card stmt-card p-5 text-center">
+      <i class="bi bi-person-lines-fill fs-1 text-primary mb-2"></i>
+      <div class="fw-bold">اختر عميلًا لعرض كشف حسابه</div>
+      <div class="text-muted small mt-1">سيظهر كشف الحساب هنا فور اختيار العميل والضغط على عرض الكشف.</div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

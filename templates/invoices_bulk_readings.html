@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}إدخال القراءات الجماعية{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="fw-bold"><i class="bi bi-speedometer2 me-2"></i>إدخال القراءات الجماعية</h4>
+    <a href="{{ url_for('invoices_bulk_create') }}" class="btn btn-success">
+      <i class="bi bi-file-earmark-plus me-1"></i>إنشاء الفواتير
+    </a>
+  </div>
+
+  <form method="get" class="row g-2 mb-4">
+    <div class="col-md-4">
+      <select name="zone" class="form-select" onchange="this.form.submit()">
+        <option value="">— جميع المناطق —</option>
+        {% for z in zones %}
+          <option value="{{ z }}" {% if z == zone %}selected{% endif %}>{{ z }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-outline-primary">فلتر</button>
+    </div>
+  </form>
+
+  <form method="post">
+    <input type="hidden" name="zone" value="{{ zone }}">
+    <div class="row g-2 mb-3">
+      <div class="col-md-3">
+        <label class="form-label fw-bold">تاريخ القراءة</label>
+        <input type="date" name="invoice_date" class="form-control" value="{{ today }}" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-bold">شهر الفاتورة</label>
+        <input type="month" name="month_label" class="form-control" value="{{ month_label }}" required>
+      </div>
+    </div>
+
+    {% if subscribers %}
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white fw-bold">
+        المشتركون ({{ subscribers|length }})
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>رقم الحساب</th>
+              <th>الاسم</th>
+              <th>العنوان</th>
+              <th>القراءة السابقة</th>
+              <th class="text-danger">القراءة الحالية *</th>
+              <th>الاستهلاك المتوقع</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sub in subscribers %}
+            <tr>
+              <td><code>{{ sub.account_number }}</code></td>
+              <td>{{ sub.name }}</td>
+              <td class="text-muted small">{{ sub.address or '—' }}</td>
+              <td class="text-center">{{ last_readings.get(sub.id, 0) | int }}</td>
+              <td style="min-width:130px">
+                <input type="hidden" name="subscriber_id" value="{{ sub.id }}">
+                <input type="number" name="current_reading_{{ sub.id }}"
+                       class="form-control form-control-sm reading-input"
+                       min="{{ last_readings.get(sub.id, 0) }}"
+                       step="0.01"
+                       data-prev="{{ last_readings.get(sub.id, 0) }}"
+                       data-subid="{{ sub.id }}"
+                       placeholder="أدخل القراءة">
+              </td>
+              <td class="consumption-cell-{{ sub.id }} text-muted">—</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mt-3 d-flex gap-2">
+      <button type="submit" class="btn btn-primary btn-lg">
+        <i class="bi bi-save me-1"></i>حفظ جميع القراءات
+      </button>
+      <a href="{{ url_for('invoices') }}" class="btn btn-outline-secondary btn-lg">إلغاء</a>
+    </div>
+    {% else %}
+    <div class="alert alert-warning">لا يوجد مشتركون نشطون في هذه المنطقة.</div>
+    {% endif %}
+  </form>
+</div>
+
+<script>
+document.querySelectorAll('.reading-input').forEach(function(inp) {
+  inp.addEventListener('input', function() {
+    var prev = parseFloat(this.dataset.prev) || 0;
+    var curr = parseFloat(this.value) || 0;
+    var cell = document.querySelector('.consumption-cell-' + this.dataset.subid);
+    if (cell) {
+      var diff = curr - prev;
+      cell.textContent = diff >= 0 ? diff.toFixed(1) : '⚠️ أقل من السابق';
+      cell.className = (diff >= 0 ? 'text-success' : 'text-danger') + ' consumption-cell-' + this.dataset.subid;
+    }
+  });
+});
+</script>
+{% endblock %}

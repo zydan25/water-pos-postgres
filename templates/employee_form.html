@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <h4 class="mb-1">{{ 'تعديل الموظف' if employee else 'إضافة موظف' }}</h4>
+            <div class="text-muted small">الحسابات والصلاحيات تُحفظ دون حذف البيانات السابقة.</div>
+          </div>
+          <a class="btn btn-outline-secondary" href="{{ url_for('employees') }}">عودة للقائمة</a>
+        </div>
+
+        <form method="post" class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">اسم المستخدم</label>
+            <input class="form-control" name="username" value="{{ employee.username if employee else '' }}" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">{{ 'كلمة مرور جديدة (اختياري)' if employee else 'كلمة المرور' }}</label>
+            <input class="form-control" name="password" type="password" {{ '' if employee else 'required' }}>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">الاسم الكامل</label>
+            <input class="form-control" name="full_name" value="{{ employee.full_name if employee and employee.full_name else '' }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">المسمى الوظيفي</label>
+            <input class="form-control" name="job_title" value="{{ employee.job_title if employee and employee.job_title else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">الدور</label>
+            <select class="form-select" name="role">
+              {% set role_value = employee.role if employee else 'Collector' %}
+              {% for r in ['Collector', 'Staff', 'Admin', 'Technician', 'Accountant', 'Manager'] %}
+                <option value="{{ r }}" {% if role_value == r %}selected{% endif %}>{{ r }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <div class="alert alert-info small mb-0">
+              إن لم تحدد حساباً، يتم إنشاء حساب موظف تلقائياً داخل فرع حسابات الموظفين، ولا يمكن ربط نفس الحساب بموظف آخر.
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">الحساب المحاسبي للموظف</label>
+            <select class="form-select" name="account_node_id">
+              <option value="">إنشاء تلقائي</option>
+              {% for acc in employee_accounts %}
+                <option value="{{ acc.id }}" {% if employee and employee.account_node_id == acc.id %}selected{% endif %}>{{ acc.code }} - {{ acc.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">الحد الشهري</label>
+            <input class="form-control" name="monthly_target" type="number" step="0.01" value="{{ employee.monthly_target if employee and employee.monthly_target is not none else '0' }}">
+          </div>
+          <div class="col-md-4 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="1" id="active_edit" name="active" {% if not employee or employee.active %}checked{% endif %}>
+              <label class="form-check-label" for="active_edit">نشط</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary">حفظ التعديلات</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

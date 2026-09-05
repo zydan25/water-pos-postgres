@@ -1,0 +1,41 @@
+
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid">
+  <div class="card p-4 rounded-4 shadow-sm">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+      <div>
+        <h4 class="mb-0">كشف الملخصات</h4>
+        <div class="text-muted small">ملخص حسب القرية/المنطقة.</div>
+      </div>
+      <a class="btn btn-outline-secondary" href="{{ url_for('manual_collection.manual_collection_home') }}">رجوع</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-striped align-middle">
+        <thead>
+          <tr>
+            <th>القرية/المنطقة</th>
+            <th>عدد الفواتير</th>
+            <th>الإجمالي</th>
+            <th>المسدد</th>
+            <th>المتبقي</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in summary %}
+          <tr>
+            <td>{{ row.village }}</td>
+            <td>{{ row.count }}</td>
+            <td>{{ "%.0f"|format(row.total) }} {{ currency }}</td>
+            <td>{{ "%.0f"|format(row.paid) }} {{ currency }}</td>
+            <td class="fw-bold">{{ "%.0f"|format(row.remaining) }} {{ currency }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-4">لا توجد بيانات</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

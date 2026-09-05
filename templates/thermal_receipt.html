@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>وصل سداد - {{ invoice.invoice_no }}</title>
+  <style>
+    @page { size: 80mm auto; margin: 3mm 4mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "DejaVu Sans", Tahoma, Arial, sans-serif;
+      font-size: 12px;
+      color: #000;
+      background: #fff;
+      width: 72mm;
+      margin: 0 auto;
+      direction: rtl;
+    }
+    .center { text-align: center; }
+    .bold { font-weight: 900; }
+    .big { font-size: 15px; font-weight: 900; }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 4px;
+      margin: 2px 0;
+    }
+    .row .lbl { font-weight: 700; white-space: nowrap; }
+    .row .val { text-align: left; word-break: break-word; }
+    hr { border: none; border-top: 1px dashed #000; margin: 4px 0; }
+    .amount-box {
+      border: 2px solid #000;
+      border-radius: 6px;
+      padding: 6px 8px;
+      text-align: center;
+      margin: 6px 0;
+    }
+    .amount-box .label { font-size: 11px; font-weight: 700; }
+    .amount-box .value { font-size: 22px; font-weight: 900; line-height: 1.1; }
+    .status-paid { background: #e8f5e9; }
+    .status-unpaid { background: #fff3e0; }
+    .qr-wrap { text-align: center; margin: 6px 0; }
+    .qr-wrap img { width: 52mm; height: 52mm; }
+    .footer { font-size: 10px; text-align: center; margin-top: 6px; }
+    .toolbar {
+      display: flex; gap: 8px; justify-content: center; margin: 0 -8px 8px;
+      padding: 8px; background: #f0f4ff; border-bottom: 1px solid #d0d8ff;
+    }
+    .btn {
+      padding: 7px 14px; border: none; border-radius: 8px;
+      cursor: pointer; font-size: 13px; font-weight: 700;
+    }
+    .btn-print { background: #1a56db; color: white; }
+    .btn-close { background: #e0e0e0; color: #333; text-decoration: none; display: inline-flex; align-items: center; }
+    @media print { .no-print { display: none !important; } body { width: 72mm; } }
+  </style>
+</head>
+<body>
+  <div class="no-print toolbar">
+    <button class="btn btn-print" onclick="window.print()">🖨️ طباعة</button>
+    <a class="btn btn-close" href="{{ back_url }}">✕ إغلاق</a>
+  </div>
+
+  <div class="center bold" style="font-size:14px;">{{ settings.organization_name }}</div>
+  <div class="center" style="font-size:11px;">{{ settings.project_name }}</div>
+  <hr>
+
+  <div class="center big">🧾 وصل سداد</div>
+  <div class="center" style="font-size:11px; margin-bottom:3px;">
+    {{ payment.payment_date[:10] if payment.payment_date else now_date }}
+  </div>
+  <hr>
+
+  <div class="row"><span class="lbl">المشترك:</span><span class="val bold">{{ invoice.subscriber_name }}</span></div>
+  <div class="row"><span class="lbl">رقم الحساب:</span><span class="val">{{ invoice.account_number }}</span></div>
+  {% if invoice.meter_number %}
+  <div class="row"><span class="lbl">العداد:</span><span class="val">{{ invoice.meter_number }}</span></div>
+  {% endif %}
+  {% if invoice.address %}
+  <div class="row"><span class="lbl">العنوان:</span><span class="val">{{ invoice.address }}</span></div>
+  {% endif %}
+  <hr>
+
+  <div class="row"><span class="lbl">رقم الفاتورة:</span><span class="val bold">{{ invoice.invoice_no }}</span></div>
+  <div class="row"><span class="lbl">الشهر:</span><span class="val">{{ invoice.month_label }}</span></div>
+  <div class="row"><span class="lbl">الاستهلاك:</span><span class="val">{{ invoice.consumption }} وحدة</span></div>
+  <div class="row"><span class="lbl">مبلغ الفاتورة:</span><span class="val">{{ "%.0f"|format(invoice.total_amount) }} {{ settings.currency_name }}</span></div>
+  <hr>
+
+  <div class="amount-box {% if invoice.remaining_amount <= 0 %}status-paid{% else %}status-unpaid{% endif %}">
+    <div class="label">المبلغ المدفوع</div>
+    <div class="value">{{ "%.0f"|format(payment.amount) }}</div>
+    <div class="currency">{{ settings.currency_name }}</div>
+  </div>
+
+  <div class="row bold">
+    <span class="lbl">المتبقي:</span>
+    <span class="val">{{ "%.0f"|format(invoice.remaining_amount) }} {{ settings.currency_name }}</span>
+  </div>
+  <div class="row">
+    <span class="lbl">الطريقة:</span>
+    <span class="val">{{ payment.method or '-' }}</span>
+  </div>
+  <div class="row">
+    <span class="lbl">المتحصل:</span>
+    <span class="val">{{ collector_name or '-' }}</span>
+  </div>
+  {% if payment.notes %}
+  <div class="row">
+    <span class="lbl">ملاحظة:</span>
+    <span class="val">{{ payment.notes }}</span>
+  </div>
+  {% endif %}
+
+  <div class="qr-wrap">
+    <img src="data:image/png;base64,{{ qr_data }}" alt="QR">
+  </div>
+
+  <div class="footer">
+    <div>رقم السند: {{ payment.id }}</div>
+    <div>{{ settings.organization_name }}</div>
+    <div>{{ settings.project_name }}</div>
+  </div>
+</body>
+</html>

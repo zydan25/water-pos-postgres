@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+  <div class="card p-4 text-center">
+    <h1 class="mb-2">{{ title }}</h1>
+    <p class="muted mb-3">{{ message }}</p>
+    <a class="btn btn-primary" href="{{ url_for('index') }}">العودة للرئيسية</a>
+  </div>
+</div>
+{% endblock %}

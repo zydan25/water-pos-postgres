@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+{% block head %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+<style>
+/* ── تنسيق شريط الأزرار الأفقية الجديد ── */
+.quick-actions-inline {
+    justify-content: flex-start;
+}
+.inline-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    text-decoration: none !important;
+    font-weight: bold;
+    color: #1a1919; 
+    font-size: 0.85rem;
+    transition: color 0.2s ease, transform 0.1s ease;
+    white-space: nowrap;
+}
+.inline-action-btn:hover {
+    color: #7209b7; 
+    transform: translateY(-1px);
+}
+/* تكبير وتسميك علامة الزائد (+) وتغيير لونها ليكون مختلفاً عن النص */
+.inline-action-btn .plus-icon {
+    font-size: 1.4rem;
+    font-weight: 900 !important;
+    color: #495057 !important; 
+    line-height: 1;
+}
+
+/* ── التنسيقات العامة للوحة التحكم ── */
+.kpi-card { border-radius:16px; padding:20px; color:white; position:relative; overflow:hidden; }
+.kpi-card .kpi-icon { position:absolute; left:16px; top:50%; transform:translateY(-50%); font-size:3.5rem; opacity:.18; }
+.kpi-card .kpi-val  { font-size:2rem; font-weight:900; line-height:1; }
+.kpi-card .kpi-lbl  { font-size:.8rem; opacity:.85; margin-top:4px; }
+.kpi-card .kpi-sub  { font-size:.78rem; opacity:.7; margin-top:2px; }
+
+.kpi-blue   { background:linear-gradient(135deg,#1a56db,#3b82f6); }
+.kpi-green  { background:linear-gradient(135deg,#059669,#34d399); }
+.kpi-orange { background:linear-gradient(135deg,#d97706,#fbbf24); }
+.kpi-red    { background:linear-gradient(135deg,#dc2626,#f87171); }
+.kpi-purple { background:linear-gradient(135deg,#7c3aed,#a78bfa); }
+.kpi-teal   { background:linear-gradient(135deg,#0891b2,#22d3ee); }
+
+.quick-action { transition:.15s; border:1.5px solid #e5e7eb; border-radius:14px; padding:16px 12px; text-align:center; text-decoration:none; color:inherit; display:block; }
+.quick-action:hover { border-color:#1a56db; background:#f0f4ff; color:#1a56db; transform:translateY(-2px); box-shadow:0 6px 20px rgba(26,86,219,.1); }
+.quick-action i { font-size:1.8rem; display:block; margin-bottom:6px; }
+.quick-action .qa-lbl { font-size:.82rem; font-weight:700; }
+
+.chart-card { border-radius:16px; border:1px solid #e5e7eb; padding:20px; }
+.activity-item { display:flex; align-items:flex-start; gap:12px; padding:10px 0; border-bottom:1px solid #f3f4f6; }
+.activity-item:last-child { border-bottom:none; }
+.activity-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; margin-top:5px; }
+.quick-actions-inline {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: .55rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: .1rem;
+}
+.inline-action-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    background: linear-gradient(180deg, #ffffff, #f8fbff);
+    border: 1px solid #dbe4f0;
+    border-radius: 14px;
+    padding: .55rem .5rem;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, .05);
+}
+.inline-action-btn span {
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.inline-action-btn .plus-icon {
+    font-size: 1.08rem;
+}
+.quick-actions-footer {
+    margin-top: .75rem;
+    display: flex;
+    justify-content: center;
+}
+.quick-actions-footer .designer-badge {
+    background: #f8fafc;
+    border: 1px solid #dbe4f0;
+    color: #334155;
+    border-radius: 999px;
+    padding: .35rem .8rem;
+    font-size: .78rem;
+    font-weight: 600;
+}
+@media (max-width: 576px) {
+    .inline-action-btn {
+        padding: .5rem .4rem;
+    }
+    .inline-action-btn span {
+        font-size: .75rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <div class="row g-3 mb-4">
+    
+    <div class="col-lg-3">
+      <div class="chart-card h-100">
+        <div class="fw-bold fs-5 mb-3">إجراءات سريعة</div>
+
+        <!-- شريط الإجراءات السريعة -->
+        <div class="card border-0 shadow-sm rounded-4 mb-3">
+          <div class="card-body py-2 px-3">
+            <div class="quick-actions-inline" dir="rtl">
+              <a href="{{ url_for('invoice_new') }}" class="inline-action-btn">
+                <i class="bi bi-plus plus-icon"></i>
+                <span>فاتورة</span>
+              </a>
+              <a href="{{ url_for('vouchers_page') }}" class="inline-action-btn">
+                <i class="bi bi-plus plus-icon"></i>
+                <span>قطع سند</span>
+              </a>
+              <a href="{{ url_for('subscriber_new') }}" class="inline-action-btn">
+                <i class="bi bi-plus plus-icon"></i>
+                <span> مشترك</span>
+              </a>
+            </div>
+           
+          </div>
+        </div>
+
+        <!-- شبكة الأزرار الستة المصلحة والمربوطة بالباك إند -->
+        <div class="row g-2">
+  {% set actions = [
+
+    (url_for('payment_center'),         'bi-cash-coin',            'تسجيل سداد'),      (url_for('collection_trip'),        'bi-map',                  'جولة تحصيل'),      (url_for('employees'),              'bi-person-badge',         'الموظفين'),
+    (url_for('subscribers'),            'bi-people',               'المشتركين'),
+    (url_for('arrears_report'),         'bi-exclamation-triangle', 'متأخرات'),
+    (url_for('invoices_print_by_date'), 'bi-printer',              'طباعة بالتاريخ'),
+    (url_for('collector_daily_report'), 'bi-calendar-check',       'تقرير يومي'),
+    (url_for('user_manual'),            'bi-book',                 'دليل الاستخدام') 
+  ] %}
+
+  {% for url, icon, lbl in actions %}
+  <div class="col-6">
+    <a href="{{ url }}" class="quick-action">
+      <i class="bi {{ icon }}"></i>
+      <div class="qa-lbl">{{ lbl }}</div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="chart-card h-100">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div class="fw-bold fs-5">أعلى المديونيات</div>
+          <a class="btn btn-sm btn-outline-danger" href="{{ url_for('arrears_report') }}">عرض الكل</a>
+        </div>
+        {% for d in top_debtors %}
+        <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+          <div>
+            <div class="fw-semibold small">{{ d.name }}</div>
+            <div class="text-muted" style="font-size:.75rem;">{{ d.account_number }}</div>
+          </div>
+          <div class="text-end">
+            <div class="fw-bold text-danger small">{{ "%.0f"|format(d.remaining) }}</div>
+            <div class="text-muted" style="font-size:.72rem;">{{ d.months }} شهر</div>
+          </div>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-check-circle text-success fs-3"></i>
+          <div class="mt-2 small">لا توجد مديونيات</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="chart-card h-100">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div class="fw-bold fs-5">آخر النشاطات</div>
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('invoices') }}">الفواتير</a>
+        </div>
+        {% for inv in recent_invoices %}
+        <div class="activity-item">
+          <div class="activity-dot {% if inv.remaining_amount <= 0 %}bg-success{% else %}bg-warning{% endif %}"></div>
+          <div class="flex-grow-1">
+            <div class="fw-semibold small">{{ inv.subscriber_name }}</div>
+            <div class="text-muted" style="font-size:.76rem;">فاتورة {{ inv.invoice_no }} — {{ inv.month_label }}</div>
+          </div>
+          <div class="text-end">
+            <div class="fw-bold small">{{ "%.0f"|format(inv.total_amount) }}</div>
+            <div class="text-muted" style="font-size:.74rem;">{{ (inv.created_at or '')[:10] }}</div>
+          </div>
+          <a class="btn btn-sm btn-outline-secondary py-0 px-2" href="{{ url_for('invoice_detail', invoice_id=inv.id) }}">↗</a>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+  <div class="row g-2 mb-4">
+    
+    <div class="col-6 col-md-4 col-lg-2">
+      <div class="kpi-card kpi-blue">
+        <div class="kpi-icon"><i class="bi bi-people-fill"></i></div>
+        <div class="kpi-val">{{ stats.total_subscribers }}</div>
+        <div class="kpi-lbl">المشتركون</div>
+        <div class="kpi-sub">{{ stats.active_subscribers }} نشط</div>
+      </div>
+    </div>
+    
+    <div class="col-6 col-md-4 col-lg-2">
+      <div class="kpi-card kpi-teal">
+        <div class="kpi-icon"><i class="bi bi-receipt"></i></div>
+        <div class="kpi-val">{{ stats.invoices_this_month }}</div>
+        <div class="kpi-lbl">فواتير هذا الشهر</div>
+        <div class="kpi-sub">إجمالي {{ stats.total_invoices }}</div>
+      </div>
+    </div>
+    
+    <div class="col-6 col-md-4 col-lg-2">
+      <div class="kpi-card kpi-green">
+        <div class="kpi-icon"><i class="bi bi-cash-stack"></i></div>
+        <div class="kpi-val">{{ "%.0f"|format(stats.collected_this_month) }}</div>
+        <div class="kpi-lbl">محصّل هذا الشهر</div>
+        <div class="kpi-sub">{{ currency }}</div>
+      </div>
+    </div>
+    
+    <div class="col-6 col-md-4 col-lg-2">
+      <div class="kpi-card kpi-orange">
+        <div class="kpi-icon"><i class="bi bi-wallet2"></i></div>
+        <div class="kpi-val">{{ "%.0f"|format(stats.total_collected) }}</div>
+        <div class="kpi-lbl">إجمالي المحصّل</div>
+        <div class="kpi-sub">{{ currency }}</div>
+      </div>
+    </div>
+    
+    <div class="col-6 col-md-4 col-lg-2">
+      <div class="kpi-card kpi-red" style="cursor:pointer;" onclick="location.href='{{ url_for('arrears_report') }}'">
+        <div class="kpi-icon"><i class="bi bi-exclamation-triangle"></i></div>
+        <div class="kpi-val">{{ stats.overdue_count }}</div>
+        <div class="kpi-lbl">متأخرون</div>
+        <div class="kpi-sub">{{ "%.0f"|format(stats.total_due) }} {{ currency }}</div>
+      </div>
+    </div>
+    
+    <div class="col-6 col-md-4 col-lg-2">
+      <div class="kpi-card kpi-purple">
+        <div class="kpi-icon"><i class="bi bi-graph-up"></i></div>
+        <div class="kpi-val">{{ stats.collection_rate }}%</div>
+        <div class="kpi-lbl">نسبة التحصيل</div>
+        <div class="kpi-sub">من إجمالي الفواتير</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-lg-8">
+      <div class="chart-card">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <div class="fw-bold fs-5">الإيرادات الشهرية</div>
+          <div class="btn-group btn-group-sm" role="group">
+            <button class="btn btn-outline-secondary active" id="chart-bar-btn" onclick="switchChart('bar')">أعمدة</button>
+            <button class="btn btn-outline-secondary" id="chart-line-btn" onclick="switchChart('line')">خط</button>
+          </div>
+        </div>
+        <canvas id="revenueChart" height="100"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="chart-card h-100 d-flex flex-column">
+        <div class="fw-bold fs-5 mb-3">نسبة التحصيل الكلية</div>
+        <div class="flex-grow-1 d-flex align-items-center justify-content-center">
+          <canvas id="gaugeChart" width="220" height="220" style="max-width:220px;"></canvas>
+        </div>
+        <div class="row g-2 text-center mt-2">
+          <div class="col-6">
+            <div class="small text-muted">إجمالي الفواتير</div>
+            <div class="fw-bold">{{ "%.0f"|format(stats.grand_total) }}</div>
+          </div>
+          <div class="col-6">
+            <div class="small text-muted">المتبقي</div>
+            <div class="fw-bold text-danger">{{ "%.0f"|format(stats.grand_remaining) }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <div class="chart-card">
+        <div class="fw-bold fs-5 mb-3">الاستهلاك الشهري (وحدة)</div>
+        <canvas id="consumptionChart" height="80"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="chart-card">
+        <div class="fw-bold fs-5 mb-3">إرسال واتساب</div>
+        <form method="post" action="{{ url_for('send_whatsapp') }}" enctype="multipart/form-data">
+          <div class="mb-2"><input class="form-control form-control-sm" name="to_number" placeholder="رقم المستلم"></div>
+         <!-- <div class="mb-2"><input class="form-control form-control-sm" name="from_number" value="{{ setting('whatsapp_from_number') }}" placeholder="From Number"></div>-->
+          <div class="mb-2"><textarea class="form-control form-control-sm" name="message_body" rows="3" placeholder="نص الرسالة" required></textarea></div>
+          <div class="mb-2"><input class="form-control form-control-sm" type="file" name="file"></div>
+          <button class="btn btn-success btn-sm w-100">إرسال</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── البيانات البرمجية المرفوعة من الخادم ──
+const monthLabels   = {{ month_labels|tojson }};
+const monthTotals   = {{ month_totals|tojson }};
+const monthPaid     = {{ month_paid|tojson }};
+const monthConsump  = {{ month_consumption|tojson }};
+const collRate      = {{ stats.collection_rate }};
+
+// ── إعداد مخطط الإيرادات البياني ──
+const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+let revenueChart = new Chart(revenueCtx, {
+  type: 'bar',
+  data: {
+    labels: monthLabels,
+    datasets: [
+      { label: 'الإجمالي',  data: monthTotals, backgroundColor:'rgba(26,86,219,.25)', borderColor:'#1a56db', borderWidth:2, borderRadius:6 },
+      { label: 'المحصّل',  data: monthPaid,   backgroundColor:'rgba(5,150,105,.25)',  borderColor:'#059669', borderWidth:2, borderRadius:6 },
+    ]
+  },
+  options: {
+    responsive:true, plugins:{ legend:{ position:'top', labels:{ font:{family:'inherit'}, boxWidth:12 } } },
+    scales: { y:{ beginAtZero:true, grid:{ color:'#f0f0f0' } }, x:{ grid:{ display:false } } }
+  }
+});
+
+function switchChart(type) {
+  revenueChart.config.type = type;
+  revenueChart.update();
+  document.getElementById('chart-bar-btn').classList.toggle('active', type==='bar');
+  document.getElementById('chart-line-btn').classList.toggle('active', type==='line');
+}
+
+// ── إعداد مؤشر نسبة التحصيل (Doughnut) ──
+const gaugeCtx = document.getElementById('gaugeChart').getContext('2d');
+new Chart(gaugeCtx, {
+  type: 'doughnut',
+  data: {
+    labels: ['محصّل','متبقي'],
+    datasets:[{ data:[collRate, 100-collRate],
+      backgroundColor:['#059669','#fee2e2'], borderWidth:0, borderRadius:6 }]
+  },
+  options: {
+    cutout:'72%', responsive:true,
+    plugins: {
+      legend:{ display:false },
+      tooltip:{ callbacks:{ label: ctx => ctx.label + ': ' + ctx.parsed + '%' } },
+    }
+  },
+  plugins:[{
+    id:'centerText',
+    afterDraw(chart) {
+      const {ctx, chartArea:{left,top,right,bottom}} = chart;
+      const cx = (left+right)/2, cy = (top+bottom)/2;
+      ctx.save();
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.font='bold 28px inherit'; ctx.fillStyle='#059669';
+      ctx.fillText(collRate+'%', cx, cy-8);
+      ctx.font='12px inherit'; ctx.fillStyle='#6b7280';
+      ctx.fillText('نسبة التحصيل', cx, cy+18);
+      ctx.restore();
+    }
+  }]
+});
+
+// ── إعداد خط الاستهلاك البياني ──
+const consCtx = document.getElementById('consumptionChart').getContext('2d');
+new Chart(consCtx, {
+  type:'line',
+  data:{
+    labels: monthLabels,
+    datasets:[{ label:'الاستهلاك', data:monthConsump, fill:true,
+      backgroundColor:'rgba(8,145,178,.12)', borderColor:'#0891b2', borderWidth:2,
+      tension:.4, pointRadius:4, pointBackgroundColor:'#0891b2' }]
+  },
+  options:{ responsive:true, plugins:{ legend:{display:false} },
+    scales:{ y:{beginAtZero:true, grid:{color:'#f0f0f0'}}, x:{grid:{display:false}} } }
+});
+</script>
+{% endblock %}

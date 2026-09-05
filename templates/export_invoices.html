@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <style>
+    {% set CFG = {
+        1:  {'cols':1, 'font':15, 'pad':12, 'gap':8},
+        2:  {'cols':2, 'font':14, 'pad':9,  'gap':6},
+        3:  {'cols':3, 'font':13, 'pad':7,  'gap':5},
+        4:  {'cols':2, 'font':12, 'pad':8,  'gap':6},
+        6:  {'cols':3, 'font':11, 'pad':6,  'gap':5},
+        8:  {'cols':4, 'font':10, 'pad':5,  'gap':4},
+        9:  {'cols':3, 'font':10, 'pad':5,  'gap':5},
+        12: {'cols':4, 'font':9,  'pad':4,  'gap':4},
+    } %}
+    {% set cfg = CFG.get(per_page, CFG[4]) %}
+    {% set cols = cfg.cols %}
+    {% set rows = ((per_page + cols - 1) // cols) %}
+    {% set hgap = cfg.gap %}
+    {% set vgap = cfg.gap %}
+    {% set card_h = ((272 - (rows - 1) * vgap) / rows) | round(1) %}
+
+    @page { size: A4; margin: 10mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "DejaVu Sans", Arial, sans-serif;
+      direction: rtl;
+      color: #111;
+    }
+    .sheet {
+      display: grid;
+      grid-template-columns: repeat({{ cols }}, 1fr);
+      grid-auto-rows: {{ card_h }}mm;
+      grid-column-gap: {{ hgap }}mm;
+      grid-row-gap: {{ vgap }}mm;
+      align-content: start;
+      width: 100%;
+    }
+    .card {
+      border: 1px solid #111;
+      border-radius: {{ 8 if per_page <= 6 else 6 }}px;
+      padding: {{ cfg.pad }}mm;
+      page-break-inside: avoid;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      font-size: {{ cfg.font }}px;
+      line-height: 1.35;
+    }
+    .card .title {
+      font-weight: 700;
+      text-align: center;
+      font-size: {{ cfg.font + 3 }}px;
+      border-bottom: 1px dashed #111;
+      padding-bottom: 2mm;
+      margin-bottom: 2mm;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .row { display: flex; justify-content: space-between; align-items: baseline; gap: 3mm; }
+    .row .label { font-weight: 700; white-space: nowrap; }
+    .row .value { font-weight: 700; text-align: left; word-break: break-word; }
+    .card.footer-strip {
+      border-top: 1px dashed #111;
+      padding-top: 1.5mm;
+      margin-top: 1.5mm;
+      font-size: {{ (cfg.font - 1) }}px;
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    {% for invoice in invoices %}
+    <div class="card">
+      <div>
+        <div class="title">{{ settings.organization_name }}</div>
+        <div class="row"><span class="label">الفاتورة</span><span class="value">{{ invoice.invoice_no }}</span></div>
+        <div class="row"><span class="label">المشترك</span><span class="value">{{ invoice.subscriber_name }}</span></div>
+        <div class="row"><span class="label">الحساب</span><span class="value">{{ invoice.account_number }}</span></div>
+        <div class="row"><span class="label">الشهر</span><span class="value">{{ invoice.month_label }}</span></div>
+        <div class="row"><span class="label">الاستهلاك</span><span class="value">{{ invoice.consumption }}</span></div>
+        <div class="row"><span class="label">الإجمالي</span><span class="value">{{ "%.0f"|format(invoice.total_amount) }}</span></div>
+        <div class="row"><span class="label">المسدد</span><span class="value">{{ "%.0f"|format(invoice.paid_amount) }}</span></div>
+        <div class="row"><span class="label">المتبقي</span><span class="value">{{ "%.0f"|format(invoice.remaining_amount) }}</span></div>
+      </div>
+      <div class="footer-strip">
+        {{ invoice.created_by_name or '-' }} — {{ settings.project_name }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</body>
+</html>

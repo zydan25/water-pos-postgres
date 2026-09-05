@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container" style="max-width:520px; margin-top:32px;">
+  <div class="card p-4">
+    <div class="d-flex align-items-center gap-3 mb-4">
+      <div style="background:#1a56db;color:white;border-radius:14px;padding:10px 14px;font-size:22px;">🖨️</div>
+      <div>
+        <h4 class="mb-0">طباعة الفواتير بالتاريخ</h4>
+        <div class="text-muted small">اختر الفترة الزمنية لطباعة جميع فواتيرها</div>
+      </div>
+    </div>
+
+    <form method="get" action="{{ url_for('invoices_print_by_date') }}" class="vstack gap-3">
+
+      <div class="row g-3">
+        <div class="col-6">
+          <label class="form-label fw-bold">من تاريخ <span class="text-danger">*</span></label>
+          <input class="form-control" type="date" name="date_from"
+                 value="{{ date_from }}" required>
+        </div>
+        <div class="col-6">
+          <label class="form-label fw-bold">إلى تاريخ <span class="text-danger">*</span></label>
+          <input class="form-control" type="date" name="date_to"
+                 value="{{ date_to }}" required>
+        </div>
+      </div>
+
+      <div>
+        <label class="form-label fw-bold">بحث إضافي (اختياري)</label>
+        <input class="form-control" name="q" value="{{ q }}"
+               placeholder="اسم المشترك أو رقم الحساب أو رقم الفاتورة">
+      </div>
+
+      <!-- Quick date shortcuts -->
+      <div>
+        <div class="form-label fw-bold mb-2">اختصارات سريعة</div>
+        <div class="d-flex flex-wrap gap-2" id="shortcuts"></div>
+      </div>
+
+      <div class="d-grid gap-2">
+        <button class="btn btn-primary btn-lg" type="submit">
+          <i class="bi bi-printer me-1"></i> معاينة وطباعة الفواتير
+        </button>
+        <button class="btn btn-success btn-lg" type="submit"
+                formaction="{{ url_for('invoices_print_by_date_pdf') }}">
+          <i class="bi bi-download me-1"></i> حفظ جميع الفواتير (PDF)
+        </button>
+        <a href="{{ url_for('invoices') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-right me-1"></i> العودة للفواتير
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card p-3 mt-3">
+    <div class="small text-muted">
+      <i class="bi bi-info-circle me-1"></i>
+      سيتم طباعة جميع الفواتير التي تاريخ إنشائها يقع ضمن الفترة المحددة.
+      تظهر ثلاث فواتير في كل صفحة A4 بنفس تنسيق الفاتورة المنفردة.
+    </div>
+  </div>
+</div>
+
+<script>
+  // Quick date shortcuts
+  const shortcuts = document.getElementById('shortcuts');
+  const today = new Date();
+
+  function fmt(d) {
+    return d.toISOString().slice(0, 10);
+  }
+
+  function addShortcut(label, from, to) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-sm btn-outline-secondary';
+    btn.textContent = label;
+    btn.onclick = () => {
+      document.querySelector('[name=date_from]').value = fmt(from);
+      document.querySelector('[name=date_to]').value   = fmt(to);
+    };
+    shortcuts.appendChild(btn);
+  }
+
+  // This month
+  const m1 = new Date(today.getFullYear(), today.getMonth(), 1);
+  const m2 = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  addShortcut('هذا الشهر', m1, m2);
+
+  // Last month
+  const lm1 = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const lm2 = new Date(today.getFullYear(), today.getMonth(), 0);
+  addShortcut('الشهر الماضي', lm1, lm2);
+
+  // This quarter
+  const q = Math.floor(today.getMonth() / 3);
+  const q1 = new Date(today.getFullYear(), q * 3, 1);
+  const q2 = new Date(today.getFullYear(), q * 3 + 3, 0);
+  addShortcut('هذا الربع', q1, q2);
+
+  // This year
+  const y1 = new Date(today.getFullYear(), 0, 1);
+  const y2 = new Date(today.getFullYear(), 11, 31);
+  addShortcut('هذا العام', y1, y2);
+
+  // Last 7 days
+  const w = new Date(today); w.setDate(w.getDate() - 6);
+  addShortcut('آخر 7 أيام', w, today);
+
+  // Last 30 days
+  const t30 = new Date(today); t30.setDate(t30.getDate() - 29);
+  addShortcut('آخر 30 يوم', t30, today);
+</script>
+{% endblock %}

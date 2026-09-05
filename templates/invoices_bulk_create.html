@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}إنشاء الفواتير الجماعية{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="fw-bold"><i class="bi bi-file-earmark-plus me-2"></i>إنشاء الفواتير الجماعية</h4>
+    <a href="{{ url_for('invoices_bulk_readings') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-speedometer2 me-1"></i>إدخال القراءات
+    </a>
+  </div>
+
+  {% if pending %}
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle me-1"></i>
+    يوجد <strong>{{ pending|length }}</strong> قراءة جاهزة لتحويلها إلى فواتير.
+  </div>
+
+  <form method="post">
+    <div class="mb-3">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="selectAll">تحديد الكل</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAll">إلغاء التحديد</button>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th><input type="checkbox" id="masterCheck"></th>
+              <th>رقم الحساب</th>
+              <th>الاسم</th>
+              <th>القراءة السابقة</th>
+              <th>القراءة الحالية</th>
+              <th>الاستهلاك</th>
+              <th>شهر الفاتورة</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in pending %}
+            <tr>
+              <td><input type="checkbox" name="reading_id" value="{{ r.id }}" class="row-check" checked></td>
+              <td><code>{{ r.account_number }}</code></td>
+              <td>{{ r.subscriber_name }}</td>
+              <td class="text-center">{{ r.previous_reading | int }}</td>
+              <td class="text-center fw-bold">{{ r.current_reading | int }}</td>
+              <td class="text-center text-success">{{ (r.current_reading - r.previous_reading) | int }}</td>
+              <td>{{ r.month_label }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mt-3 d-flex gap-2">
+      <button type="submit" class="btn btn-success btn-lg">
+        <i class="bi bi-check2-all me-1"></i>إنشاء الفواتير المحددة
+      </button>
+      <a href="{{ url_for('invoices') }}" class="btn btn-outline-secondary btn-lg">إلغاء</a>
+    </div>
+  </form>
+
+  <script>
+  var master = document.getElementById('masterCheck');
+  master.addEventListener('change', function(){
+    document.querySelectorAll('.row-check').forEach(function(c){ c.checked = master.checked; });
+  });
+  document.getElementById('selectAll').onclick = function(){ document.querySelectorAll('.row-check').forEach(function(c){ c.checked=true; }); };
+  document.getElementById('deselectAll').onclick = function(){ document.querySelectorAll('.row-check').forEach(function(c){ c.checked=false; }); };
+  </script>
+  {% else %}
+  <div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    لا توجد قراءات محفوظة جاهزة. <a href="{{ url_for('invoices_bulk_readings') }}">أدخل القراءات أولاً</a>.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

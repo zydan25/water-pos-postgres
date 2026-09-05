@@ -1,0 +1,456 @@
+{% extends "base.html" %}
+{% block title %}التقارير المحاسبية{% endblock %}
+{% block head %}
+<style>
+  .report-page{
+    --card-radius: 1.25rem;
+  }
+  .report-page .report-card,
+  .report-page .stat-box{
+    border:0;
+    border-radius:var(--card-radius);
+    box-shadow:0 1px 3px rgba(15,23,42,.06);
+  }
+  .report-page .section-title{
+    font-weight:800;
+  }
+  .report-page .print-only{display:none;}
+  .report-page .report-table thead th{
+    background:#1e3a8a !important;
+    color:#fff !important;
+    border-color:#1e3a8a !important;
+    vertical-align:middle;
+    white-space:nowrap;
+  }
+  .report-page .report-table tbody tr:nth-child(even) > td{
+    background:#f8fafc;
+  }
+  .report-page .report-table td,
+  .report-page .report-table th{
+    padding:.55rem .65rem;
+    vertical-align:middle;
+  }
+  .report-page .issue-card{
+    border:1px solid #fde68a;
+    background:#fffbeb;
+    border-radius:1rem;
+    box-shadow:0 1px 2px rgba(15,23,42,.03);
+  }
+  .report-page .multi-pick{
+    border:1px solid #dbe4ef;
+    border-radius:1rem;
+    background:#fff;
+    overflow:hidden;
+  }
+  .report-page .multi-pick-head{
+    padding:.75rem .9rem;
+    background:#f8fafc;
+    border-bottom:1px solid #e2e8f0;
+  }
+  .report-page .multi-pick-body{
+    max-height:340px;
+    overflow:auto;
+    padding:.35rem;
+  }
+  .report-page .acc-choice{
+    display:flex;
+    align-items:center;
+    gap:.45rem;
+    padding:.45rem .55rem;
+    border-radius:.8rem;
+    cursor:pointer;
+    margin:.1rem 0;
+  }
+  .report-page .acc-choice:hover{
+    background:#eff6ff;
+  }
+  .report-page .acc-choice .code{
+    font-family:monospace;
+    color:#64748b;
+    font-size:.78rem;
+    background:#f8fafc;
+    border:1px solid #e2e8f0;
+    border-radius:999px;
+    padding:.14rem .42rem;
+    white-space:nowrap;
+  }
+  .report-page .acc-choice .name{
+    font-weight:700;
+    color:#0f172a;
+    min-width:0;
+    flex:1;
+  }
+  .report-page .acc-choice .meta{
+    white-space:nowrap;
+  }
+  .report-page .acc-choice.parent{
+    background:#f8fafc;
+  }
+  .report-page .acc-choice.parent .name{
+    color:#1e40af;
+  }
+  .report-page .acc-choice .balance{
+    min-width:7rem;
+    text-align:end;
+    font-weight:800;
+  }
+  .report-page .account-name{
+    font-weight:800;
+  }
+  .report-page .account-sub{
+    font-size:.76rem;
+    color:#64748b;
+  }
+  .report-page .journal-entry{
+    border:1px solid #e5e7eb;
+    border-radius:1rem;
+    overflow:hidden;
+    margin-bottom:.8rem;
+    background:#fff;
+  }
+  .report-page .journal-entry > summary{
+    list-style:none;
+    cursor:pointer;
+    padding:.9rem 1rem;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:.75rem;
+    background:#f8fafc;
+  }
+  .report-page .journal-entry > summary::-webkit-details-marker{display:none;}
+  .report-page .journal-entry .entry-meta{
+    display:flex;
+    flex-wrap:wrap;
+    gap:.4rem .5rem;
+    align-items:center;
+  }
+  .report-page .journal-entry .entry-lines{
+    padding:.75rem;
+    border-top:1px dashed #e5e7eb;
+  }
+  .report-page .detail-row td{
+    background:#fafafa;
+    font-size:.78rem;
+    padding:.35rem .5rem;
+  }
+  .report-page .totals-row{
+    background:#f0fdf4;
+    font-weight:800;
+  }
+  .report-page .pos{color:#16a34a;}
+  .report-page .neg{color:#dc2626;}
+  .report-page .stat-box .label{color:#64748b;font-size:.82rem}
+  .report-page .stat-box .value{font-weight:900;font-size:1.45rem;line-height:1.1}
+  .report-page .print-header{
+    border-bottom:2px solid #1e3a8a;
+    padding-bottom:.45rem;
+    margin-bottom:.75rem;
+  }
+  .report-page .print-footer{
+    display:none;
+  }
+  @media print{
+    @page{size:A4;margin:12mm 10mm;}
+    body{background:#fff !important;}
+    .no-print, .sidebar, .sidebar-overlay, .top-bar-modern, .bottom-nav, .more-menu, .more-overlay, .mobile-toggle, #notif-bell, .quick-bar{display:none !important;}
+    .print-only{display:block !important;}
+    .report-card, .stat-box, .journal-entry{box-shadow:none !important;}
+    .report-table{font-size:.78rem;}
+    .report-table thead th{print-color-adjust:exact; -webkit-print-color-adjust:exact;}
+    .print-footer{
+      display:block !important;
+      position:fixed;
+      left:0; right:0; bottom:0;
+      text-align:center;
+      font-size:.7rem;
+      color:#475569;
+      border-top:1px solid #cbd5e1;
+      padding:.3rem;
+      background:#fff;
+    }
+  }
+  @media (max-width: 767.98px){
+    .report-page .hide-sm{display:none !important;}
+    .report-page .journal-entry > summary{
+      align-items:flex-start;
+      flex-direction:column;
+    }
+    .report-page .journal-entry .entry-meta{width:100%;}
+    .report-page .acc-choice{align-items:flex-start;}
+    .report-page .acc-choice .balance{min-width:5.5rem;}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid report-page px-2 px-md-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 no-print">
+    <div>
+      <h3 class="mb-0 fw-bold"><i class="bi bi-journal-text me-2"></i> التقارير المحاسبية</h3>
+      <div class="text-muted small">أرصدة الحسابات، القيود اليومية، والسندات في صفحة واحدة قابلة للطباعة.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-outline-secondary" type="button" onclick="window.print()"><i class="bi bi-printer me-1"></i> طباعة</button>
+      <a class="btn btn-outline-dark" href="{{ url_for('accounting_journal') }}"><i class="bi bi-journal-bookmark me-1"></i> القيود</a>
+      <a class="btn btn-outline-primary" href="{{ url_for('vouchers_page') }}"><i class="bi bi-journal-text me-1"></i> السندات</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('accounts_tree') }}"><i class="bi bi-diagram-3 me-1"></i> الشجرة</a>
+    </div>
+  </div>
+
+  <div class="print-only print-header">
+    <div class="fw-bold">نظام المحاسبة</div>
+    <div class="small text-muted">التقارير المحاسبية من {{ start }} إلى {{ end }}</div>
+  </div>
+
+  {% if balance_issues %}
+    <div class="issue-card p-3 mb-3 no-print">
+      <div class="fw-bold mb-2"><i class="bi bi-exclamation-triangle me-1"></i> تنبيه للأرصدة القديمة</div>
+      <div class="small text-muted mb-2">هذه الحسابات الرئيسية يظهر عليها رصيد مباشر، والأصح أن تكون تجميعية فقط.</div>
+      <div class="d-flex flex-wrap gap-2">
+        {% for issue in balance_issues[:6] %}
+          <span class="badge text-bg-warning">
+            {{ issue.code }} — {{ issue.name }} : {{ "%.0f"|format(issue.balance or 0) }}
+          </span>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <form method="get" class="card report-card mb-3 no-print">
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-2">
+          <label class="form-label">من تاريخ</label>
+          <input type="date" class="form-control" name="start" value="{{ start }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">إلى تاريخ</label>
+          <input type="date" class="form-control" name="end" value="{{ end }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">بحث نصي</label>
+          <input type="text" class="form-control" name="q" value="{{ q }}" placeholder="رمز أو اسم الحساب">
+        </div>
+        <div class="col-md-5">
+          <label class="form-label">الحسابات</label>
+          <div class="multi-pick">
+            <div class="multi-pick-head d-flex justify-content-between align-items-center gap-2 flex-wrap">
+              <div class="fw-semibold">اختر حسابًا أو أكثر</div>
+              <div class="d-flex gap-2 flex-wrap">
+                <input type="search" class="form-control form-control-sm" id="accountFilter" style="min-width:220px;" placeholder="فلترة الحسابات..." oninput="filterAccounts(this.value)">
+                <button class="btn btn-sm btn-outline-secondary" type="button" onclick="document.querySelectorAll('.account-choice input[type=checkbox]').forEach(cb=>cb.checked=true)">تحديد الكل</button>
+              </div>
+            </div>
+            <div class="multi-pick-body" id="accountsList">
+              {% for item in all_accounts %}
+                <label class="acc-choice {% if not item.is_postable %}parent{% endif %}" data-search="{{ (item.code ~ ' ' ~ item.name ~ ' ' ~ (item.node_type|default(''))) | lower }}" style="padding-inline-start: {{ (item.level|default(0, true)|int) * 14 }}px;">
+                  <input type="checkbox" class="form-check-input m-0" name="account_ids" value="{{ item.id }}" {% if item.id in selected_account_ids %}checked{% endif %}>
+                 
+                  <span class="name">{{ item.name }}</span>
+                  <span class="badge {% if item.is_postable %}text-bg-success{% else %}text-bg-secondary{% endif %} meta">
+                    {% if item.is_postable %}تفصيلي{% else %}رئيسي{% endif %}
+                  </span>
+                  <span class="balance {% if (item.balance or 0) >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    {{ "%.0f"|format(item.balance or 0) }}
+                  </span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="form-text">الحسابات الرئيسية للعرض، والفروع للحسابات العملية.</div>
+        </div>
+        <div class="col-12 d-flex gap-2 flex-wrap mt-2">
+          <button class="btn btn-primary" type="submit"><i class="bi bi-funnel me-1"></i> تطبيق</button>
+          <a class="btn btn-outline-secondary" href="{{ url_for('accounting_reports') }}"><i class="bi bi-x-circle me-1"></i> إعادة</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-3 col-6">
+      <div class="stat-box p-3 h-100">
+        <div class="label">إجمالي المدين</div>
+        <div class="value text-success">{{ "%.0f"|format(summary.debit_total or 0) }}</div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="stat-box p-3 h-100">
+        <div class="label">إجمالي الدائن</div>
+        <div class="value text-danger">{{ "%.0f"|format(summary.credit_total or 0) }}</div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="stat-box p-3 h-100">
+        <div class="label">صافي الأرصدة</div>
+        <div class="value text-primary">{{ "%.0f"|format(summary.balance_total or 0) }}</div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="stat-box p-3 h-100">
+        <div class="label">الحسابات الظاهرة</div>
+        <div class="value">{{ account_rows|length }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-5">
+      <div class="card report-card h-100">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <strong class="section-title">أرصدة الحسابات</strong>
+          <span class="text-muted small">الحسابات الرئيسية تظهر كعناوين تجميعية فقط</span>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 report-table">
+            <thead>
+              <tr>
+                <th class="hide-sm">الرمز</th>
+                <th>الحساب</th>
+                <th class="hide-sm">النوع</th>
+                <th>مدين</th>
+                <th>دائن</th>
+                <th>الرصيد</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in account_rows %}
+              <tr class="{% if not row.is_postable %}table-warning{% endif %}">
+                <td class="hide-sm text-nowrap">{{ row.code }}</td>
+                <td>
+                  <div style="padding-inline-start: {{ (row.level or 0) * 14 }}px;">
+                    <div class="account-name">{{ row.name }}</div>
+                    <div class="account-sub">
+                      {% if row.is_postable %}
+                        <span class="badge text-bg-success">تفصيلي</span>
+                      {% else %}
+                        <span class="badge text-bg-secondary">رئيسي</span>
+                      {% endif %}
+                      <span class="badge text-bg-light border">{{ row.node_type }}</span>
+                    </div>
+                  </div>
+                </td>
+                <td class="hide-sm">{{ row.node_type }}</td>
+                <td>{{ "%.0f"|format(row.debit or 0) }}</td>
+                <td>{{ "%.0f"|format(row.credit or 0) }}</td>
+                <td class="fw-bold {% if (row.balance or 0) >= 0 %}text-success{% else %}text-danger{% endif %}">
+                  {{ "%.0f"|format(row.balance or 0) }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="card report-card mb-3">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <strong class="section-title">السندات</strong>
+          <span class="text-muted small">{{ vouchers|length }} سند</span>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 report-table">
+            <thead>
+              <tr>
+                <th>النوع</th>
+                <th>المبلغ</th>
+                <th>من → إلى</th>
+                <th class="hide-sm">التاريخ</th>
+                <th class="hide-sm">المرجع</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for v in vouchers %}
+              <tr>
+                <td><span class="badge text-bg-{{ 'success' if v.voucher_type == 'receipt' else 'danger' }}">{{ 'قبض' if v.voucher_type == 'receipt' else 'صرف' }}</span></td>
+                <td class="fw-bold">{{ "%.0f"|format(v.amount or 0) }}</td>
+                <td>{{ v.from_account_name }} → {{ v.to_account_name }}</td>
+                <td class="hide-sm">{{ v.voucher_date }}</td>
+                <td class="hide-sm">{{ v.reference or '-' }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="text-center text-muted py-4">لا توجد سندات</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card report-card">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <strong class="section-title">القيود اليومية</strong>
+          <span class="text-muted small">{{ journal_entries|length }} قيد</span>
+        </div>
+        <div class="card-body">
+          {% if journal_entries %}
+            {% for item in journal_entries %}
+              {% set e = item.entry %}
+              <details class="journal-entry" {% if loop.first %}open{% endif %}>
+                <summary>
+                  <div class="entry-meta">
+                    <span class="badge text-bg-primary">{{ e.entry_no }}</span>
+                    <span>{{ e.entry_date }}</span>
+                    <span class="text-muted">{{ e.description or '-' }}</span>
+                  </div>
+                  <div class="entry-meta">
+                    <span class="badge text-bg-success">مدين {{ "%.0f"|format(item.debit_total or 0) }}</span>
+                    <span class="badge text-bg-danger">دائن {{ "%.0f"|format(item.credit_total or 0) }}</span>
+                  </div>
+                </summary>
+                <div class="entry-lines">
+                  <div class="table-responsive">
+                    <table class="table table-sm mb-0 report-table">
+                      <thead>
+                        <tr>
+                          <th>الحساب</th>
+                          <th>مدين</th>
+                          <th>دائن</th>
+                          <th class="hide-sm">البيان</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for line in item.lines %}
+                        <tr>
+                          <td>
+                            <div class="account-name">{{ line.account_code }} - {{ line.account_name }}</div>
+                            <div class="account-sub">{{ line.account_type }}</div>
+                          </td>
+                          <td>{{ "%.0f"|format(line.debit or 0) }}</td>
+                          <td>{{ "%.0f"|format(line.credit or 0) }}</td>
+                          <td class="hide-sm">{{ line.description or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </details>
+            {% endfor %}
+          {% else %}
+            <div class="text-center text-muted py-4">لا توجد قيود في هذه الفترة.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="print-only print-footer">
+  نظام المحاسبة — {{ start }} إلى {{ end }}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterAccounts(value){
+  const q = String(value || '').trim().toLowerCase();
+  document.querySelectorAll('#accountsList .acc-choice').forEach((item) => {
+    const search = item.dataset.search || '';
+    item.style.display = !q || search.includes(q) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

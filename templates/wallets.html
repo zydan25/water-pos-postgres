@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row g-4">
+    <!-- Wallets List -->
+    <div class="col-lg-8">
+      <div class="card p-3 h-100">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="mb-0 page-title"><i class="bi bi-wallet2 text-primary me-2"></i>الصناديق والخزن المالية</h4>
+        </div>
+        <div class="row row-cols-1 row-cols-md-2 g-3">
+          {% for w in wallets %}
+          <div class="col">
+            <div class="card border-primary-subtle bg-light-subtle shadow-sm h-100">
+              <div class="card-body">
+                <h5 class="card-title text-primary"><i class="bi bi-safe2 me-2"></i>{{ w.name }}</h5>
+                <h3 class="card-text my-3 fw-bold text-success">{{ "%.2f"|format(w.balance or 0.0) }} <small class="fs-6 text-muted">{{ setting('currency_name', 'ريال') }}</small></h3>
+                <p class="card-text text-muted small"><i class="bi bi-calendar-event me-1"></i>تاريخ الإنشاء: {{ w.created_at[:10] }}</p>
+              </div>
+            </div>
+          </div>
+          {% else %}
+          <div class="col-12 text-center text-muted py-4">لا توجد صناديق مسجلة.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Expense Recording Form -->
+    <div class="col-lg-4">
+      <div class="card p-3 h-100">
+        <h4 class="mb-3 page-title"><i class="bi bi-cash-stack text-danger me-2"></i>سند صرف مصروفات</h4>
+        <form method="post" action="{{ url_for('add_expense') }}">
+          <div class="mb-3">
+            <label class="form-label">الحساب المصروف عليه</label>
+            <select class="form-select" name="account_id" required>
+              <option value="" disabled selected>-- اختر حساباً من الشجرة --</option>
+              {% for item in account_options %}
+              <option value="{{ item.id }}">{{ item.label }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">سيُستخدم صندوق النظام الرئيسي تلقائياً، ويُقيد الصرف على الحساب المختار.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">المبلغ المراد صرفه</label>
+            <div class="input-group">
+              <input type="number" step="0.01" class="form-control" name="amount" required min="0.01" placeholder="0.00">
+              <span class="input-group-text">{{ setting('currency_name', 'ريال') }}</span>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">بيان المنصرفات / الملاحظات</label>
+            <textarea class="form-control" name="notes" rows="3" required placeholder="اكتب تفاصيل الصرف هنا (مثال: صيانة شبكة، أدوات مكتبية...)"></textarea>
+          </div>
+          <button class="btn btn-danger w-100 py-2" type="submit">
+            <i class="bi bi-check-circle me-1"></i>تسجيل السند وخصم الرصيد
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Transactions Log -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card p-3">
+        <h4 class="mb-3 page-title"><i class="bi bi-clock-history text-secondary me-2"></i>آخر العمليات المالية وتدقيق الحسابات</h4>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead>
+              <tr>
+                <th>رقم العملية</th>
+                <th>نوع الحركة</th>
+                <th>الصندوق</th>
+                <th>المبلغ</th>
+                <th>البيان / الملاحظات</th>
+                <th>بواسطة</th>
+                <th>التاريخ والوقت</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for t in transactions %}
+              <tr>
+                <td>#{{ t.id }}</td>
+                <td>
+                  {% if t.type == 'IN' %}
+                  <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-arrow-down-left me-1"></i>تحصيل / إيداع</span>
+                  {% elif t.type == 'OUT' %}
+                  <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-arrow-up-right me-1"></i>صرف / مصروفات</span>
+                  {% else %}
+                  <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">{{ t.type }}</span>
+                  {% endif %}
+                </td>
+                <td><strong>{{ t.wallet_name }}</strong></td>
+                <td class="fw-bold {% if t.type == 'IN' %}text-success{% else %}text-danger{% endif %}">
+                  {% if t.type == 'IN' %}+{% else %}-{% endif %}{{ "%.2f"|format(t.amount) }}
+                </td>
+                <td>
+                  {{ t.notes or '-' }}
+                  {% if t.subscriber_name %}
+                  <br><small class="text-muted">المشترك: {{ t.subscriber_name }}</small>
+                  {% endif %}
+                </td>
+                <td><i class="bi bi-person me-1"></i>{{ t.username }}</td>
+                <td>{{ t.created_at[:16]|replace('T', ' ') }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="7" class="text-center text-muted py-4">لا توجد عمليات مسجلة حتى الآن.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

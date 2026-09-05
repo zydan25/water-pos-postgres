@@ -1,0 +1,215 @@
+
+{% extends "base.html" %}
+{% block head %}
+<style>
+.hero-card {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #fff;
+}
+.action-card {
+  transition: transform .15s ease, box-shadow .15s ease;
+  border: 0;
+}
+.action-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, .12);
+}
+.badge-soft {
+  background: rgba(255,255,255,.14);
+  color: #fff;
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="card hero-card p-4 mb-3 rounded-4 shadow-sm">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+      <div>
+        <div class="opacity-75 small">{{ organization_name }}</div>
+        <h3 class="mb-1">{{ project_name }}</h3>
+        <div class="text-white-50">كشف قراءة، كشف تحصيل، ملخصات، وتسديدات متعددة في شاشة واحدة.</div>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <span class="badge rounded-pill badge-soft">المشتركين: {{ total_subscribers }}</span>
+        <span class="badge rounded-pill badge-soft">الفواتير: {{ total_invoices }}</span>
+        <span class="badge rounded-pill badge-soft">الإجمالي: {{ "%.0f"|format(total_amount) }} {{ currency }}</span>
+        <span class="badge rounded-pill badge-soft">المسدد: {{ "%.0f"|format(total_paid) }} {{ currency }}</span>
+        <span class="badge rounded-pill badge-soft">المتبقي: {{ "%.0f"|format(total_remaining) }} {{ currency }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card rounded-4 p-3 mb-3 border-0 shadow-sm">
+    <div class="row g-3 align-items-end">
+      <div class="col-lg-4">
+        <label class="form-label fw-semibold mb-1">اختر القرية / المنطقة</label>
+        <select class="form-select" id="villageSelect">
+          <option value="">كل القرى</option>
+          {% for v in village_names %}
+          <option value="{{ v }}">{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-lg-3">
+        <label class="form-label fw-semibold mb-1">طريقة الطباعة</label>
+        <select class="form-select" id="printMode">
+          <option value="pdf">PDF واحد</option>
+          <option value="zip">ملفات PDF لكل قرية</option>
+        </select>
+      </div>
+      <div class="col-lg-5 d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-primary" id="readingsBtn">كشف قراءة</button>
+        <button type="button" class="btn btn-outline-primary" id="collectionsBtn">كشف تحصيل</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('manual_collection.manual_collection_summary') }}">كشف الملخصات</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-3">
+      <a href="{{ url_for('manual_collection.manual_collection_readings') }}" class="text-decoration-none">
+        <div class="card action-card p-3 h-100 rounded-4 shadow-sm">
+          <div class="fs-3">🧾</div>
+          <div class="fw-bold">كشف قراءة</div>
+          <div class="small text-muted">عرض مرتب حسب القرية ثم طباعة PDF.</div>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-3">
+      <a href="{{ url_for('manual_collection.manual_collection_collections') }}" class="text-decoration-none">
+        <div class="card action-card p-3 h-100 rounded-4 shadow-sm">
+          <div class="fs-3">💰</div>
+          <div class="fw-bold">كشف تحصيل</div>
+          <div class="small text-muted">إظهار الفواتير غير المسددة فقط.</div>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-3">
+      <a href="{{ url_for('invoices_bulk_readings') }}" class="text-decoration-none">
+        <div class="card action-card p-3 h-100 rounded-4 shadow-sm">
+          <div class="fs-3">📡</div>
+          <div class="fw-bold">تسجيل قراءات متعددة</div>
+          <div class="small text-muted">انتقال مباشر لواجهة القراءات الجماعية.</div>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-3">
+      <a href="{{ url_for('manual_collection.bulk_payments') }}" class="text-decoration-none">
+        <div class="card action-card p-3 h-100 rounded-4 shadow-sm">
+          <div class="fs-3">🧮</div>
+          <div class="fw-bold">تسديدات متعددة</div>
+          <div class="small text-muted">تسجيل الدفعات عبر جدول واحد.</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-lg-7">
+      <div class="card p-4 rounded-4 shadow-sm">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+          <h5 class="mb-0">كشف ملخصات حسب القرية</h5>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('manual_collection.manual_collection_summary') }}">عرض الملخصات</a>
+        </div>
+        <div class="row g-2">
+          {% for village in village_names %}
+          <div class="col-md-4 col-lg-3">
+            <a class="btn btn-light border w-100 text-start" href="{{ url_for('manual_collection.manual_collection_readings', village=village) }}">{{ village }}</a>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      {% if g.user and g.user.role and g.user.role|lower == 'admin' %}
+      <div class="card p-4 rounded-4 shadow-sm border-danger">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="mb-0 text-danger">تصفير مالي آمن</h5>
+          <span class="badge text-bg-danger">Admin</span>
+        </div>
+        <p class="text-muted small mb-3">
+          هذا الإجراء يحذف الفواتير والمدفوعات والقيود والسندات والحركات المالية فقط، مع الإبقاء على العملاء وشجرة الحسابات والمستخدمين.
+          قبل التنفيذ يتم إنشاء نسخة احتياطية تلقائية.
+        </p>
+        <form method="post" action="{{ url_for('manual_collection.manual_collection_financial_reset') }}" class="row g-2">
+          <div class="col-12">
+            <label class="form-label small fw-semibold">اكتب RESET للتأكيد</label>
+            <input class="form-control" name="confirm_text" placeholder="RESET">
+          </div>
+          <div class="col-12">
+            <button class="btn btn-danger w-100" onclick="return confirm('هل أنت متأكد من تنفيذ التصفير المالي الآمن؟')">تنفيذ التصفير المالي</button>
+          </div>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card p-4 rounded-4 shadow-sm mb-3">
+    <h5 class="mb-3">آخر الفواتير غير المسددة</h5>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th>الفاتورة</th>
+            <th>المشترك</th>
+            <th>القرية/المنطقة</th>
+            <th>الشهر</th>
+            <th>المتبقي</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inv in latest_unpaid %}
+          <tr>
+            <td>{{ inv.invoice_no }}</td>
+            <td>{{ inv.subscriber_name }}<div class="small text-muted">{{ inv.account_number }}</div></td>
+            <td>{{ inv.village or inv.address or '-' }}</td>
+            <td>{{ inv.month_label or inv.invoice_date or '-' }}</td>
+            <td class="fw-bold">{{ "%.0f"|format(inv.remaining_amount or 0) }}</td>
+            <td><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('invoice_detail', invoice_id=inv.id) }}">عرض</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center text-muted py-4">لا توجد فواتير غير مسددة</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function downloadPdf(url, filename) {
+  try {
+    const resp = await fetch(url, { credentials: 'same-origin' });
+    if (!resp.ok) throw new Error(await resp.text());
+    const blob = await resp.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch (err) {
+    alert('تعذر تنزيل الملف: ' + err.message);
+  }
+}
+function updateReportLinks() {
+  const village = villageSelect && villageSelect.value ? encodeURIComponent(villageSelect.value) : '';
+  const mode = printMode && printMode.value ? encodeURIComponent(printMode.value) : 'pdf';
+  const baseReadings = "{{ url_for('manual_collection.manual_collection_readings_pdf') }}";
+  const baseCollections = "{{ url_for('manual_collection.manual_collection_collections_pdf') }}";
+  const qs = village ? `?village=${village}&mode=${mode}` : `?mode=${mode}`;
+  readingsBtn.onclick = () => downloadPdf(baseReadings + qs, `كشف_قراءة_${villageSelect && villageSelect.value ? villageSelect.value : 'جميع_القرى'}.${mode === 'zip' ? 'zip' : 'pdf'}`);
+  collectionsBtn.onclick = () => downloadPdf(baseCollections + qs, `كشف_تحصيل_${villageSelect && villageSelect.value ? villageSelect.value : 'جميع_القرى'}.${mode === 'zip' ? 'zip' : 'pdf'}`);
+}
+if (villageSelect) villageSelect.addEventListener('change', updateReportLinks);
+if (printMode) printMode.addEventListener('change', updateReportLinks);
+updateReportLinks();
+</script>
+
+{% endblock %}

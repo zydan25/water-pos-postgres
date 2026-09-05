@@ -1,0 +1,491 @@
+{% extends "base.html" %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+@media print {
+  .no-print{display:none!important;}
+  .card{border:1px solid #ccc!important;box-shadow:none!important;}
+}
+.tab-btn { border:none; background:none; padding:10px 18px; font-weight:600; color:#6b7280; border-bottom:3px solid transparent; cursor:pointer; }
+.tab-btn.active { color:#1a56db; border-bottom-color:#1a56db; }
+.tab-pane { display:none; }
+.tab-pane.active { display:block; }
+.stat-pill { background:#f0f4ff; border-radius:12px; padding:8px 14px; text-align:center; }
+.stat-pill .val { font-size:1.4rem; font-weight:900; color:#1a56db; }
+.stat-pill .lbl { font-size:.72rem; color:#6b7280; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 no-print">
+    <div>
+      <h4 class="mb-0"><i class="bi bi-graph-up-arrow text-primary me-2"></i>مركز التقارير</h4>
+      <div class="text-muted small">{{ request.args.get('start','') }} — {{ request.args.get('end','') }}</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-dark" href="{{ url_for('reports_pdf') }}?subscriber_id={{ request.args.get('subscriber_id','') }}&start={{ request.args.get('start','') }}&end={{ request.args.get('end','') }}&q={{ request.args.get('q','') }}" target="_blank">
+        <i class="bi bi-file-pdf me-1"></i>PDF
+      </a>
+      <a class="btn btn-outline-success" href="{{ url_for('arrears_report') }}">
+        <i class="bi bi-exclamation-triangle me-1"></i>تقرير المتأخرات
+      </a>
+      <button class="btn btn-outline-secondary" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i>طباعة
+      </button>
+    </div>
+  </div>
+
+  <!-- Filter card -->
+  <div class="card p-3 mb-3 no-print">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label fw-bold">المشترك</label>
+        <select class="form-select" name="subscriber_id">
+          <option value="">— جميع المشتركين —</option>
+          {% for s in subscribers %}
+         <option value="{{ s.id }}" {% if request.args.get('subscriber_id')|int == s.id %}selected{% endif %}>
+            {{ s.name }} — {{ s.account_number }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-bold">بحث</label>
+        <input class="form-control" name="q" value="{{ request.args.get('q','') }}" placeholder="رقم / اسم">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-bold">من</label>
+        <input class="form-control" type="date" name="start" value="{{ request.args.get('start','') }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-bold">إلى</label>
+        <input class="form-control" type="date" name="end" value="{{ request.args.get('end','') }}">
+      </div>
+      <div class="col-md-2 d-grid">
+        <button class="btn btn-primary">عرض</button>
+      </div>
+      <div class="col-md-1 d-grid">
+        <a class="btn btn-outline-secondary" href="{{ url_for('reports') }}">مسح</a>
+      </div>
+    </form>
+    <!-- Quick shortcuts -->
+    <div class="d-flex gap-2 flex-wrap mt-2" id="report-shortcuts"></div>
+  </div>
+
+  <!-- Summary pills -->
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="stat-pill">
+        <div class="val">{{ "%.0f"|format(summary.invoices_total or 0) }}</div>
+        <div class="lbl">إجمالي الفواتير</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-pill" style="background:#f0fdf4;">
+        <div class="val" style="color:#059669;">{{ "%.0f"|format(summary.payments_total or 0) }}</div>
+        <div class="lbl">إجمالي السداد</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-pill" style="background:#fef2f2;">
+        <div class="val" style="color:#dc2626;">{{ "%.0f"|format(summary.remaining_total or 0) }}</div>
+        <div class="lbl">المتبقي</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-pill" style="background:#fffbeb;">
+        <div class="val" style="color:#d97706;">{{ "%.0f"|format(summary.consumption_total or 0) }}</div>
+        <div class="lbl">الاستهلاك الكلي</div>
+      </div>
+    </div>
+  </div>
+
+  {% if mode == 'subscriber' %}
+  <!-- ════ تقرير مشترك محدد ════ -->
+  <div class="card p-3 mb-3">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h5 class="mb-0">{{ subscriber.name }}</h5>
+        <div class="text-muted small">{{ subscriber.account_number }}</div>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-sm btn-outline-warning" href="{{ url_for('arrears_report') }}?q={{ subscriber.account_number }}">المتأخرات</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('invoices') }}?q={{ subscriber.account_number }}">الفواتير</a>
+      </div>
+    </div>
+  </div>
+  <div class="row g-3">
+    <div class="col-lg-8">
+      <!-- Chart for subscriber -->
+      <div class="card p-3 mb-3">
+        <div class="fw-bold mb-2">مقارنة الفواتير والسداد</div>
+        <canvas id="subChart" height="90"></canvas>
+      </div>
+      <div class="card p-0 overflow-hidden">
+        <div class="card-header fw-bold">الفواتير ({{ invoices|length }})</div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th>الرقم</th><th>التاريخ</th><th>الشهر</th><th>الاستهلاك</th><th>الإجمالي</th><th>المسدد</th><th>المتبقي</th><th class="no-print"></th></tr></thead>
+            <tbody>
+              {% for i in invoices %}
+              <tr>
+                <td><a href="{{ url_for('invoice_detail', invoice_id=i.id) }}">{{ i.invoice_no }}</a></td>
+                <td>{{ i.invoice_date }}</td>
+                <td>{{ i.month_label }}</td>
+                <td>{{ "%.0f"|format(i.consumption or 0) }}</td>
+                <td>{{ "%.0f"|format(i.total_amount or 0) }}</td>
+                <td class="text-success fw-semibold">{{ "%.0f"|format(i.paid_amount or 0) }}</td>
+                <td class="{% if i.remaining_amount > 0 %}text-danger fw-bold{% endif %}">{{ "%.0f"|format(i.remaining_amount or 0) }}</td>
+                <td class="no-print">
+                  {% if i.remaining_amount > 0 %}
+                  <a class="btn btn-sm btn-warning text-dark" href="{{ url_for('thermal_pay', invoice_id=i.id) }}">سداد</a>
+                  {% else %}
+                  <span class="badge bg-success">مسدد ✓</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="8" class="text-center text-muted py-4">لا توجد فواتير</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card p-0 overflow-hidden">
+        <div class="card-header fw-bold">المدفوعات ({{ payments|length }})</div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th>التاريخ</th><th>المبلغ</th><th>الطريقة</th><th class="no-print"></th></tr></thead>
+            <tbody>
+              {% for p in payments %}
+              <tr>
+                <td>{{ (p.payment_date or '')[:10] }}</td>
+                <td class="fw-bold text-success">{{ "%.0f"|format(p.amount or 0) }}</td>
+                <td><span class="badge bg-light text-dark border">{{ p.method or '—' }}</span></td>
+                <td class="no-print">
+                  <a class="btn btn-sm btn-outline-dark" href="{{ url_for('thermal_receipt', payment_id=p.id) }}" target="_blank">
+                    <i class="bi bi-receipt-cutoff"></i>
+                  </a>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="text-center text-muted py-3">لا توجد مدفوعات</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% else %}
+  <!-- ════ تقرير عام ════ -->
+
+  <!-- Tabs -->
+  <div class="border-bottom mb-3 no-print">
+    <button class="tab-btn active" onclick="showTab('tab-charts')">📊 رسوم بيانية</button>
+    <button class="tab-btn" onclick="showTab('tab-subscribers')">👥 ملخص المشتركين</button>
+    <button class="tab-btn" onclick="showTab('tab-invoices')">🧾 الفواتير</button>
+    <button class="tab-btn" onclick="showTab('tab-payments')">💰 المدفوعات</button>
+  </div>
+
+  <!-- Tab: Charts -->
+  <div id="tab-charts" class="tab-pane active">
+    <div class="row g-3 mb-3">
+      <div class="col-lg-8">
+        <div class="card p-3">
+          <div class="fw-bold mb-3">إيرادات حسب الشهر</div>
+          <canvas id="allRevenueChart" height="100"></canvas>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card p-3 h-100">
+          <div class="fw-bold mb-3">نسبة التحصيل</div>
+          <canvas id="collectionDoughnut" width="200" height="200" style="max-width:200px;margin:auto;display:block;"></canvas>
+          {% set rate = (summary.payments_total / summary.invoices_total * 100)|round(1) if summary.invoices_total else 0 %}
+          <div class="text-center mt-3">
+            <div class="fw-bold fs-4 text-primary">{{ rate }}%</div>
+            <div class="small text-muted">نسبة ما تم تحصيله</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row g-3">
+      <div class="col-lg-6">
+        <div class="card p-3">
+          <div class="fw-bold mb-3">أعلى 10 مشتركين استهلاكاً</div>
+          <canvas id="topConsumptionChart" height="160"></canvas>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card p-3">
+          <div class="fw-bold mb-3">توزيع حالة الفواتير</div>
+          <canvas id="statusPieChart" height="160"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Subscribers -->
+  <div id="tab-subscribers" class="tab-pane">
+    <div class="card p-0 overflow-hidden">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-bold">ملخص المشتركين ({{ subscriber_summary|length }})</span>
+        <input class="form-control form-control-sm" id="sub-search" placeholder="🔍 بحث سريع..." style="max-width:220px;">
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="sub-table">
+          <thead class="table-light">
+            <tr>
+              <th>#</th><th>المشترك</th><th>رقم الحساب</th>
+              <th class="text-center">فواتير</th>
+              <th class="text-center">الإجمالي</th>
+              <th class="text-center">السداد</th>
+              <th class="text-center">المتبقي</th>
+              <th class="no-print"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in subscriber_summary %}
+            <tr class="sub-row" data-search="{{ s.name|lower }} {{ s.account_number }}">
+              <td>{{ loop.index }}</td>
+              <td class="fw-semibold">{{ s.name }}</td>
+              <td>{{ s.account_number }}</td>
+              <td class="text-center">{{ s.invoices_count }}</td>
+              <td class="text-center">{{ "%.0f"|format(s.total_amount or 0) }}</td>
+              <td class="text-center text-success fw-semibold">{{ "%.0f"|format(s.paid_amount or 0) }}</td>
+              <td class="text-center {% if (s.remaining_amount or 0) > 0 %}text-danger fw-bold{% else %}text-success{% endif %}">
+                {{ "%.0f"|format(s.remaining_amount or 0) }}
+              </td>
+              <td class="no-print">
+                <a class="btn btn-sm btn-outline-secondary" href="?subscriber_id={{ s.id }}&start={{ request.args.get('start','') }}&end={{ request.args.get('end','') }}">تفاصيل</a>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" class="text-center text-muted py-5">لا توجد بيانات</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Invoices -->
+  <div id="tab-invoices" class="tab-pane">
+    <div class="card p-0 overflow-hidden">
+      <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span class="fw-bold">الفواتير ({{ all_invoices|length }})</span>
+        <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-dark no-print" href="{{ url_for('invoices_print_by_date') }}?date_from={{ request.args.get('start','') }}&date_to={{ request.args.get('end','') }}" target="_blank">
+            <i class="bi bi-printer me-1"></i>طباعة الكل
+          </a>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr><th>الرقم</th><th>المشترك</th><th>التاريخ</th><th>الشهر</th><th>الاستهلاك</th><th>الإجمالي</th><th>المتبقي</th><th>المنشئ</th><th class="no-print"></th></tr>
+          </thead>
+          <tbody>
+            {% for i in all_invoices %}
+            <tr>
+              <td><a href="{{ url_for('invoice_detail', invoice_id=i.id) }}">{{ i.invoice_no }}</a></td>
+              <td>{{ i.subscriber_name }}<div class="small text-muted">{{ i.account_number }}</div></td>
+              <td>{{ i.invoice_date }}</td>
+              <td>{{ i.month_label }}</td>
+              <td>{{ "%.0f"|format(i.consumption or 0) }}</td>
+              <td>{{ "%.0f"|format(i.total_amount or 0) }}</td>
+              <td class="{% if (i.remaining_amount or 0) > 0 %}text-danger fw-bold{% else %}text-success{% endif %}">
+                {{ "%.0f"|format(i.remaining_amount or 0) }}
+              </td>
+              <td class="small text-muted">{{ i.created_by_name or '—' }}</td>
+              <td class="no-print">
+                {% if (i.remaining_amount or 0) > 0 %}
+                <a class="btn btn-sm btn-warning text-dark" href="{{ url_for('thermal_pay', invoice_id=i.id) }}">سداد</a>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="9" class="text-center text-muted py-5">لا توجد فواتير</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Payments -->
+  <div id="tab-payments" class="tab-pane">
+    <div class="card p-0 overflow-hidden">
+      <div class="card-header fw-bold">المدفوعات ({{ all_payments|length }})</div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr><th>التاريخ</th><th>المشترك</th><th>الفاتورة</th><th>المبلغ</th><th>الطريقة</th><th>المنشئ</th><th class="no-print"></th></tr>
+          </thead>
+          <tbody>
+            {% for p in all_payments %}
+            <tr>
+              <td>{{ (p.payment_date or '')[:10] }}</td>
+              <td>{{ p.subscriber_name or '—' }}<div class="small text-muted">{{ p.account_number or '' }}</div></td>
+              <td>{{ p.invoice_no or '—' }}</td>
+              <td class="fw-bold text-success">{{ "%.0f"|format(p.amount or 0) }}</td>
+              <td><span class="badge bg-light text-dark border">{{ p.method or '—' }}</span></td>
+              <td class="small text-muted">{{ p.created_by_name or '—' }}</td>
+              <td class="no-print">
+                <a class="btn btn-sm btn-outline-dark" href="{{ url_for('thermal_receipt', payment_id=p.id) }}" target="_blank">
+                  <i class="bi bi-receipt-cutoff"></i>
+                </a>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="text-center text-muted py-5">لا توجد مدفوعات</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+// ── Tab switching ──
+function showTab(id) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ── Subscriber search ──
+document.getElementById('sub-search')?.addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  document.querySelectorAll('.sub-row').forEach(r => {
+    r.style.display = !q || r.dataset.search.includes(q) ? '' : 'none';
+  });
+});
+
+// ── Date shortcuts ──
+const sc = document.getElementById('report-shortcuts');
+if (sc) {
+  const today = new Date();
+  const fmt = d => d.toISOString().slice(0,10);
+  const addBtn = (label, from, to) => {
+    const b = document.createElement('button');
+    b.type='button'; b.className='btn btn-sm btn-outline-secondary';
+    b.textContent=label;
+    b.onclick = () => {
+      document.querySelector('[name=start]').value = fmt(from);
+      document.querySelector('[name=end]').value   = fmt(to);
+    };
+    sc.appendChild(b);
+  };
+  const m1 = new Date(today.getFullYear(), today.getMonth(), 1);
+  const m2 = new Date(today.getFullYear(), today.getMonth()+1, 0);
+  addBtn('هذا الشهر', m1, m2);
+  const lm1 = new Date(today.getFullYear(), today.getMonth()-1, 1);
+  const lm2 = new Date(today.getFullYear(), today.getMonth(), 0);
+  addBtn('الشهر الماضي', lm1, lm2);
+  const q = Math.floor(today.getMonth()/3);
+  addBtn('هذا الربع', new Date(today.getFullYear(),q*3,1), new Date(today.getFullYear(),q*3+3,0));
+  addBtn('هذا العام', new Date(today.getFullYear(),0,1), new Date(today.getFullYear(),11,31));
+}
+
+{% if mode != 'subscriber' %}
+// ── All revenue chart ──
+const months = {{ (all_invoices | map(attribute='invoice_date') | list | unique | sort | list) | tojson if all_invoices else '[]' }};
+// Build per-month aggregates client-side from raw data
+const invData = {{ all_invoices | map(attribute='total_amount') | list | tojson if all_invoices else '[]' }};
+const invDates= {{ all_invoices | map(attribute='invoice_date') | list | tojson if all_invoices else '[]' }};
+const invPaid = {{ all_invoices | map(attribute='paid_amount') | list | tojson if all_invoices else '[]' }};
+
+const monthAgg = {};
+invDates.forEach((d,i)=>{
+  const m = d.slice(0,7);
+  if(!monthAgg[m]) monthAgg[m]={total:0,paid:0};
+  monthAgg[m].total += invData[i]||0;
+  monthAgg[m].paid  += invPaid[i]||0;
+});
+const mKeys = Object.keys(monthAgg).sort();
+const mTotals = mKeys.map(k => monthAgg[k].total);
+const mPaid   = mKeys.map(k => monthAgg[k].paid);
+
+if(mKeys.length) {
+  new Chart(document.getElementById('allRevenueChart').getContext('2d'), {
+    type:'bar',
+    data:{ labels:mKeys,
+      datasets:[
+        {label:'الإجمالي', data:mTotals, backgroundColor:'rgba(26,86,219,.3)', borderColor:'#1a56db', borderWidth:2, borderRadius:6},
+        {label:'المحصّل',  data:mPaid,   backgroundColor:'rgba(5,150,105,.3)',  borderColor:'#059669', borderWidth:2, borderRadius:6},
+      ]},
+    options:{responsive:true,plugins:{legend:{position:'top',labels:{font:{family:'inherit'},boxWidth:12}}},
+      scales:{y:{beginAtZero:true,grid:{color:'#f0f0f0'}},x:{grid:{display:false}}}}
+  });
+}
+
+// ── Collection doughnut ──
+const total_inv = {{ summary.invoices_total or 0 }};
+const total_paid= {{ summary.payments_total or 0 }};
+const rate = total_inv ? Math.round(total_paid/total_inv*100) : 0;
+new Chart(document.getElementById('collectionDoughnut').getContext('2d'), {
+  type:'doughnut',
+  data:{ labels:['محصّل','متبقي'],
+    datasets:[{data:[rate,100-rate], backgroundColor:['#059669','#fee2e2'], borderWidth:0, borderRadius:6}]},
+  options:{cutout:'70%',responsive:true,plugins:{legend:{position:'bottom',labels:{font:{family:'inherit'},boxWidth:12}}}}
+});
+
+// ── Top consumption bar ──
+const subSummary = {{ subscriber_summary | map(attribute='name') | list | tojson if subscriber_summary else '[]' }};
+const subConsump = {{ subscriber_summary | map(attribute='consumption_total') | list | tojson if subscriber_summary else '[]' }};
+const topN = 10;
+const topNames  = subSummary.slice(0,topN);
+const topValues = subConsump.slice(0,topN);
+if(topNames.length) {
+  new Chart(document.getElementById('topConsumptionChart').getContext('2d'), {
+    type:'bar',
+    data:{labels:topNames,
+      datasets:[{label:'الاستهلاك',data:topValues,backgroundColor:'rgba(8,145,178,.5)',borderColor:'#0891b2',borderWidth:1,borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},
+      scales:{x:{beginAtZero:true,grid:{color:'#f0f0f0'}},y:{grid:{display:false}}}}
+  });
+}
+
+// ── Status pie ──
+const paidInv    = {{ all_invoices | selectattr('remaining_amount','le',0) | list | length if all_invoices else 0 }};
+const partialInv = {{ all_invoices | selectattr('remaining_amount','gt',0) | selectattr('paid_amount','gt',0) | list | length if all_invoices else 0 }};
+const unpaidInv  = {{ all_invoices | selectattr('paid_amount','le',0) | list | length if all_invoices else 0 }};
+if(paidInv+partialInv+unpaidInv > 0) {
+  new Chart(document.getElementById('statusPieChart').getContext('2d'), {
+    type:'pie',
+    data:{labels:['مسدد كاملاً','مسدد جزئياً','غير مسدد'],
+      datasets:[{data:[paidInv,partialInv,unpaidInv],
+        backgroundColor:['#059669','#f59e0b','#dc2626'],borderWidth:2}]},
+    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{family:'inherit'},boxWidth:12}}}}
+  });
+}
+{% else %}
+// ── Subscriber invoice/payment chart ──
+const subInvNos  = {{ invoices | map(attribute='invoice_no') | list | tojson if invoices else '[]' }};
+const subInvTot  = {{ invoices | map(attribute='total_amount') | list | tojson if invoices else '[]' }};
+const subInvPaid = {{ invoices | map(attribute='paid_amount') | list | tojson if invoices else '[]' }};
+if(subInvNos.length) {
+  new Chart(document.getElementById('subChart').getContext('2d'), {
+    type:'bar',
+    data:{labels:subInvNos,
+      datasets:[
+        {label:'الإجمالي',data:subInvTot, backgroundColor:'rgba(26,86,219,.3)',borderColor:'#1a56db',borderWidth:2,borderRadius:4},
+        {label:'المسدد',  data:subInvPaid,backgroundColor:'rgba(5,150,105,.3)', borderColor:'#059669',borderWidth:2,borderRadius:4},
+      ]},
+    options:{responsive:true,plugins:{legend:{position:'top',labels:{font:{family:'inherit'},boxWidth:12}}},
+      scales:{y:{beginAtZero:true},x:{grid:{display:false}}}}
+  });
+}
+{% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,451 @@
+{% extends "base.html" %}
+{% block title %}شجرة الحسابات - نظام المحاسبة{% endblock %}
+{% block head %}
+<style>
+  .accounts-page{
+    --card-radius: 1.25rem;
+  }
+  .accounts-page .hero-card,
+  .accounts-page .panel-card{
+    border:0;
+    border-radius:var(--card-radius);
+    box-shadow:0 1px 3px rgba(15,23,42,.06);
+    overflow:hidden;
+  }
+  .accounts-page .panel-card .card-header{
+    background:#fff;
+    border-bottom:1px solid #eef2f7;
+  }
+  .accounts-page .accounts-toolbar{
+    display:flex;
+    flex-wrap:wrap;
+    gap:.6rem;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .accounts-page .accounts-search{
+    min-width:240px;
+    max-width:420px;
+  }
+  .accounts-page .stats-grid .mini-stat{
+    background:#fff;
+    border:1px solid #eef2f7;
+    border-radius:1rem;
+    padding:1rem;
+    height:100%;
+  }
+  .accounts-page .mini-stat .label{color:#64748b;font-size:.82rem}
+  .accounts-page .mini-stat .value{font-weight:900;font-size:1.45rem;line-height:1.1}
+  .accounts-page .accounts-table th,
+  .accounts-page .accounts-table td{
+    vertical-align:middle;
+    padding:.7rem .75rem;
+  }
+  .accounts-page .accounts-table thead th{
+    background:#f8fafc;
+    color:#0f172a;
+    font-weight:700;
+    white-space:nowrap;
+  }
+  .accounts-page .acc-code{
+    font-family:monospace;
+    font-size:.82rem;
+    color:#64748b;
+    background:#f8fafc;
+    border:1px solid #e2e8f0;
+    border-radius:999px;
+    padding:.18rem .55rem;
+    white-space:nowrap;
+  }
+  .accounts-page .acc-name{
+    font-weight:800;
+    color:#0f172a;
+    max-width:20rem;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .accounts-page .acc-sub{
+    font-size:.74rem;
+    color:#64748b;
+    margin-top:.15rem;
+  }
+  .accounts-page .acc-toggle{
+    width:1.5rem;
+    height:1.5rem;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:999px;
+    color:#475569;
+    border:1px solid transparent;
+    flex:0 0 auto;
+  }
+  .accounts-page .acc-toggle:hover{
+    background:#eff6ff;
+    border-color:#bfdbfe;
+    color:#1d4ed8;
+  }
+  .accounts-page .acc-spacer{
+    width:1.5rem;
+    display:inline-block;
+  }
+  .accounts-page .acc-balance{
+    min-width:8.5rem;
+    text-align:end;
+    font-weight:900;
+    white-space:nowrap;
+  }
+  .accounts-page .acc-actions{
+    display:flex;
+    gap:.35rem;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+  .accounts-page .level-wrap{
+    display:flex;
+    align-items:center;
+    gap:.5rem;
+    min-width:0;
+  }
+  .accounts-page .child-container{
+    border-inline-start:2px dashed #e2e8f0;
+    padding-inline-start:.75rem;
+    margin-inline-start:.25rem;
+  }
+  .accounts-page .main-badge{
+    border-radius:999px;
+    padding:.25rem .55rem;
+    font-size:.72rem;
+  }
+  .accounts-page .search-box{
+    position:relative;
+  }
+  .accounts-page .search-box .bi{
+    position:absolute;
+    top:50%;
+    inset-inline-start:.8rem;
+    transform:translateY(-50%);
+    color:#94a3b8;
+  }
+  .accounts-page .search-box input{
+    padding-inline-start:2.2rem;
+  }
+  @media (max-width: 767.98px){
+    .accounts-page .accounts-toolbar{
+      align-items:stretch;
+    }
+    .accounts-page .accounts-search{
+      width:100%;
+      max-width:none;
+    }
+    .accounts-page .acc-name{max-width:11rem;font-size:.92rem;}
+    .accounts-page .accounts-table th,
+    .accounts-page .accounts-table td{
+      padding:.5rem .45rem;
+      font-size:.8rem;
+    }
+    .accounts-page .acc-actions .btn{
+      font-size:.72rem;
+      padding:.18rem .45rem;
+    }
+    .accounts-page .acc-balance{min-width:6.8rem;}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid accounts-page">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="mb-0 fw-bold"><i class="bi bi-diagram-3 me-2"></i> شجرة الحسابات</h3>
+      <div class="text-muted small">الحسابات الرئيسية تجميعية، والأرصدة التشغيلية تظهر فقط في الفروع.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-primary" type="button" onclick="openAddAccountModal()">
+        <i class="bi bi-plus-lg me-1"></i> <span class="d-none d-sm-inline">حساب جديد</span><span class="d-sm-none">جديد</span>
+      </button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('accounting_reports') }}">
+        <i class="bi bi-bar-chart me-1"></i> التقارير المحاسبية
+      </a>
+    </div>
+  </div>
+
+  <div class="card hero-card mb-3">
+    <div class="card-body">
+      <div class="row g-3 stats-grid">
+        <div class="col-md-3 col-6">
+          <div class="mini-stat">
+            <div class="label">عدد الحسابات الظاهرة</div>
+            <div class="value">{{ tree|length }}</div>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="mini-stat">
+            <div class="label">الحسابات التفصيلية</div>
+            <div class="value">{{ flat_accounts|selectattr('is_postable')|list|length }}</div>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="mini-stat">
+            <div class="label">تنبيه مهم</div>
+            <div class="small fw-semibold mt-1">الحساب الرئيسي لا يُستخدم للحركة المباشرة.</div>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="mini-stat">
+            <div class="label">العرض</div>
+            <div class="small fw-semibold mt-1">واجهة متجاوبة مع الهاتف والطباعة.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card panel-card">
+    <div class="card-header py-3">
+      <div class="accounts-toolbar">
+        <div class="fw-bold"><i class="bi bi-list-tree me-1"></i> الحسابات</div>
+        <div class="search-box accounts-search">
+          <i class="bi bi-search"></i>
+          <input type="search" class="form-control" id="accountsSearch" placeholder="ابحث برمز أو اسم الحساب..." oninput="filterAccounts(this.value)">
+        </div>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 accounts-table" id="accountsTable">
+        <thead>
+          <tr>
+            <th>الحساب</th>
+            <th class="d-none d-md-table-cell">النوع</th>
+            <th>الرصيد</th>
+            <th class="text-end">الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if tree %}
+            {% macro render_nodes(nodes, level=0) -%}
+              {% for node in nodes %}
+                {% set children = node.children|default([], true) %}
+                {% set balance = node.balance|default(0, true)|float %}
+                <tr class="account-row {% if not node.is_postable %}table-warning{% endif %}" data-search="{{ (node.code ~ ' ' ~ node.name ~ ' ' ~ (node.node_type|default(''))) | lower }}">
+                  <td>
+                    <div class="level-wrap" style="padding-inline-start: {{ level * 18 }}px;">
+                      {% if children %}
+                        <button type="button" class="acc-toggle" onclick="toggleChildren('{{ node.id }}', this)" aria-label="فتح/إغلاق">
+                          <i class="bi bi-chevron-left"></i>
+                        </button>
+                      {% else %}
+                        <span class="acc-spacer"></span>
+                      {% endif %}
+                      <div class="min-w-0">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                          <span class="acc-code">{{ node.code }}</span>
+                          <span class="acc-name">{{ node.name }}</span>
+                          <span class="badge {% if node.is_postable %}text-bg-success{% else %}text-bg-secondary{% endif %} main-badge">
+                            {% if node.is_postable %}تفصيلي{% else %}رئيسي{% endif %}
+                          </span>
+                          {% if children %}
+                            <span class="badge text-bg-light border main-badge">فروع {{ children|length }}</span>
+                          {% endif %}
+                        </div>
+                        {% if not node.is_postable %}
+                          <div class="acc-sub text-warning">حساب تجميعي فقط</div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </td>
+                  <td class="d-none d-md-table-cell text-muted">{{ node.node_type|default('-') }}</td>
+                  <td class="acc-balance {% if balance >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    {{ "%.2f"|format(balance) }} {{ currency }}
+                  </td>
+                  <td class="text-end">
+                    <div class="acc-actions">
+                      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('accounts_edit', account_id=node.id) }}">
+                        <i class="bi bi-pencil-square"></i> تعديل
+                      </a>
+                      <form method="post" action="{{ url_for('accounts_delete', account_id=node.id) }}" class="d-inline" onsubmit="return confirm('سيتم حذف الحساب أو تعطيله إن كان مرتبطًا بحركات أو فروع. المتابعة؟');">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                          <i class="bi bi-trash"></i> حذف
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+                {% if children %}
+                  <tr id="children-{{ node.id }}" class="children-row">
+                    <td colspan="4" class="p-0">
+                      <div class="child-container d-none" id="children-wrap-{{ node.id }}">
+                        <table class="table table-hover align-middle mb-0 accounts-table">
+                          <tbody>
+                            {{ render_nodes(children, level + 1) }}
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                {% endif %}
+              {% endfor %}
+            {%- endmacro %}
+            {{ render_nodes(tree) }}
+          {% else %}
+            <tr>
+              <td colspan="4" class="text-center text-muted py-5">
+                <i class="bi bi-diagram-3 display-6 d-block mb-2"></i>
+                لا توجد حسابات ظاهرة.
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="accModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header">
+        <h5 class="modal-title" id="accModalTitle">حساب جديد</h5>
+        <button type="button" class="btn-close ms-0" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="{{ url_for('accounts_create') }}" id="accForm">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">الحساب الأب</label>
+              <select class="form-select" name="parent_id" id="acc_parent_id" required>
+                <option value="" selected disabled>اختر الحساب الأب</option>
+                {% for item in flat_accounts %}
+                  <option value="{{ item.id }}">{{ item.label }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">الحسابات الرئيسية تجميعية، والحركات تكون على الفروع فقط.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">اسم الحساب</label>
+              <input type="text" class="form-control" name="name" id="acc_name" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">رمز الحساب</label>
+              <input type="text" class="form-control" name="code" id="acc_code" placeholder="سيتم توليده تلقائيًا">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">نوع الحساب</label>
+              <input type="hidden" name="node_type" id="acc_node_type" value="account">
+              <div class="form-control bg-light" id="acc_node_type_view">account</div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">قابل للحركات</label>
+              <select class="form-select" name="is_postable" id="acc_is_postable">
+                <option value="1" selected>نعم، تفصيلي</option>
+                <option value="0">لا، رئيسي/تجميعي</option>
+              </select>
+            </div>
+          </div>
+          <div class="alert alert-info mt-3 mb-0">
+            عند اختيار الأب، يتم اقتراح الرمز ونوع الحساب تلقائيًا.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">إلغاء</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i> حفظ الحساب</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  const modalEl = document.getElementById('accModal');
+  const accModal = modalEl && window.bootstrap ? new bootstrap.Modal(modalEl) : null;
+  const parentSel = document.getElementById('acc_parent_id');
+  const codeInp = document.getElementById('acc_code');
+  const typeInp = document.getElementById('acc_node_type');
+  const typeView = document.getElementById('acc_node_type_view');
+  const nameInp = document.getElementById('acc_name');
+  const postableSel = document.getElementById('acc_is_postable');
+
+  window.openAddAccountModal = function(){
+    if (accModal) accModal.show();
+    if (parentSel) parentSel.value = "";
+    if (codeInp) codeInp.value = "";
+    if (typeInp) typeInp.value = "account";
+    if (typeView) typeView.textContent = "account";
+    if (nameInp) nameInp.value = "";
+    if (postableSel) postableSel.value = "1";
+  };
+
+  async function refreshSuggestedFields(parentId){
+    if (!parentId){
+      if (codeInp) codeInp.value = "";
+      if (typeInp) typeInp.value = "account";
+      if (typeView) typeView.textContent = "account";
+      return;
+    }
+    try{
+      const r = await fetch("{{ url_for('api_account_next_code') }}?parent_id=" + encodeURIComponent(parentId), {
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      });
+      const data = await r.json();
+      if (codeInp) codeInp.value = data.code || "";
+      if (typeInp) typeInp.value = data.node_type || "account";
+      if (typeView) typeView.textContent = data.node_type || "account";
+      if (postableSel && data.node_type) {
+        const rootLike = String(data.node_type).toLowerCase() === 'root';
+        postableSel.value = rootLike ? "0" : "1";
+      }
+    }catch(err){
+      console.error(err);
+    }
+  }
+
+  if (parentSel){
+    parentSel.addEventListener('change', function(){ refreshSuggestedFields(this.value); });
+  }
+
+  window.toggleChildren = function(id, btn){
+    const wrap = document.getElementById('children-wrap-' + id);
+    const icon = btn ? btn.querySelector('i') : null;
+    if (!wrap) return;
+    const visible = !wrap.classList.contains('d-none');
+    if (visible) {
+      wrap.classList.add('d-none');
+      if (icon) {
+        icon.classList.remove('bi-chevron-down');
+        icon.classList.add('bi-chevron-left');
+      }
+    } else {
+      wrap.classList.remove('d-none');
+      if (icon) {
+        icon.classList.remove('bi-chevron-left');
+        icon.classList.add('bi-chevron-down');
+      }
+    }
+  };
+
+  window.filterAccounts = function(value){
+    const q = String(value || '').trim().toLowerCase();
+    const searching = q.length > 0;
+    document.querySelectorAll('#accountsTable .account-row').forEach((row) => {
+      const match = !q || (row.dataset.search || '').includes(q);
+      row.style.display = match ? '' : 'none';
+    });
+    document.querySelectorAll('#accountsTable .children-row').forEach((row) => {
+      const wrap = row.querySelector('[id^="children-wrap-"]');
+      if (!wrap) return;
+      if (searching) {
+        wrap.classList.remove('d-none');
+        row.style.display = '';
+        return;
+      }
+      const anyVisible = wrap.querySelector('.account-row:not([style*="display: none"])');
+      row.style.display = anyVisible ? '' : 'none';
+    });
+  };
+})();
+</script>
+{% endblock %}

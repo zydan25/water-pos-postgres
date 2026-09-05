@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row g-4 mb-4">
+    <div class="col-lg-4">
+      <div class="card p-4 h-100">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="mb-0">إضافة موظف</h4>
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('staff_monitor') }}">المراقبة</a>
+        </div>
+        <form method="post" action="{{ url_for('employee_new') }}" class="vstack gap-3">
+          <div>
+            <label class="form-label">اسم المستخدم</label>
+            <input class="form-control" name="username" required>
+          </div>
+          <div>
+            <label class="form-label">كلمة المرور</label>
+            <input class="form-control" name="password" type="password" required>
+          </div>
+          <div>
+            <label class="form-label">الاسم الكامل</label>
+            <input class="form-control" name="full_name">
+          </div>
+          <div>
+            <label class="form-label">المسمى الوظيفي</label>
+            <input class="form-control" name="job_title" placeholder="متحصل / محاسب / مدير ...">
+          </div>
+          <div class="row g-2">
+            <div class="col-md-6">
+              <label class="form-label">الدور</label>
+              <select class="form-select" name="role">
+                <option value="Collector">Collector</option>
+                <option value="Staff">Staff</option>
+                <option value="Admin">Admin</option>
+                <option value="Technician">Technician</option>
+                <option value="Accountant">Accountant</option>
+                <option value="Manager">Manager</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">الحد الشهري</label>
+              <input class="form-control" name="monthly_target" type="number" step="0.01" value="0">
+            </div>
+          </div>
+          <div class="alert alert-info small mb-0">
+            إن لم تختر حساباً، سيتم إنشاء حساب موظف تلقائياً داخل فرع حسابات الموظفين ولن يُستخدم حساب واحد لأكثر من موظف.
+          </div>
+          <div>
+            <label class="form-label">الحساب المحاسبي للموظف</label>
+            <select class="form-select" name="account_node_id">
+              <option value="">إنشاء حساب تلقائي</option>
+              {% for acc in employee_accounts %}
+                <option value="{{ acc.id }}">{{ acc.code }} - {{ acc.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" value="1" id="active_new" name="active" checked>
+            <label class="form-check-label" for="active_new">نشط</label>
+          </div>
+          <button class="btn btn-primary btn-lg">حفظ الموظف</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="card p-4 h-100">
+        <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+          <h4 class="mb-0">قائمة الموظفين</h4>
+          <form class="d-flex gap-2" method="get">
+            <input class="form-control" name="q" value="{{ q }}" placeholder="بحث بالاسم أو الدور">
+            <button class="btn btn-outline-primary">بحث</button>
+          </form>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>المستخدم</th>
+                <th>الاسم</th>
+                <th>الدور</th>
+                                <th>الحساب</th>
+                <th>الحد</th>
+                <th>الحالة</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for emp in employees %}
+              <tr>
+                <td>{{ emp.id }}</td>
+                <td>{{ emp.username }}</td>
+                <td>{{ emp.full_name or '-' }}</td>
+                <td>{{ emp.role }}</td>
+                                <td>{{ emp.account_code or '-' }} {{ emp.account_name or '' }}</td>
+                <td>{{ "%.0f"|format(emp.monthly_target or 0) }}</td>
+                <td>
+                  {% if emp.active %}
+                    <span class="badge text-bg-success">نشط</span>
+                  {% else %}
+                    <span class="badge text-bg-danger">موقوف</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('employee_edit', user_id=emp.id) }}">تعديل</a>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="9" class="text-center text-muted py-4">لا يوجد موظفون بعد</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

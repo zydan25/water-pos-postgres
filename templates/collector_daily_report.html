@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+@media print {
+  .no-print { display:none!important; }
+  .card { border:1px solid #ccc!important; box-shadow:none!important; }
+  body { font-size:12px; }
+  @page { size:A4; margin:10mm; }
+}
+.method-bar  { height:10px; border-radius:4px; }
+.stat-card   { transition:.15s; }
+.stat-card:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,.1); }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+
+  <!-- Header -->
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 no-print">
+    <div>
+      <h4 class="mb-0"><i class="bi bi-person-check text-primary me-2"></i>تقرير المحصّل اليومي</h4>
+      <div class="text-muted small">{{ org }} — {{ project }}</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-dark" href="?report_date={{ report_date }}&collector_id={{ target_collector or '' }}&print=1" target="_blank">
+        <i class="bi bi-printer me-1"></i>طباعة / PDF
+      </a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('collection_trip') }}">جولة التحصيل</a>
+    </div>
+  </div>
+
+  <!-- Print header -->
+  <div class="text-center mb-4 d-none d-print-block">
+    <h3 class="mb-0">{{ org }}</h3>
+    <h5>{{ project }}</h5>
+    <h4 class="mt-2">تقرير المحصّل اليومي</h4>
+    <div>التاريخ: {{ report_date }} {% if collector_name %}— المحصّل: {{ collector_name }}{% endif %}</div>
+    <hr>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="card p-3 mb-3 no-print">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label fw-bold">التاريخ</label>
+        <input class="form-control" type="date" name="report_date" value="{{ report_date }}">
+      </div>
+      {% if collectors %}
+      <div class="col-md-4">
+        <label class="form-label fw-bold">المحصّل</label>
+        <select class="form-select" name="collector_id">
+          <option value="">— جميع المحصلين —</option>
+          {% for c in collectors %}
+          <option value="{{ c.id }}" {% if target_collector == c.id %}selected{% endif %}>
+            {{ c.username }} ({{ c.role }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="col-md-2 d-grid">
+        <button class="btn btn-primary">عرض</button>
+      </div>
+      <!-- Quick date shortcuts -->
+      <div class="col-12 d-flex gap-2 flex-wrap" id="date-shortcuts"></div>
+    </form>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="card p-3 text-center stat-card" style="border-top:4px solid #1a56db;">
+        <div class="small text-muted">إجمالي المحصّل</div>
+        <div class="h3 fw-bold text-primary mb-0">{{ "%.0f"|format(total_collected) }}</div>
+        <div class="small text-muted">{{ currency }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card p-3 text-center stat-card" style="border-top:4px solid #198754;">
+        <div class="small text-muted">عدد السدادات</div>
+        <div class="h3 fw-bold text-success mb-0">{{ payments|length }}</div>
+        <div class="small text-muted">سند</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card p-3 text-center stat-card" style="border-top:4px solid #fd7e14;">
+        <div class="small text-muted">فواتير منشأة</div>
+        <div class="h3 fw-bold text-warning mb-0">{{ invoices|length }}</div>
+        <div class="small text-muted">فاتورة</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card p-3 text-center stat-card" style="border-top:4px solid #6c757d;">
+        <div class="small text-muted">قيمة الفواتير</div>
+        <div class="h3 fw-bold text-secondary mb-0">{{ "%.0f"|format(total_invoiced) }}</div>
+        <div class="small text-muted">{{ currency }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <!-- By method -->
+    <div class="col-md-5">
+      <div class="card p-3 h-100">
+        <div class="fw-bold mb-3">توزيع التحصيل حسب طريقة الدفع</div>
+        {% if by_method %}
+          {% for method, amt in by_method.items() %}
+          {% set pct = ((amt / total_collected * 100)|round(1)) if total_collected else 0 %}
+          <div class="mb-2">
+            <div class="d-flex justify-content-between small fw-bold mb-1">
+              <span>{{ method }}</span>
+              <span>{{ "%.0f"|format(amt) }} {{ currency }} ({{ pct }}%)</span>
+            </div>
+            <div class="progress" style="height:8px;border-radius:8px;">
+              <div class="progress-bar bg-primary" style="width:{{ pct }}%;"></div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-muted text-center py-3">لا توجد سدادات في هذا التاريخ</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Trip summary -->
+    <div class="col-md-7">
+      <div class="card p-3 h-100">
+        <div class="fw-bold mb-3"><i class="bi bi-map me-1"></i>ملخص جولة التحصيل</div>
+        {% if trip %}
+          {% set trip_total = trip_stats.values()|sum(attribute='count') if trip_stats else 0 %}
+          <div class="row g-3 text-center mb-3">
+            {% set statuses = [
+              ('collected','محصّل','success'),
+              ('absent','غائب','danger'),
+              ('refused','رفض','warning'),
+              ('deferred','مؤجل','info'),
+              ('pending','لم يُزَر','secondary')
+            ] %}
+            {% for st, label, color in statuses %}
+            {% set s = trip_stats.get(st, {'count':0,'sum':0}) %}
+            <div class="col">
+              <div class="fw-bold text-{{ color }} fs-5">{{ s.count }}</div>
+              <div class="small text-muted">{{ label }}</div>
+              {% if s.sum > 0 %}<div class="small fw-bold">{{ "%.0f"|format(s.sum) }}</div>{% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          <div class="d-flex justify-content-between small text-muted mb-1">
+            <span>نسبة الإنجاز</span>
+            {% set done = (trip_stats.get('collected',{'count':0}).count) %}
+            {% set pct_trip = ((done / trip_total * 100)|int) if trip_total else 0 %}
+            <span>{{ pct_trip }}%</span>
+          </div>
+          <div class="progress" style="height:10px;border-radius:8px;">
+            <div class="progress-bar bg-success" style="width:{{ pct_trip }}%;"></div>
+          </div>
+          <div class="mt-2 small text-muted">
+            الهدف: {{ "%.0f"|format(trip.target_amount or 0) }} {{ currency }} |
+            المحصّل: {{ "%.0f"|format(trip.collected_amount or 0) }} {{ currency }}
+          </div>
+        {% else %}
+          <div class="text-muted text-center py-4">
+            <i class="bi bi-map fs-1 opacity-25"></i>
+            <div class="mt-2">لا توجد جولة تحصيل مسجّلة لهذا التاريخ</div>
+            <a class="btn btn-sm btn-outline-primary mt-2 no-print" href="{{ url_for('collection_trip') }}">
+              فتح جولة جديدة
+            </a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Payments table -->
+  <div class="card mb-3">
+    <div class="card-header fw-bold d-flex justify-content-between">
+      <span><i class="bi bi-cash-coin me-1"></i>سجل السدادات ({{ payments|length }})</span>
+      <span>{{ "%.0f"|format(total_collected) }} {{ currency }}</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th>رقم السند</th>
+            <th>المشترك</th>
+            <th>رقم الحساب</th>
+            <th>الفاتورة</th>
+            <th>المبلغ</th>
+            <th>الطريقة</th>
+            <th>الوقت</th>
+            {% if not target_collector %}<th>المحصّل</th>{% endif %}
+            <th class="no-print"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in payments %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ p.id }}</td>
+            <td>{{ p.subscriber_name or '—' }}</td>
+            <td>{{ p.account_number or '—' }}</td>
+            <td>{{ p.invoice_no or '—' }}</td>
+            <td class="fw-bold text-success">{{ "%.0f"|format(p.amount or 0) }}</td>
+            <td><span class="badge bg-light text-dark border">{{ p.method or '—' }}</span></td>
+            <td class="small text-muted">{{ (p.payment_date or '')[-8:] if p.payment_date and 'T' in p.payment_date else p.payment_date or '—' }}</td>
+            {% if not target_collector %}<td>{{ p.collector_name or '—' }}</td>{% endif %}
+            <td class="no-print">
+              <a class="btn btn-sm btn-outline-dark" href="{{ url_for('thermal_receipt', payment_id=p.id) }}" target="_blank">
+                <i class="bi bi-receipt-cutoff"></i>
+              </a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" class="text-center text-muted py-4">لا توجد سدادات في هذا التاريخ</td></tr>
+          {% endfor %}
+        </tbody>
+        {% if payments %}
+        <tfoot class="table-light fw-bold">
+          <tr>
+            <td colspan="5" class="text-center">الإجمالي</td>
+            <td class="text-success">{{ "%.0f"|format(total_collected) }} {{ currency }}</td>
+            <td colspan="4"></td>
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+
+  <!-- Invoices created -->
+  <div class="card mb-3">
+    <div class="card-header fw-bold d-flex justify-content-between">
+      <span><i class="bi bi-receipt me-1"></i>الفواتير المنشأة ({{ invoices|length }})</span>
+      <span>{{ "%.0f"|format(total_invoiced) }} {{ currency }}</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th>رقم الفاتورة</th>
+            <th>المشترك</th>
+            <th>رقم الحساب</th>
+            <th>الشهر</th>
+            <th>الإجمالي</th>
+            <th>المسدد</th>
+            <th>المتبقي</th>
+            {% if not target_collector %}<th>المنشئ</th>{% endif %}
+            <th class="no-print"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for i in invoices %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ i.invoice_no }}</td>
+            <td>{{ i.subscriber_name }}</td>
+            <td>{{ i.account_number }}</td>
+            <td>{{ i.month_label }}</td>
+            <td>{{ "%.0f"|format(i.total_amount or 0) }}</td>
+            <td class="text-success">{{ "%.0f"|format(i.paid_amount or 0) }}</td>
+            <td class="{% if (i.remaining_amount or 0) > 0 %}text-danger fw-bold{% endif %}">
+              {{ "%.0f"|format(i.remaining_amount or 0) }}
+            </td>
+            {% if not target_collector %}<td>{{ i.creator_name or '—' }}</td>{% endif %}
+            <td class="no-print">
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('invoice_detail', invoice_id=i.id) }}">
+                <i class="bi bi-eye"></i>
+              </a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" class="text-center text-muted py-4">لا توجد فواتير منشأة في هذا التاريخ</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Print footer -->
+  <div class="d-none d-print-block text-center mt-4 border-top pt-3" style="font-size:11px;">
+    <div class="row">
+      <div class="col-4">
+        <div class="border-top mt-4 pt-1">توقيع المحصّل</div>
+      </div>
+      <div class="col-4">
+        <div class="mt-2">{{ project }}<br>{{ eng }}</div>
+      </div>
+      <div class="col-4">
+        <div class="border-top mt-4 pt-1">توقيع المسؤول</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Quick date shortcuts
+const shortcuts = document.getElementById('date-shortcuts');
+if (shortcuts) {
+  const today = new Date();
+  const fmt = d => d.toISOString().slice(0,10);
+  const addBtn = (label, d) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn btn-sm btn-outline-secondary';
+    b.textContent = label;
+    b.onclick = () => { document.querySelector('[name=report_date]').value = fmt(d); };
+    shortcuts.appendChild(b);
+  };
+  addBtn('اليوم', today);
+  const y = new Date(today); y.setDate(y.getDate()-1);
+  addBtn('أمس', y);
+  for (let i = 2; i <= 6; i++) {
+    const d = new Date(today); d.setDate(d.getDate()-i);
+    addBtn(d.toLocaleDateString('ar-YE', {weekday:'short', month:'short', day:'numeric'}), d);
+  }
+}
+</script>
+{% endblock %}

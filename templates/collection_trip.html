@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+.visit-card { transition: box-shadow .15s; }
+.visit-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); }
+.status-badge-pending   { background:#fff3e0; color:#e65100; border:1px solid #ffcc80; }
+.status-badge-collected { background:#e8f5e9; color:#2e7d32; border:1px solid #a5d6a7; }
+.status-badge-absent    { background:#fce4ec; color:#c62828; border:1px solid #f48fb1; }
+.status-badge-refused   { background:#f3e5f5; color:#6a1b9a; border:1px solid #ce93d8; }
+.status-badge-deferred  { background:#e3f2fd; color:#1565c0; border:1px solid #90caf9; }
+.progress-ring { transition: stroke-dashoffset .5s; }
+.trip-stat { text-align:center; }
+.trip-stat .val { font-size:1.6rem; font-weight:900; line-height:1; }
+.trip-stat .lbl { font-size:.75rem; color:#6c757d; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <div>
+    <h4 class="mb-0"><i class="bi bi-map text-primary me-2"></i>جولة التحصيل اليومية</h4>
+    <div class="text-muted small">{{ today }}</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{{ url_for('reports/collector-daily'|replace('/','.') ) if false else url_for('collector_daily_report') }}">
+      <i class="bi bi-bar-chart me-1"></i>تقرير المحصّل
+    </a>
+  </div>
+</div>
+
+{% if open_trip %}
+{# ══════════════════════════════ جولة مفتوحة ══════════════════════════════ #}
+<div class="row g-3 mb-3">
+  <div class="col-12">
+    <div class="card p-3" style="border-right:5px solid #1a56db;">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+          <div class="fw-bold fs-5"><i class="bi bi-play-circle-fill text-primary me-2"></i>جولة مفتوحة — {{ open_trip.trip_date }}</div>
+          <div class="text-muted small">الهدف: {{ "%.0f"|format(open_trip.target_amount or 0) }} {{ currency }}</div>
+        </div>
+        <div class="d-flex gap-4 flex-wrap">
+          {% set total_v   = visits|length %}
+          {% set done_v    = visits|selectattr('status','ne','pending')|list|length %}
+          {% set coll_v    = visits|selectattr('status','eq','collected')|list|length %}
+          {% set coll_amt  = visits|sum(attribute='amount_collected') %}
+          <div class="trip-stat"><div class="val text-primary">{{ total_v }}</div><div class="lbl">إجمالي</div></div>
+          <div class="trip-stat"><div class="val text-success">{{ coll_v }}</div><div class="lbl">محصّل</div></div>
+          <div class="trip-stat"><div class="val text-warning">{{ total_v - done_v }}</div><div class="lbl">متبقي</div></div>
+          <div class="trip-stat"><div class="val text-dark">{{ "%.0f"|format(coll_amt) }}</div><div class="lbl">{{ currency }} محصّل</div></div>
+        </div>
+        <!-- Progress bar -->
+        <div style="min-width:160px;">
+          {% set pct = ((done_v / total_v * 100)|int) if total_v else 0 %}
+          <div class="d-flex justify-content-between small fw-bold mb-1"><span>التقدم</span><span>{{ pct }}%</span></div>
+          <div class="progress" style="height:10px; border-radius:8px;">
+            <div class="progress-bar bg-primary" style="width:{{ pct }}%"></div>
+          </div>
+        </div>
+        <!-- Close trip -->
+        <form method="post" onsubmit="return confirm('إغلاق الجولة نهائياً؟')">
+          <input type="hidden" name="action" value="close_trip">
+          <input type="hidden" name="trip_id" value="{{ open_trip.id }}">
+          <button class="btn btn-danger"><i class="bi bi-stop-circle me-1"></i>إغلاق الجولة</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Visit cards -->
+<div class="row g-3">
+  {% for v in visits %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card visit-card p-3 h-100">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div>
+          <div class="fw-bold">{{ v.subscriber_name }}</div>
+          <div class="small text-muted">{{ v.account_number }}{% if v.phone %} • {{ v.phone }}{% endif %}</div>
+          {% if v.address %}<div class="small text-muted">{{ v.address }}</div>{% endif %}
+        </div>
+        <span class="badge rounded-pill status-badge-{{ v.status }}">
+          {% if v.status == 'pending'   %}⏳ لم يُزَر
+          {% elif v.status == 'collected' %}✅ محصّل
+          {% elif v.status == 'absent'    %}🚪 غائب
+          {% elif v.status == 'refused'   %}❌ رفض
+          {% elif v.status == 'deferred'  %}📅 مؤجل
+          {% endif %}
+        </span>
+      </div>
+      <div class="row g-1 text-center mb-2">
+        <div class="col-4"><div class="small text-muted">الفاتورة</div><div class="fw-bold small">{{ v.invoice_no }}</div></div>
+        <div class="col-4"><div class="small text-muted">الإجمالي</div><div class="fw-bold small">{{ "%.0f"|format(v.total_amount) }}</div></div>
+        <div class="col-4"><div class="small text-muted">المتبقي</div><div class="fw-bold small text-danger">{{ "%.0f"|format(v.remaining_amount) }}</div></div>
+      </div>
+      {% if v.status == 'collected' and v.amount_collected %}
+      <div class="alert alert-success py-1 px-2 small mb-2">تم تحصيل {{ "%.0f"|format(v.amount_collected) }} {{ currency }}</div>
+      {% endif %}
+      {% if v.notes %}<div class="small text-muted mb-2">📝 {{ v.notes }}</div>{% endif %}
+
+      <!-- Update form -->
+      <form method="post" class="mt-auto">
+        <input type="hidden" name="action" value="update_visit">
+        <input type="hidden" name="visit_id" value="{{ v.id }}">
+        <div class="row g-1 mb-2">
+          <div class="col-7">
+            <select class="form-select form-select-sm" name="status">
+              <option value="pending"   {% if v.status=='pending'   %}selected{% endif %}>⏳ لم يُزَر</option>
+              <option value="collected" {% if v.status=='collected' %}selected{% endif %}>✅ محصّل</option>
+              <option value="absent"    {% if v.status=='absent'    %}selected{% endif %}>🚪 غائب</option>
+              <option value="refused"   {% if v.status=='refused'   %}selected{% endif %}>❌ رفض</option>
+              <option value="deferred"  {% if v.status=='deferred'  %}selected{% endif %}>📅 مؤجل</option>
+            </select>
+          </div>
+          <div class="col-5">
+            <input class="form-control form-control-sm" name="amount_collected" type="number"
+                   step="0.01" min="0.01" max="{{ v.remaining_amount }}"
+                   value="{{ v.remaining_amount|int }}" placeholder="المبلغ">
+          </div>
+        </div>
+        <input class="form-control form-control-sm mb-2" name="notes" placeholder="ملاحظة (اختياري)" value="{{ v.notes or '' }}">
+        <button class="btn btn-sm btn-primary w-100">حفظ</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+{# ══════════════════════════════ لا توجد جولة مفتوحة ══════════════════════════════ #}
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card p-4">
+      <h5 class="mb-3"><i class="bi bi-plus-circle text-primary me-2"></i>بدء جولة تحصيل جديدة</h5>
+      <div class="alert alert-info small">
+        <i class="bi bi-info-circle me-1"></i>
+        اختر الفواتير المراد تحصيلها اليوم. بعد فتح الجولة يمكنك تحديث حالة كل زيارة وتسجيل السداد مباشرة.
+      </div>
+      <form method="post" id="trip-form">
+        <input type="hidden" name="action" value="open">
+        <div class="d-flex gap-2 mb-3 flex-wrap">
+          <input class="form-control" id="trip-search" placeholder="🔍 بحث بالاسم أو رقم الحساب..." style="max-width:280px;">
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="selectAll(true)">تحديد الكل</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="selectAll(false)">إلغاء الكل</button>
+          <span class="badge bg-primary align-self-center" id="selected-count">0 محدد</span>
+        </div>
+        <div style="max-height:420px; overflow-y:auto;" id="invoice-list">
+          {% for inv in pending_invoices %}
+          <label class="d-flex align-items-center gap-2 p-2 rounded-3 mb-1 border trip-item"
+                 style="cursor:pointer; transition:.1s;"
+                 data-search="{{ inv.subscriber_name|lower }} {{ inv.account_number }}">
+            <input type="checkbox" name="invoice_ids" value="{{ inv.id }}" class="form-check-input trip-check" style="width:18px;height:18px;">
+            <div class="flex-grow-1">
+              <div class="fw-semibold">{{ inv.subscriber_name }}</div>
+              <div class="small text-muted">{{ inv.account_number }}{% if inv.address %} • {{ inv.address }}{% endif %}</div>
+            </div>
+            <div class="text-end">
+              <div class="fw-bold text-danger">{{ "%.0f"|format(inv.remaining_amount) }}</div>
+              <div class="small text-muted">{{ inv.month_label }}</div>
+            </div>
+          </label>
+          {% else %}
+          <div class="text-center py-5 text-muted">
+            <i class="bi bi-check-circle fs-1 text-success"></i>
+            <div class="mt-2">لا توجد فواتير غير مسددة حالياً</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% if pending_invoices %}
+        <div class="mt-3">
+          <button class="btn btn-primary btn-lg w-100" type="submit">
+            <i class="bi bi-play-fill me-1"></i>فتح الجولة (<span id="selected-count2">0</span> فاتورة)
+          </button>
+        </div>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card p-4">
+      <h5 class="mb-3"><i class="bi bi-clock-history text-secondary me-2"></i>آخر الجولات</h5>
+      {% for t in past_trips %}
+      <div class="border rounded-3 p-3 mb-2">
+        <div class="d-flex justify-content-between">
+          <div class="fw-bold">{{ t.trip_date }}</div>
+          <span class="badge bg-success">{{ "%.0f"|format(t.collected_amount or 0) }} {{ currency }}</span>
+        </div>
+        <div class="small text-muted mt-1">
+          {{ t.collected_visits }}/{{ t.total_visits }} زيارة محصّلة
+        </div>
+        <div class="progress mt-2" style="height:6px;">
+          {% set pct = ((t.collected_visits / t.total_visits * 100)|int) if t.total_visits else 0 %}
+          <div class="progress-bar bg-success" style="width:{{ pct }}%"></div>
+        </div>
+      </div>
+      {% else %}
+      <div class="text-muted text-center py-4">لا توجد جولات سابقة</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+</div>
+
+<script>
+// Search filter
+document.getElementById('trip-search')?.addEventListener('input', function() {
+  const q = this.value.toLowerCase().trim();
+  document.querySelectorAll('.trip-item').forEach(el => {
+    const match = !q || el.dataset.search.includes(q);
+    el.style.display = match ? '' : 'none';
+  });
+});
+// Select all / none
+function selectAll(state) {
+  document.querySelectorAll('.trip-check').forEach(cb => {
+    const li = cb.closest('.trip-item');
+    if (li.style.display !== 'none') cb.checked = state;
+  });
+  updateCount();
+}
+// Count selected
+function updateCount() {
+  const n = document.querySelectorAll('.trip-check:checked').length;
+  document.getElementById('selected-count').textContent  = n + ' محدد';
+  const s2 = document.getElementById('selected-count2');
+  if(s2) s2.textContent = n;
+}
+document.querySelectorAll('.trip-check').forEach(cb => cb.addEventListener('change', updateCount));
+// Highlight checked items
+document.querySelectorAll('.trip-item').forEach(el => {
+  el.addEventListener('change', function() {
+    this.style.background = this.querySelector('input').checked ? '#e8f0fe' : '';
+  });
+});
+updateCount();
+</script>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container" style="max-width: 1100px;">
+  <div class="card p-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+      <h4 class="mb-0">الإعدادات</h4>
+      <div class="d-flex gap-2 flex-wrap">
+        <span class="badge text-bg-light">API واتساب + الفواتير + التقارير</span>
+        <a class="btn btn-outline-dark btn-sm" href="{{ url_for('developer_tools') }}">لوحة المبرمج</a>
+      </div>
+    </div>
+    <form method="post" class="row g-3">
+      <div class="col-md-4"><label class="form-label">اسم المشروع</label><input class="form-control" name="project_name" value="{{ settings.project_name }}"></div>
+      <div class="col-md-4"><label class="form-label">اسم المنظمة</label><input class="form-control" name="organization_name" value="{{ settings.organization_name }}"></div>
+      <div class="col-md-4"><label class="form-label">انتاج شركة</label><input class="form-control" name="engineer_name" value="{{ settings.engineer_name }}" placeholder= "يمن كود للتقنيات الذكية" readonly></div>
+      <div class="col-md-4">
+        <label class="form-label">الثيم</label>
+        <select class="form-select" name="ui_theme">
+          <option value="light" {% if settings.ui_theme == "light" %}selected{% endif %}>فاتح</option>
+          <option value="dark" {% if settings.ui_theme == "dark" %}selected{% endif %}>داكن</option>
+          <option value="ocean" {% if settings.ui_theme == "ocean" %}selected{% endif %}>أزرق هادئ</option>
+        </select>
+      </div>
+      <div class="col-md-3"><label class="form-label">سعر الوحدة الافتراضي</label><input class="form-control" name="default_unit_price" value="{{ settings.default_unit_price }}"></div>
+      <div class="col-md-3"><label class="form-label">رسوم الاشتراك الافتراضية</label><input class="form-control" name="default_subscription_fee" value="{{ settings.default_subscription_fee }}"></div>
+      <div class="col-md-3"><label class="form-label">اسم العملة</label><input class="form-control" name="currency_name" value="{{ settings.currency_name }}"></div>
+      <div class="col-md-3"><label class="form-label">رقم الفاتورة البداية</label><input class="form-control" name="invoice_start_no" value="{{ settings.invoice_start_no }}"></div>
+      <div class="col-md-6"><label class="form-label">رابط واتساب API</label><input class="form-control" name="whatsapp_api_url" value="{{ settings.whatsapp_api_url }}" placeholder="https://whatsapp.alattab.site/water/api/send" readonly></div>
+      <div class="col-md-6"><label class="form-label">From Number للواتساب</label><input class="form-control" name="whatsapp_from_number" value="{{ settings.whatsapp_from_number }}" placeholder="9677XXXXXXXX"></div>
+      <div class="col-md-3"><label class="form-label">عدد الفواتير في PDF</label><input class="form-control" name="invoice_rows_per_pdf" value="{{ settings.invoice_rows_per_pdf }}"></div>
+      <div class="col-md-3">
+        <label class="form-label d-block">منع أكثر من فاتورة لنفس المشترك في نفس الشهر</label>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" role="switch" name="enforce_one_invoice_per_month" value="1" {% if settings.enforce_one_invoice_per_month|default('1') in ['1','true','True','yes','on'] %}checked{% endif %}>
+          <label class="form-check-label">مفعّل</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label d-block">إظهار حقل المتأخرات عند إنشاء الفاتورة</label>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" role="switch" name="manual_previous_arrears_entry" value="1" {% if settings.manual_previous_arrears_entry|default('1') in ['1','true','True','yes','on'] %}checked{% endif %}>
+          <label class="form-check-label">مفعّل</label>
+        </div>
+      </div>
+      <div class="col-12"><button class="btn btn-primary">حفظ</button></div>
+    </form>
+  </div>
+
+  <div class="card p-4 mt-3">
+    <h5>ماذا يحتاج إرسال واتساب؟</h5>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead><tr><th>الحقل</th><th>المعنى</th><th>ملاحظات</th></tr></thead>
+        <tbody>
+          <tr><td>api_url</td><td>رابط API</td><td>يؤخذ من الإعدادات أو من الحقول في الفورم</td></tr>
+          <tr><td>fromNumber</td><td>رقم/معرّف الإرسال</td><td>يُرسل مع الطلب</td></tr>
+          <tr><td>to / number</td><td>رقم المستلم</td><td>رقم المشترك بصيغة دولية مثل 9677XXXXXXXX</td></tr>
+          <tr><td>messageBody</td><td>نص الرسالة</td><td>يدعم الرسالة العربية الكاملة</td></tr>
+          <tr><td>file</td><td>ملف مرفق</td><td>اختياري: PDF أو صورة أو سند</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card p-4 mt-3">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+      <h5 class="mb-0">النسخ الاحتياطي والاسترجاع</h5>
+      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('backup_db') }}">تنزيل نسخة احتياطية</a>
+    </div>
+    <form method="post" action="{{ url_for('restore_db') }}" enctype="multipart/form-data" class="row g-3 align-items-end">
+      <div class="col-md-8">
+        <label class="form-label">رفع نسخة احتياطية للاسترجاع</label>
+        <input type="file" class="form-control" name="backup_file" accept=".sqlite3,.db,.sqlite">
+      </div>
+      <div class="col-md-4">
+        <button class="btn btn-danger w-100" type="submit">استرجاع النسخة</button>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

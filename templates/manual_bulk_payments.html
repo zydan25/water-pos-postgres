@@ -1,0 +1,67 @@
+
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid">
+  <div class="card p-4 rounded-4 shadow-sm">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+      <div>
+        <h4 class="mb-0">تسجيل تسديدات متعددة</h4>
+        <div class="text-muted small">الظهور يبدأ من آخر الفواتير غير المسددة، والمبلغ يُكتب يدوياً بدون قيود رقمية صارمة.</div>
+      </div>
+      <a class="btn btn-outline-secondary" href="{{ url_for('manual_collection.manual_collection_home') }}">رجوع</a>
+    </div>
+
+    <form method="post">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>المشترك</th>
+              <th>القرية</th>
+              <th>الفاتورة</th>
+              <th>الشهر</th>
+              <th>المتبقي</th>
+              <th style="width:150px">المبلغ</th>
+              <th style="width:160px">الطريقة</th>
+              <th>ملاحظة</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in invoices %}
+            <tr>
+              <td>
+                <div class="fw-semibold">{{ inv.subscriber_name }}</div>
+                <div class="small text-muted">{{ inv.account_number }} • {{ inv.address or '-' }}</div>
+              </td>
+              <td>{{ inv.village or inv.address or '-' }}</td>
+              <td>
+                <input type="hidden" name="invoice_id" value="{{ inv.id }}">
+                {{ inv.invoice_no }}
+              </td>
+              <td>{{ inv.month_label or inv.invoice_date or '-' }}</td>
+              <td class="fw-bold">{{ "%.0f"|format(inv.remaining_amount or 0) }}</td>
+              <td>
+                <input class="form-control" type="text" inputmode="decimal" name="amount" value="{{ inv.remaining_amount or 0 }}" placeholder="0">
+              </td>
+              <td>
+                <select class="form-select" name="method">
+                  <option value="نقداً" selected>نقداً</option>
+                  <option value="تحويل">تحويل</option>
+                  <option value="شيك">شيك</option>
+                </select>
+              </td>
+              <td><input class="form-control" name="note" placeholder="اختياري"></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" class="text-center text-muted py-4">لا توجد فواتير غير مسددة</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="d-flex justify-content-end gap-2 mt-3">
+        <button class="btn btn-primary">حفظ التسديدات</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

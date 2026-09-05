@@ -1,0 +1,41 @@
+body {
+  background: #f6f8fb;
+  font-family: system-ui, -apple-system, "Segoe UI", Tahoma, Arial, sans-serif;
+}
+.card {
+  border: 0;
+  border-radius: 1rem;
+  box-shadow: 0 0.35rem 1rem rgba(0,0,0,.05);
+}
+.table thead th {
+  white-space: nowrap;
+}
+.form-control, .form-select, .btn {
+  border-radius: .85rem;
+}
+.muted {
+  color: #6c757d;
+}
+.search-results {
+  max-height: 300px;
+  overflow: auto;
+}
+.badge-soft {
+  background: rgba(13,110,253,.1);
+  color: #0d6efd;
+}
+.small-muted {
+  font-size: .875rem;
+  color: #6c757d;
+}
+.invoice-action-grid {
+  display: grid;
+  gap: .75rem;
+}
+@media (max-width: 768px) {
+  .hide-mobile { display: none !important; }
+}
+
+.account-tree ul { margin-bottom: 0; }
+.account-tree .badge { min-width: 4rem; }
+.portal-stat { min-height: 100%; }

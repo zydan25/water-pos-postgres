@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+.drop-zone {
+  border: 2px dashed #93c5fd;
+  border-radius: 16px;
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: .2s;
+  background: #f8faff;
+}
+.drop-zone.drag-over { border-color: #1a56db; background: #eff6ff; }
+.drop-zone .drop-icon { font-size: 3rem; color: #93c5fd; }
+.template-card { border: 1.5px solid #e5e7eb; border-radius: 14px; padding: 16px; transition: .15s; cursor: pointer; }
+.template-card:hover { border-color: #1a56db; background: #f0f4ff; }
+.step-circle { width:32px; height:32px; border-radius:50%; background:#1a56db; color:white; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:.85rem; flex-shrink:0; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container" style="max-width:900px;">
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <div style="background:#1a56db;color:white;border-radius:14px;padding:12px 16px;font-size:1.5rem;">📥</div>
+    <div>
+      <h4 class="mb-0">استيراد وإدارة البيانات</h4>
+      <div class="text-muted small">استيراد المشتركين من Excel، XML، أو CSV</div>
+    </div>
+  </div>
+
+  <!-- Steps -->
+  <div class="card p-4 mb-4">
+    <div class="fw-bold mb-3">خطوات الاستيراد</div>
+    <div class="d-flex flex-column gap-3">
+      {% for step, desc in [
+        ('1','حمّل قالب Excel المناسب أو جهّز ملفك وفق الأعمدة المطلوبة'),
+        ('2','اختر الملف بالسحب والإفلات أو عبر زر التصفح'),
+        ('3','اضغط "استيراد" — سيتم تحديث السجلات الموجودة أو إضافة الجديدة تلقائياً'),
+      ] %}
+      <div class="d-flex align-items-start gap-3">
+        <div class="step-circle">{{ step }}</div>
+        <div class="mt-1">{{ desc }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Download templates -->
+  <div class="card p-4 mb-4">
+    <div class="fw-bold mb-3">📄 قوالب جاهزة للتحميل</div>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="template-card text-center">
+          <div style="font-size:2.5rem;">📊</div>
+          <div class="fw-bold mt-2">قالب Excel</div>
+          <div class="small text-muted mb-3">مشتركين — .xlsx</div>
+          <a class="btn btn-sm btn-primary w-100" href="{{ url_for('download_import_template', fmt='xlsx') }}">
+            <i class="bi bi-download me-1"></i>تحميل
+          </a>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="template-card text-center">
+          <div style="font-size:2.5rem;">📋</div>
+          <div class="fw-bold mt-2">قالب CSV</div>
+          <div class="small text-muted mb-3">مشتركين — .csv</div>
+          <a class="btn btn-sm btn-outline-primary w-100" href="{{ url_for('download_import_template', fmt='csv') }}">
+            <i class="bi bi-download me-1"></i>تحميل
+          </a>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="template-card text-center">
+          <div style="font-size:2.5rem;">🗄️</div>
+          <div class="fw-bold mt-2">نسخة احتياطية DB</div>
+          <div class="small text-muted mb-3">قاعدة البيانات الكاملة</div>
+          <a class="btn btn-sm btn-outline-dark w-100" href="{{ url_for('backup_db') }}">
+            <i class="bi bi-cloud-download me-1"></i>تحميل
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upload form -->
+  <div class="card p-4 mb-4">
+    <div class="fw-bold mb-3">⬆️ استيراد ملف</div>
+    <form method="post" enctype="multipart/form-data" id="import-form">
+      <div class="drop-zone mb-3" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <div class="drop-icon">📂</div>
+        <div class="fw-bold mt-2" id="drop-label">اسحب الملف هنا أو اضغط للتصفح</div>
+        <div class="small text-muted mt-1">Excel (.xlsx) — CSV (.csv) — XML (.xml)</div>
+        <input type="file" id="file-input" name="file" accept=".xlsx,.csv,.xml" class="d-none" required>
+      </div>
+
+      <div class="row g-3 align-items-end">
+        <div class="col-md-6">
+          <label class="form-label fw-bold">نوع البيانات</label>
+          <select class="form-select" name="data_type">
+            <option value="subscribers">مشتركون</option>
+          </select>
+        </div>
+        <div class="col-md-6 d-grid">
+          <button class="btn btn-primary btn-lg" type="submit" id="import-btn">
+            <i class="bi bi-upload me-1"></i>استيراد الآن
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Field reference -->
+  <div class="card p-4">
+    <div class="fw-bold mb-3">📑 الحقول المدعومة</div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead class="table-light">
+          <tr><th>اسم الحقل</th><th>الوصف</th><th>إلزامي</th><th>مثال</th></tr>
+        </thead>
+        <tbody>
+          {% for field, desc, req, ex in [
+            ('account_number', 'رقم الحساب (معرّف فريد)', 'نعم', 'WS-0001'),
+            ('name',           'اسم المشترك',              'نعم', 'أحمد محمد'),
+            ('meter_number',   'رقم العداد',               'لا',  'M-123456'),
+            ('phone',          'رقم الهاتف',               'لا',  '9677XXXXXXXX'),
+            ('address',        'العنوان',                  'لا',  'صنعاء - حدة'),
+            ('default_unit_price',       'سعر الوحدة الافتراضي', 'لا', '3500'),
+            ('default_subscription_fee', 'رسوم الاشتراك الافتراضية', 'لا', '500'),
+            ('notes',  'ملاحظات', 'لا', '—'),
+            ('active', 'نشط (1) أو موقوف (0)', 'لا', '1'),
+          ] %}
+          <tr>
+            <td><code>{{ field }}</code></td>
+            <td>{{ desc }}</td>
+            <td>
+              {% if req == 'نعم' %}
+              <span class="badge bg-danger">إلزامي</span>
+              {% else %}
+              <span class="badge bg-secondary">اختياري</span>
+              {% endif %}
+            </td>
+            <td class="text-muted small">{{ ex }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="alert alert-info mt-3 mb-0 small">
+      <i class="bi bi-info-circle me-1"></i>
+      إذا كان <code>account_number</code> موجوداً مسبقاً، سيتم <strong>تحديث</strong> السجل.
+      إذا كان جديداً، سيتم <strong>إضافته</strong>. هذا يتيح الاستيراد المتكرر بأمان.
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Drag & drop
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+['dragenter','dragover'].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add('drag-over'); }));
+['dragleave','drop'].forEach(e => dropZone.addEventListener(e, () => dropZone.classList.remove('drag-over')));
+dropZone.addEventListener('drop', ev => {
+  ev.preventDefault();
+  const f = ev.dataTransfer.files[0];
+  if (f) { fileInput.files = ev.dataTransfer.files; updateLabel(f.name); }
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) updateLabel(fileInput.files[0].name);
+});
+function updateLabel(name) {
+  document.getElementById('drop-label').textContent = '✅ ' + name;
+  dropZone.style.borderColor = '#059669';
+  dropZone.style.background  = '#f0fdf4';
+}
+
+// Disable submit while uploading
+document.getElementById('import-form').addEventListener('submit', () => {
+  const btn = document.getElementById('import-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري الاستيراد...';
+});
+</script>
+{% endblock %}
