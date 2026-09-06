@@ -1,390 +1,226 @@
-{% set card_zoom = card_zoom|default(1) %}
 {% set base_total = (invoice.consumption_amount or 0) + (invoice.subscription_fee or 0) + (invoice.other_charges or 0) %}
 {% set opening_balance = invoice.opening_balance or 0 %}
 {% set credit_amount = invoice.credit_amount or 0 %}
 {% set final_total = invoice.total_amount or (base_total + opening_balance) %}
 {% set paid = invoice.paid_amount or 0 %}
 {% set remaining = invoice.remaining_amount or 0 %}
-{% set prev = previous_invoice %}
-{% set prev_total = prev.total_amount if prev else 0 %}
-{% set prev_paid = prev.paid_amount if prev else 0 %}
-{% set prev_remaining = prev.remaining_amount if prev else 0 %}
+{% set currency = settings.currency_name|default('ريال') %}
+{% set connection_status %}{% if invoice.subscriber_active == 1 %}مفعّل{% elif invoice.subscriber_active == 0 %}موقوف{% else %}—{% endif %}{% endset %}
+{% set qr = qr_data if qr_data else (qr_image_uri(make_qr_data(invoice)) if qr_image_uri is defined and make_qr_data is defined else none) %}
+{% set dl = invoice.invoice_date|deadline(15) %}
 <style>
-  .invoice-card {
-    border: 2px solid #000;
-    padding: 10px 12px;
+  .invoice {
+    width: 100%;
+    border: 1.5px solid #000;
+    padding: 2px;
+    margin-bottom: 0;
+    background: #fff;
     page-break-inside: avoid;
     break-inside: avoid;
-    margin: 0 auto 6mm;
-    max-width: 202mm;
-    zoom: {{ card_zoom }};
+    box-sizing: border-box;
+    direction: rtl;
+    text-align: right;
   }
-  .invoice-card .header {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    align-items: center;
-    font-weight: 900;
-    font-size: 16px;
-    border-bottom: 2px dashed #000;
-    padding-bottom: 10px;
-    margin-bottom: 10px;
-  }
-  .invoice-card .meta {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin-bottom: 10px;
-    font-weight: 700;
-  }
-  .invoice-card .meta div {
+  .invoice:last-child { margin-bottom: 0; }
+  .invoice-table { width: 100%; border-collapse: collapse; table-layout: fixed; direction: rtl; }
+  .stub-col { width: 30%; vertical-align: top; padding: 0 !important; }
+  .main-col { width: 70%; vertical-align: top; padding: 0 !important; }
+  .inner-table { width: 100%; border-collapse: collapse; direction: rtl; }
+  .inner-table td, .inner-table th {
     border: 1px solid #000;
-    padding: 6px 8px;
-    border-radius: 6px;
+    padding: 1.5px 2px;
     text-align: center;
+    font-weight: bold;
+    font-size: 8.5pt;
+    line-height: 1.2;
+    color: #000;
+    direction: rtl;
   }
-  table.main {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 10px 0;
-    border: 2px solid #000;
-    table-layout: fixed;
-  }
-  table.main th,
-  table.main td {
-    border: 1px solid #000;
-    padding: 4px;
+  .header-title { font-size: 9.5pt; font-weight: bold; padding: 2px 0; text-align: center; }
+  .footer-note {
+    font-size: 7.5pt;
+    font-weight: bold;
+    padding: 2px;
     text-align: center;
-    font-weight: 700;
-    vertical-align: top;
-    word-break: break-word;
-  }
-  table.main th {
-    background: #f5f5f5;
-    font-size: 11px;
-    line-height: 1.25;
-  }
-  .cell-block {
-    min-height: 46px;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    align-items: center;
-    gap: 2px;
-    padding: 2px 0;
-  }
-  .cell-block .label {
-    display: none;
-  }
-  .cell-block .value {
-    font-size: 15px;
-    font-weight: 900;
-    line-height: 1.15;
-  }
-  .cell-block .sub {
-    font-size: 10px;
-    font-weight: 700;
-    color: #333;
     line-height: 1.2;
   }
-  .nested-box {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-  }
-  .nested-box td,
-  .nested-box th {
-    border: 1px solid #000;
-    padding: 5px 4px;
-    text-align: center;
+  .bg-gray { background-color: #f2f2f2; }
+  .td-big { font-size: 9.5pt; font-weight: 900; }
+  .td-big2 { font-size: 8.5pt; }
+  .org-name { font-size: 8.5pt; font-weight: bold; text-align: center; }
+  .org-title { font-size: 9pt; font-weight: bold; text-align: center; }
+  .stub-tafqit { font-size: 8pt; line-height: 1.2; text-align: center; }
+  .w { white-space: nowrap; }
+  .qr-img {
+    display: inline-block;
     vertical-align: middle;
-    word-break: break-word;
-  }
-  .nested-box th {
-    background: #f5f5f5;
-    font-size: 11px;
-    font-weight: 900;
-    line-height: 1.2;
-  }
-  .nested-label {
-    font-size: 10px;
-    font-weight: 900;
-    line-height: 1.2;
-  }
-  .nested-value {
-    margin-top: 2px;
-    font-size: 15px;
-    font-weight: 900;
-    line-height: 1.1;
-  }
-  .nested-note {
-    font-size: 10px;
-    font-weight: 700;
-    color: #333;
-    line-height: 1.2;
-    margin-top: 2px;
-  }
-  .summary-box {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
-  .summary-row {
+    width: 32px;
+    height: 32px;
     border: 1px solid #000;
-    display: grid;
-    grid-template-columns: 1.35fr 1fr;
-    align-items: center;
-    min-height: 30px;
+    padding: 1px;
+    background: #fff;
+    margin-inline-start: 2px;
   }
-  .summary-row + .summary-row { border-top: 0; }
-  .summary-row .lbl {
-    border-left: 1px solid #000;
-    padding: 6px 6px;
-    font-size: 11px;
-    font-weight: 900;
-    text-align: center;
-    background: #fbfbfb;
-  }
-  .summary-row .val {
-    padding: 6px 6px;
-    font-size: 14px;
-    font-weight: 900;
-    text-align: center;
-  }
-  .summary-row.main-total {
-    background: #f5f5f5;
-  }
-  .summary-row.main-total .val {
-    font-size: 16px;
-  }
-  .summary-row.final-total {
-    background: #eef4ff;
-  }
-  .summary-row.final-total .val {
-    font-size: 16px;
-  }
-  .badge-line {
-    border: 1px solid #000;
-    border-radius: 6px;
-    padding: 5px 6px;
-    font-weight: 900;
-    margin-top: 4px;
-    font-size: 11px;
-  }
-  .note-box {
-    margin-top: 10px;
-    border: 1px solid #000;
-    padding: 8px;
-    border-radius: 6px;
-    font-weight: 700;
-  }
-  .invoice-card .footer {
-    margin-top: 10px;
-    padding-top: 8px;
-    border-top: 1px solid #000;
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    font-size: 11px;
-    font-weight: 700;
-  }
-  @media print {
-    .invoice-card { margin-bottom: 0; border-width: 2px; }
-  }
+  .dl-nowrap { white-space: nowrap; }
+  .footer-strip { border-top: 1px solid #000; }
+  .cut { display: none; }
 </style>
 
-<div class="page">
-  <div class="invoice-card">
-    <div class="header">
-      <div>{{ settings.organization_name }}</div>
-      <div>فاتورة رقم {{ invoice.invoice_no }}</div>
-      <div>{{ invoice.month_label }} / {{ invoice.invoice_date }}</div>
-    </div>
+<div class="invoice">
+  <table class="invoice-table">
+    <tr>
+      <!-- ===== الكعب - الجزء الأيمن ===== -->
+      <td class="stub-col">
+        <table class="inner-table">
+          <tr>
+            <td colspan="2" style="padding: 2px 1px;">
+              <div class="org-name">{{ settings.organization_name }}</div>
+              <span class="org-title">كعب الفاتورة</span>
+              {% if qr %}<img class="qr-img" src="{{ qr }}" alt="QR">{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td style="width: 35%;">المشترك</td>
+            <td style="width: 65%; font-size: 9.5pt;">{{ invoice.subscriber_name }}</td>
+          </tr>
+          <tr>
+            <td class="bg-gray">شهر / عداد</td>
+            <td>{{ invoice.month_label }} / {{ invoice.meter_number or '—' }}</td>
+          </tr>
+          <tr>
+            <td class="bg-gray">رقم الفاتورة</td>
+            <td class="td-big">{{ invoice.invoice_no }}</td>
+          </tr>
+          <tr>
+            <td class="bg-gray">المنطقة</td>
+            <td>{{ invoice.village or invoice.address or '—' }}</td>
+          </tr>
+          <tr>
+            <td class="bg-gray">المبلغ المستحق</td>
+            <td class="td-big">{{ final_total|num }} {{ currency }}</td>
+          </tr>
+          <tr>
+            <td colspan="2" class="stub-tafqit" style="padding: 2px 1px;">
+              {{ final_total|tafqit(currency) }}
+            </td>
+          </tr>
+        </table>
+      </td>
 
-    <div class="meta">
-      <div>رقم الحساب: {{ invoice.account_number }}</div>
-      <div>اسم المشترك: {{ invoice.subscriber_name }}</div>
-      <div>رقم العداد: {{ invoice.meter_number or '-' }}</div>
-    </div>
-    <div class="meta">
-      <div>العنوان: {{ invoice.address or '-' }}</div>
-      <div>الشهر: {{ invoice.month_label }}</div>
-      <div>سعر الوحدة: {{ invoice.unit_price }}</div>
-    </div>
+      <!-- ===== الفاتورة الرئيسية - الجزء الأيسر ===== -->
+      <td class="main-col">
+        <table class="inner-table">
+          <tr>
+            <td style="width: 22%; font-size: 8.5pt;">فاتورة مياه منزلي</td>
+            <td style="width: 58%;" class="header-title">{{ settings.organization_name }}</td>
+            <td style="width: 20%;" rowspan="2">
+              <svg width="34" height="34" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="50" cy="50" r="46" stroke="#000" stroke-width="4" fill="none" stroke-dasharray="6,3"/>
+                <circle cx="50" cy="50" r="38" stroke="#000" stroke-width="2" fill="none"/>
+                <path d="M50 20 C50 20, 30 50, 30 65 A20 20 0 0 0 70 65 C70 50, 50 20, 50 20 Z" fill="#000"/>
+                <path d="M35 60 Q50 75 65 60" stroke="#fff" stroke-width="3" fill="none"/>
+              </svg>
+            </td>
+          </tr>
+          <tr>
+            <td class="bg-gray">فاتورة شهر</td>
+            <td>{{ invoice.month_label }}</td>
+          </tr>
+          <tr>
+            <td class="bg-gray">المنطقة / العنوان</td>
+            <td colspan="2">{% if invoice.village and invoice.address and invoice.village != invoice.address %}{{ invoice.village }} - {{ invoice.address }}{% else %}{{ invoice.village or invoice.address or '—' }}{% endif %}</td>
+          </tr>
+          <tr>
+            <td class="bg-gray">إسم المشترك</td>
+            <td colspan="2" style="font-size: 9.5pt;">{{ invoice.subscriber_name }}</td>
+          </tr>
+        </table>
 
-    <table class="main">
-      <colgroup>
-        <col style="width: 10%">
-        <col style="width: 10%">
-        <col style="width: 10%">
-        <col style="width: 11%">
-        <col style="width: 11%">
-        <col style="width: 18%">
-        <col style="width: 30%">
-      </colgroup>
-      <thead>
-        <tr>
-          <th>القراءة السابقة</th>
-          <th>القراءة الحالية</th>
-          <th>الاستهلاك</th>
-          <th>سعر الاستهلاك</th>
-          <th>قيمة الاشتراك</th>
-          <th>الشهر السابق</th>
-          <th>الإجماليات</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>
-            <div class="cell-block">
-              <div class="value">{{ invoice.previous_reading }}</div>
-            </div>
-          </td>
-          <td>
-            <div class="cell-block">
-              <div class="value">{{ invoice.current_reading }}</div>
-            </div>
-          </td>
-          <td>
-            <div class="cell-block">
-              <div class="value">{{ invoice.consumption }}</div>
-              {% if invoice.current_reading_date %}
-              <div class="sub">من {{ invoice.previous_reading_date or '—' }} إلى {{ invoice.current_reading_date }}</div>
-              {% endif %}
-            </div>
-          </td>
-          <td>
-            <div class="cell-block">
-              <div class="value">{{ invoice.unit_price }}</div>
-            </div>
-          </td>
-          <td>
-            <div class="cell-block">
-              <div class="value">{{ invoice.subscription_fee }}</div>
-            </div>
-          </td>
-          <td>
-            <table class="nested-box">
-              <tr>
-                <th colspan="2">الشهر السابق</th>
-              </tr>
-              {% if prev %}
-              <tr>
-                <td>
-                  <div class="nested-label">المستحق</div>
-                </td>
-                <td>
-                  <div class="nested-label">المسدد</div>
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  <div class="nested-value">{{ "%.0f"|format(prev_total or 0) }}</div>
-                  <div class="nested-note">رقم {{ prev.invoice_no }}</div>
-                </td>
-                <td>
-                  <div class="nested-value">{{ "%.0f"|format(prev_paid or 0) }}</div>
-                  <div class="nested-note">المتبقي: {{ "%.0f"|format(prev_remaining or 0) }}</div>
-                </td>
-              </tr>
-              {% if (prev.credit_amount or 0) != 0 %}
-              <tr>
-                <td colspan="2">
-                  <div class="nested-label">الرصيد له/عليه</div>
-                  <div class="nested-value" style="font-size:13px;">
-                    {% if (prev.credit_amount or 0) > 0 %}
-                      له {{ "%.0f"|format(prev.credit_amount) }}
-                    {% else %}
-                      عليه {{ "%.0f"|format(prev.credit_amount|abs) }}
-                    {% endif %}
-                  </div>
-                </td>
-              </tr>
-              {% endif %}
-              {% else %}
-              <tr>
-                <td colspan="2">
-                  <div class="nested-value" style="font-size:12px;">لا توجد فاتورة سابقة</div>
-                </td>
-              </tr>
-              {% endif %}
-            </table>
-          </td>
-          <td>
-            <div class="summary-box">
-              <div class="summary-row main-total">
-                <div class="lbl">الإجمالي الأساسي</div>
-                <div class="val">{{ "%.0f"|format(base_total) }}</div>
-              </div>
+        <table class="inner-table" style="margin-top: -1px;">
+          <tr>
+            <td style="width: 16%;" class="bg-gray">رقم المشترك</td>
+            <td style="width: 16%;" class="td-big2">{{ invoice.account_number }}</td>
+            <td style="width: 16%;" class="bg-gray">رقم العداد</td>
+            <td style="width: 20%;" class="td-big2">{{ invoice.meter_number or '—' }}</td>
+            <td style="width: 16%;" class="bg-gray">حالة التوصيل</td>
+            <td style="width: 16%;" class="td-big2">{{ connection_status }}</td>
+          </tr>
+          <tr>
+            <td class="bg-gray">رقم الفاتورة</td>
+            <td class="td-big2">{{ invoice.invoice_no }}</td>
+            <td class="bg-gray">تاريخ الاصدار</td>
+            <td class="td-big2">{{ invoice.invoice_date }}</td>
+            <td class="bg-gray">موعد السداد</td>
+            <td class="td-big2">{% if dl %}{{ dl }}{% else %}خلال 15 يوماً{% endif %}</td>
+          </tr>
+        </table>
 
-              <div class="summary-row">
-                <div class="lbl">المتأخرات</div>
-                <div class="val">
-                  {% if opening_balance > 0 %}
-                    {{ "%.0f"|format(opening_balance) }}
-                  {% elif opening_balance < 0 %}
-                    لكم {{ "%.0f"|format(opening_balance|abs) }}
-                  {% else %}
-                    0
-                  {% endif %}
-                </div>
-              </div>
+        <table class="inner-table" style="margin-top: -1px;">
+          <thead>
+            <tr class="bg-gray">
+              <th colspan="2">قراءة العداد</th>
+              <th rowspan="2">الاستهلاك</th>
+              <th rowspan="2">قيمة الاستهلاك</th>
+              <th rowspan="2">الاشتراك</th>
+              <th colspan="2">الشهر السابق</th>
+              <th rowspan="2">المتأخرات</th>
+              <th rowspan="2">المبلغ المستحق</th>
+            </tr>
+            <tr class="bg-gray">
+              <th>السابقة</th>
+              <th>الحالية</th>
+              <th>القيمة</th>
+              <th>المدفوع</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{{ "%.0f"|format(invoice.previous_reading or 0) }}</td>
+              <td>{{ "%.0f"|format(invoice.current_reading or 0) }}</td>
+              <td>{{ "%.0f"|format(invoice.consumption or 0) }}</td>
+              <td>{{ (invoice.consumption_amount or 0)|num }}</td>
+              <td>{{ (invoice.subscription_fee or 0)|num }}</td>
+              <td>{% if opening_balance > 0 %}{{ opening_balance|num }}{% elif opening_balance < 0 %}لكم {{ (opening_balance|abs)|num }}{% else %}0{% endif %}</td>
+              <td>{{ paid|num }}</td>
+              <td>{% if opening_balance > 0 %}{{ opening_balance|num }}{% else %}0{% endif %}</td>
+              <td class="td-big">{{ final_total|num }}</td>
+            </tr>
+          </tbody>
+        </table>
 
-              {% if credit_amount != 0 %}
-              <div class="summary-row">
-                <div class="lbl">الرصيد له/عليه</div>
-                <div class="val">
-                  {% if credit_amount > 0 %}
-                    له {{ "%.0f"|format(credit_amount) }}
-                  {% else %}
-                    عليه {{ "%.0f"|format(credit_amount|abs) }}
-                  {% endif %}
-                </div>
-              </div>
-              {% endif %}
+        <table class="inner-table" style="margin-top: -1px;">
+          <tr>
+            <td style="width: 20%;" class="bg-gray">قيمة الاستهلاك</td>
+            <td style="width: 18%;">{{ (invoice.consumption_amount or 0)|num }} {{ currency }}</td>
+            <td rowspan="2" style="width: 62%;" class="footer-note">
+              {% if invoice.other_charges %}الرسوم والإضافات : {{ (invoice.other_charges or 0)|num }} {{ currency }} | {% endif %}
+              {% if remaining > 0 %}المتبقي : {{ remaining|num }} {{ currency }}{% else %}المتبقي : مسدد{% endif %}<br>
+              الرجاء سرعة سداد الفاتورة خلال أسبوع تجنباً للفصل وغرامة التأخير
+            </td>
+          </tr>
+          <tr>
+            <td class="bg-gray">الإجمالي المستحق</td>
+            <td class="td-big">{{ final_total|num }} {{ currency }}</td>
+          </tr>
+        </table>
 
-              <div class="summary-row final-total">
-                <div class="lbl">الإجمالي بعد الإضافة أو الخصم</div>
-                <div class="val">{{ "%.0f"|format(final_total) }}</div>
-              </div>
+        {% if invoice.notes %}
+        <table class="inner-table" style="margin-top: -1px;">
+          <tr>
+            <td class="bg-gray" style="width: 20%;">ملاحظات</td>
+            <td style="text-align: right; font-size: 8pt; padding: 1px 3px;">{{ invoice.notes }}</td>
+          </tr>
+        </table>
+        {% endif %}
 
-              <div class="summary-row">
-                <div class="lbl">المستحق</div>
-                <div class="val">{{ "%.0f"|format(final_total) }}</div>
-              </div>
-
-              <div class="summary-row">
-                <div class="lbl">المسدد</div>
-                <div class="val">{{ "%.0f"|format(paid) }}</div>
-              </div>
-
-              <div class="summary-row">
-                <div class="lbl">المتبقي</div>
-                <div class="val">{{ "%.0f"|format(remaining) }}</div>
-              </div>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-
-    {% if remaining > 0 %}
-    <div class="note-box">المتبقي: {{ "%.0f"|format(remaining) }} {{ settings.currency_name }}</div>
-    {% else %}
-    <div class="note-box">الحالة: مسددة بالكامل</div>
-    {% endif %}
-
-    {% if invoice.notes %}
-    <div class="note-box">
-      الملاحظات: {{ invoice.notes }}
-    </div>
-    {% endif %}
-
-    <div class="footer">
-      <div>المشتغل: {{ invoice.created_by_name or '-' }}</div>
-      <div>برمجة وتصميم: {{ settings.engineer_name }}</div>
-      <div>طُبعت بواسطة النظام</div>
-      <div>{{ settings.project_name }}</div>
-    </div>
-  </div>
+        <table class="inner-table footer-strip" style="margin-top: -1px;">
+          <tr>
+            <td style="font-size: 7.5pt;">أُصدرت بواسطة : {{ invoice.created_by_name or '—' }}</td>
+            <td style="font-size: 7.5pt;">التاريخ : {{ invoice.invoice_date }}</td>
+            <td style="font-size: 7.5pt;">برمجة وتصميم : {{ settings.engineer_name or settings.project_name }}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </div>

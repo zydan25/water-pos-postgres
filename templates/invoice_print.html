@@ -5,31 +5,54 @@
   <meta http-equiv="Content-Language" content="ar">
   <meta name="google" content="notranslate">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>فاتورة {{ invoice.invoice_no }}</title>
+  <title>طباعة الفواتير</title>
   <style>
-    @page { size: A4; margin: 4mm; }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "DejaVu Sans", Tahoma, Arial, sans-serif;
-      direction: rtl;
-      color: #000;
+    @page { size: A4 portrait; margin: 5mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Amiri', 'Traditional Arabic', 'Tahoma', sans-serif; }
+    body { background-color: #ffffff; color: #000000; direction: rtl; padding: 0; }
+    .page-container { width: 100%; max-width: 200mm; margin: 0 auto; direction: rtl; }
+    .cut-sep {
+      border-top: 1px dashed #000;
+      margin: 1.5mm 0;
+      text-align: center;
+      position: relative;
+      height: 4px;
+    }
+    .cut-sep::before {
+      content: "✂ اقطع هنا";
+      position: relative;
+      top: -6.5pt;
       background: #fff;
-      font-size: 14px;
+      padding: 0 4px;
+      font-size: 7pt;
+      font-weight: bold;
+      color: #000;
     }
-    .page { padding: 0; }
-    @media print {
-      .no-print { display: none !important; }
+    .page-group {
+      page-break-after: always;
+      break-after: page;
     }
+    .page-group:last-of-type { page-break-after: auto; break-after: auto; }
+    @media print { .no-print { display: none !important; } }
   </style>
 </head>
 <body>
   <div class="no-print" style="padding:10px 14px; background:#f0f4ff; border-bottom:1px solid #d0d8ff; text-align:center;">
     <button onclick="window.print()" style="padding:8px 18px;border:none;border-radius:8px;background:#1a56db;color:#fff;font-weight:700;cursor:pointer;">🖨️ طباعة</button>
+    {% if invoices is not defined or not invoices %}
     <a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}" style="padding:8px 18px;border-radius:8px;background:#e5e7eb;color:#111;text-decoration:none;display:inline-block;font-weight:700;margin-inline-start:8px;">إغلاق</a>
+    {% endif %}
   </div>
 
-  {% set card_zoom = 1 %}
-  {% include "_invoice_card.html" %}
+  <div class="page-container">
+  {% set invoices_list = invoices if (invoices is defined and invoices) else [invoice] %}
+  {% for single in invoices_list %}
+    {% if loop.index0 % 3 == 0 %}<div class="page-group">{% endif %}
+      {% if loop.index0 % 3 != 0 %}<div class="cut-sep"></div>{% endif %}
+      {% set invoice = single %}
+      {% include "_invoice_card.html" %}
+    {% if loop.index % 3 == 0 or loop.last %}</div>{% endif %}
+  {% endfor %}
+  </div>
 </body>
 </html>

@@ -40,7 +40,7 @@ database_file_path = str(DB_PATH)
 DEFAULT_SETTINGS = {
     "project_name": "نظام فواتير المياه",
     "organization_name": "جمعية مياه",
-    "engineer_name": "يمن كود للتقنيات الذكية",
+    "engineer_name": "يمن كود للبرمجيات والأنظمة",
     "default_unit_price": "3500",
     "default_subscription_fee": "500",
     "currency_name": "ريال",

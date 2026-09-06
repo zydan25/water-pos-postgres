@@ -6,7 +6,7 @@ import secrets
 import uuid
 import xml.etree.ElementTree as ET
 from collections import defaultdict
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from functools import wraps
 from pathlib import Path
 import time
@@ -136,6 +136,100 @@ def parse_decimal(value):
         return float(value)
     except ValueError:
         return 0.0
+
+
+_AR_ONES = [
+    "", "واحد", "اثنان", "ثلاثة", "أربعة", "خمسة", "ستة", "سبعة", "ثمانية", "تسعة",
+    "عشرة", "أحد عشر", "اثنا عشر", "ثلاثة عشر", "أربعة عشر", "خمسة عشر",
+    "ستة عشر", "سبعة عشر", "ثمانية عشر", "تسعة عشر",
+]
+_AR_TENS = ["", "عشرة", "عشرون", "ثلاثون", "أربعون", "خمسون", "ستون", "سبعون", "ثمانون", "تسعون"]
+_AR_HUNDREDS = ["", "مئة", "مئتان", "ثلاثمئة", "أربعمئة", "خمسمئة", "ستمئة", "سبعمئة", "ثمانمئة", "تسعمئة"]
+
+
+def _tafqit_sub100(n):
+    if n < 20:
+        return _AR_ONES[n]
+    tens, units = divmod(n, 10)
+    if units == 0:
+        return _AR_TENS[tens]
+    u = "أحد" if units == 1 else ("اثنان" if units == 2 else _AR_ONES[units])
+    return f"{u} و{_AR_TENS[tens]}"
+
+
+def _tafqit_sub1000(n):
+    parts = []
+    h, rest = divmod(n, 100)
+    if h:
+        parts.append(_AR_HUNDREDS[h])
+    if rest:
+        parts.append(_tafqit_sub100(rest))
+    return " و".join(parts)
+
+
+def number_in_arabic_words(value):
+    """تحويل رقم صحيح إلى كلمات عربية (تفقيط) حتى المليارات."""
+    try:
+        n = int(round(float(value)))
+    except (TypeError, ValueError):
+        return "صفر"
+    if n == 0:
+        return "صفر"
+    if n < 0:
+        return "ناقص " + number_in_arabic_words(-n)
+    groups = []
+    for divisor, (one, two, many) in (
+        (10**9, ("مليار", "ملياران", "مليارات")),
+        (10**6, ("مليون", "مليونان", "ملايين")),
+        (10**3, ("ألف", "ألفان", "آلاف")),
+    ):
+        cnt, n = divmod(n, divisor)
+        if cnt == 0:
+            continue
+        if cnt == 1:
+            groups.append(one)
+        elif cnt == 2:
+            groups.append(two)
+        elif cnt <= 10:
+            groups.append(f"{number_in_arabic_words(cnt)} {many}")
+        else:
+            groups.append(f"{number_in_arabic_words(cnt)} {one}")
+    if n:
+        groups.append(_tafqit_sub1000(n))
+    return " و".join(groups)
+
+
+def tafqit_filter(amount, currency=None):
+    words = number_in_arabic_words(amount)
+    if currency:
+        words = f"{words} {currency}"
+    return words
+
+
+def num_filter(value, decimals=0):
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return "0"
+    if decimals:
+        return f"{f:,.{int(decimals)}f}"
+    return f"{int(round(f)):,}"
+
+
+def deadline_filter(iso_date, days=15):
+    """حساب تاريخ استحقاق الدفع: تاريخ إصدار الفاتورة + عدد الأيام."""
+    if not iso_date:
+        return ""
+    parsed = None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d"):
+        try:
+            parsed = datetime.strptime(str(iso_date).strip()[:10], fmt)
+            break
+        except ValueError:
+            continue
+    if parsed is None:
+        return ""
+    return (parsed + timedelta(days=int(days))).strftime("%d / %m / %Y")
 
 def now_iso():
     return datetime.now().isoformat()
@@ -378,6 +472,19 @@ def make_qr_data(invoice):
     return f"Invoice:{invoice['invoice_no']}|Total:{invoice['total_amount']}|Remaining:{invoice['remaining_amount']}"
 
 
+def qr_image_uri(payload, size=180):
+    """توليد صورة QR بصيغة base64 data-URI لعرضها داخل قالب الطباعة."""
+    try:
+        qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M)
+        qr.add_data(payload)
+        qr.make(fit=True)
+        buf = io.BytesIO()
+        qr.make_image(fill_color="black", back_color="white").save(buf, format="PNG")
+        return f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('ascii')}"
+    except Exception:
+        return None
+
+
 def fetch_previous_invoice_summary(db, subscriber_id, current_invoice_id=None):
     """إرجاع آخر فاتورة سابقة للمشترك لعرض جدول الشهر السابق."""
     if current_invoice_id:
@@ -481,6 +588,7 @@ def generate_invoice_pdf_bytes(app, invoice_id, per_page=1):
         invoice = db.execute(
             """
             SELECT i.*, s.name subscriber_name, s.account_number, s.phone, s.village, s.address, s.meter_number,
+                   s.active AS subscriber_active,
                    uc.username AS created_by_name, up.username AS printed_by_name, us.username AS sent_by_name
             FROM invoices i
             JOIN subscribers s ON s.id = i.subscriber_id
@@ -494,7 +602,7 @@ def generate_invoice_pdf_bytes(app, invoice_id, per_page=1):
         if not invoice:
             raise ValueError("invoice not found")
         previous_invoice = fetch_previous_invoice_summary(db, invoice["subscriber_id"], invoice["id"])
-        qr_data = make_qr_data(invoice)
+        qr_data = qr_image_uri(make_qr_data(invoice))
         html = render_template(
             "invoice_print.html",
             invoice=invoice,
@@ -509,7 +617,7 @@ def generate_invoice_pdf_bytes(app, invoice_id, per_page=1):
             browser = p.chromium.launch()
             page = browser.new_page()
             page.set_content(html)
-            pdf = page.pdf(format="A4", print_background=True)
+            pdf = page.pdf(format="A4", print_background=True, prefer_css_page_size=True)
             browser.close()
         return pdf, invoice
 
@@ -782,6 +890,16 @@ def create_app():
         MAX_CONTENT_LENGTH=25 * 1024 * 1024,
         TEMPLATES_AUTO_RELOAD=True,
     )
+
+    app.jinja_env.filters.update({
+        "tafqit": tafqit_filter,
+        "num": num_filter,
+        "deadline": deadline_filter,
+    })
+    app.jinja_env.globals.update({
+        "make_qr_data": make_qr_data,
+        "qr_image_uri": qr_image_uri,
+    })
 
     def current_csrf_token():
         token = session.get("_csrf_token")
@@ -1354,7 +1472,7 @@ def create_app():
             "SELECT * FROM attachments WHERE invoice_id = ? ORDER BY id DESC",
             (invoice_id,),
         ).fetchall()
-        qr_data = make_qr_data(invoice)
+        qr_data = qr_image_uri(make_qr_data(invoice))
         return render_template(
             "invoice_detail.html",
             invoice=invoice,
@@ -1916,7 +2034,7 @@ def create_app():
                             total_amount,
                             0,
                             total_amount,
-                            "إنشاء جماعي",
+                            "",
                             session.get("user_id"),
                             now_iso(),
                             now_iso(),
@@ -1951,6 +2069,7 @@ def create_app():
         invoice = db.execute(
             """
             SELECT i.*, s.name subscriber_name, s.account_number, s.phone, s.village, s.address, s.meter_number,
+                   s.active AS subscriber_active,
                    uc.username AS created_by_name,
                    up.username AS printed_by_name,
                    us.username AS sent_by_name
@@ -1973,6 +2092,7 @@ def create_app():
         invoice = db.execute(
             """
             SELECT i.*, s.name subscriber_name, s.account_number, s.phone, s.village, s.address, s.meter_number,
+                   s.active AS subscriber_active,
                    uc.username AS created_by_name,
                    up.username AS printed_by_name,
                    us.username AS sent_by_name
@@ -1984,7 +2104,7 @@ def create_app():
             """,
             (invoice_id,),
         ).fetchone()
-        qr_data = make_qr_data(invoice)
+        qr_data = qr_image_uri(make_qr_data(invoice))
         html = render_template(
             "invoice_print.html",
             invoice=invoice,
@@ -2000,7 +2120,7 @@ def create_app():
                 browser = p.chromium.launch()
                 page = browser.new_page()
                 page.set_content(html)
-                pdf = page.pdf(format="A4", print_background=True)
+                pdf = page.pdf(format="A4", print_background=True, prefer_css_page_size=True)
                 browser.close()
             return send_file(io.BytesIO(pdf), mimetype="application/pdf", as_attachment=True, download_name=f"invoice-{invoice['invoice_no']}.pdf")
         return html
@@ -2024,6 +2144,7 @@ def create_app():
         params = []
         sql = """
             SELECT i.*, s.name subscriber_name, s.account_number, s.phone, s.village, s.address, s.meter_number,
+                   s.active AS subscriber_active,
                    uc.username AS created_by_name,
                    up.username AS printed_by_name,
                    us.username AS sent_by_name
@@ -2061,7 +2182,7 @@ def create_app():
             browser = p.chromium.launch()
             page = browser.new_page()
             page.set_content(html)
-            pdf = page.pdf(format="A4", print_background=True)
+            pdf = page.pdf(format="A4", print_background=True, prefer_css_page_size=True)
             browser.close()
         return send_file(io.BytesIO(pdf), mimetype="application/pdf", as_attachment=True, download_name="invoices.pdf")
 
@@ -2073,6 +2194,7 @@ def create_app():
         invoice = db.execute(
             """
             SELECT i.*, s.name subscriber_name, s.account_number, s.phone, s.village, s.address, s.meter_number,
+                   s.active AS subscriber_active,
                    uc.username AS created_by_name,
                    up.username AS printed_by_name,
                    us.username AS sent_by_name
@@ -3082,6 +3204,7 @@ def create_app():
         sql  = """
             SELECT i.*, s.name subscriber_name, s.account_number, s.phone,
                    s.village, s.address, s.meter_number,
+                   s.active AS subscriber_active,
                    uc.username AS created_by_name
             FROM invoices i
             JOIN subscribers s ON s.id = i.subscriber_id
@@ -3144,6 +3267,7 @@ def create_app():
         sql  = """
             SELECT i.*, s.name subscriber_name, s.account_number, s.phone,
                    s.village, s.address, s.meter_number,
+                   s.active AS subscriber_active,
                    uc.username AS created_by_name
             FROM invoices i
             JOIN subscribers s ON s.id = i.subscriber_id
@@ -3183,7 +3307,7 @@ def create_app():
             browser = p.chromium.launch()
             page = browser.new_page()
             page.set_content(html)
-            pdf = page.pdf(format="A4", print_background=True)
+            pdf = page.pdf(format="A4", print_background=True, prefer_css_page_size=True)
             browser.close()
         fname = f"invoices_{date_from}_to_{date_to}.pdf"
         return send_file(io.BytesIO(pdf), mimetype="application/pdf", as_attachment=True, download_name=fname)
