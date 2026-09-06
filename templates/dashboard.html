@@ -140,7 +140,7 @@
         <div class="row g-2">
   {% set actions = [
 
-    (url_for('payment_center'),         'bi-cash-coin',            'تسجيل سداد'),      (url_for('collection_trip'),        'bi-map',                  'جولة تحصيل'),      (url_for('employees'),              'bi-person-badge',         'الموظفين'),
+    (url_for('payment_center'),         'bi-cash-coin',            'تسجيل سداد'),      (url_for('manual_collection.manual_collection_home'),        'bi-clipboard-check', 'تحصيل يدوي'),      (url_for('employees'),              'bi-person-badge',         'الموظفين'),
     (url_for('subscribers'),            'bi-people',               'المشتركين'),
     (url_for('arrears_report'),         'bi-exclamation-triangle', 'متأخرات'),
     (url_for('invoices_print_by_date'), 'bi-printer',              'طباعة بالتاريخ'),
