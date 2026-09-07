@@ -7,14 +7,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>طباعة الفواتير — {{ date_from }} إلى {{ date_to }}</title>
   <style>
-    @page { size: A4 portrait; margin: 4mm; }
+    @page { size: A4 portrait; margin: 3mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Amiri', 'Traditional Arabic', 'Tahoma', sans-serif; }
     html, body { height: 100%; background: #fff; color: #000; direction: rtl; }
 
-    /* ===== صفحة واحدة = 3 فواتير ===== */
+    /* ===== صفحة واحدة = 3 فواتير بعرض الورقة الكامل ===== */
     .page-group {
       width: 100%;
-      height: 282mm;            /* ارتفاع A4 - الهوامش (297 - 4*2 - 5 بامتياز) */
+      height: 291mm;            /* ارتفاع A4 - الهوامش (297 - 3*2) لاستغلال كامل الورقة */
       display: flex;
       flex-direction: column;
       page-break-after: always;
@@ -36,9 +36,9 @@
 
     /* فاصل القص بين الفواتير */
     .cut-sep {
-      height: 5mm;
-      min-height: 5mm;
-      max-height: 5mm;
+      height: 4mm;
+      min-height: 4mm;
+      max-height: 4mm;
       border-top: 1px dashed #000;
       text-align: center;
       position: relative;

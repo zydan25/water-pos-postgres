@@ -6,16 +6,16 @@
   <meta name="google" content="notranslate">
   <title>تصدير الفواتير</title>
   <style>
-    @page { size: A4 portrait; margin: 5mm; }
+    @page { size: A4 portrait; margin: 3mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Amiri', 'Traditional Arabic', 'Tahoma', sans-serif; }
     body { background-color: #ffffff; color: #000000; direction: rtl; padding: 0; }
-    .page-container { width: 100%; max-width: 200mm; margin: 0 auto; direction: rtl; }
+    .page-container { width: 100%; max-width: 204mm; margin: 0 auto; direction: rtl; }
     .cut-sep {
       border-top: 1px dashed #000;
-      margin: 1.5mm 0;
+      margin: 1mm 0;
       text-align: center;
       position: relative;
-      height: 4px;
+      height: 3px;
     }
     .cut-sep::before {
       content: "✂ اقطع هنا";
@@ -37,11 +37,11 @@
 <body>
   <div class="page-container">
   {% for single in invoices %}
-    {% if loop.index0 % 5 == 0 %}<div class="page-group">{% endif %}
-      {% if loop.index0 % 5 != 0 %}<div class="cut-sep"></div>{% endif %}
+    {% if loop.index0 % 3 == 0 %}<div class="page-group">{% endif %}
+      {% if loop.index0 % 3 != 0 %}<div class="cut-sep"></div>{% endif %}
       {% set invoice = single %}
       {% include "_invoice_card.html" %}
-    {% if loop.index % 5 == 0 or loop.last %}</div>{% endif %}
+    {% if loop.index % 3 == 0 or loop.last %}</div>{% endif %}
   {% endfor %}
   </div>
 </body>
