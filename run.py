@@ -6,6 +6,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5006))
 
     # استبعاد مجلدات مكتبات النظام من المراقبة لمنع إعادة التشغيل غير الضرورية
+    
     python_lib = os.path.dirname(os.__file__)
     site_packages = os.path.join(python_lib, "site-packages")
 

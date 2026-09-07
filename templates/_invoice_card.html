@@ -8,6 +8,9 @@
 {% set connection_status %}{% if invoice.subscriber_active == 1 %}مفعّل{% elif invoice.subscriber_active == 0 %}موقوف{% else %}—{% endif %}{% endset %}
 {% set qr = qr_data if qr_data else (qr_image_uri(make_qr_data(invoice)) if qr_image_uri is defined and make_qr_data is defined else none) %}
 {% set dl = invoice.invoice_date|deadline(15) %}
+
+<!--كود الcss-->
+
 <style>
   .invoice {
     width: 100%;
