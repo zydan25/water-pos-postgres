@@ -48,19 +48,19 @@
 <body>
   <div class="no-print toolbar">
     <div class="batch-title">طباعة الفواتير</div>
-    <div class="batch-subtitle">من {{ date_from }} إلى {{ date_to }} — {{ invoices|length }} فاتورة ({{ (invoices|length + 2) // 3 }} صفحة)</div>
+    <div class="batch-subtitle">من {{ date_from }} إلى {{ date_to }} — {{ invoices|length }} فاتورة ({{ (invoices|length + 4) // 5 }} صفحة)</div>
     <button onclick="window.print()">🖨️ طباعة الكل</button>
     <a href="{{ back_url }}">✕ إغلاق</a>
   </div>
 
   <div class="page-container">
   {% for single in invoices %}
-    {% if loop.index0 % 3 == 0 %}<div class="page-group">{% endif %}
-      {% if loop.index0 % 3 != 0 %}<div class="cut-sep"></div>{% endif %}
+    {% if loop.index0 % 5 == 0 %}<div class="page-group">{% endif %}
+      {% if loop.index0 % 5 != 0 %}<div class="cut-sep"></div>{% endif %}
       {% set invoice = single %}
       {% set previous_invoice = previous_invoices.get(invoice.id) if previous_invoices else none %}
       {% include "_invoice_card.html" %}
-    {% if loop.index % 3 == 0 or loop.last %}</div>{% endif %}
+    {% if loop.index % 5 == 0 or loop.last %}</div>{% endif %}
   {% endfor %}
   </div>
 </body>

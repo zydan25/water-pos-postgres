@@ -47,11 +47,11 @@
   <div class="page-container">
   {% set invoices_list = invoices if (invoices is defined and invoices) else [invoice] %}
   {% for single in invoices_list %}
-    {% if loop.index0 % 3 == 0 %}<div class="page-group">{% endif %}
-      {% if loop.index0 % 3 != 0 %}<div class="cut-sep"></div>{% endif %}
+    {% if loop.index0 % 5 == 0 %}<div class="page-group">{% endif %}
+      {% if loop.index0 % 5 != 0 %}<div class="cut-sep"></div>{% endif %}
       {% set invoice = single %}
       {% include "_invoice_card.html" %}
-    {% if loop.index % 3 == 0 or loop.last %}</div>{% endif %}
+    {% if loop.index % 5 == 0 or loop.last %}</div>{% endif %}
   {% endfor %}
   </div>
 </body>

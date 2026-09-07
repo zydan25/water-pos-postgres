@@ -11,8 +11,8 @@
 <style>
   .invoice {
     width: 100%;
-    border: 1.5px solid #000;
-    padding: 2px;
+    border: 1.2px solid #000;
+    padding: 1.5px;
     margin-bottom: 0;
     background: #fff;
     page-break-inside: avoid;
@@ -23,39 +23,39 @@
   }
   .invoice:last-child { margin-bottom: 0; }
   .invoice-table { width: 100%; border-collapse: collapse; table-layout: fixed; direction: rtl; }
-  .stub-col { width: 30%; vertical-align: top; padding: 0 !important; }
-  .main-col { width: 70%; vertical-align: top; padding: 0 !important; }
+  .stub-col { width: 29%; vertical-align: top; padding: 0 !important; }
+  .main-col { width: 71%; vertical-align: top; padding: 0 !important; }
   .inner-table { width: 100%; border-collapse: collapse; direction: rtl; }
   .inner-table td, .inner-table th {
     border: 1px solid #000;
-    padding: 1.5px 2px;
+    padding: 1px 1.5px;
     text-align: center;
     font-weight: bold;
-    font-size: 8.5pt;
-    line-height: 1.2;
+    font-size: 7.5pt;
+    line-height: 1.15;
     color: #000;
     direction: rtl;
   }
-  .header-title { font-size: 9.5pt; font-weight: bold; padding: 2px 0; text-align: center; }
+  .header-title { font-size: 8.5pt; font-weight: bold; padding: 1px 0; text-align: center; }
   .footer-note {
-    font-size: 7.5pt;
+    font-size: 6.5pt;
     font-weight: bold;
-    padding: 2px;
+    padding: 1px;
     text-align: center;
-    line-height: 1.2;
+    line-height: 1.15;
   }
   .bg-gray { background-color: #f2f2f2; }
-  .td-big { font-size: 9.5pt; font-weight: 900; }
-  .td-big2 { font-size: 8.5pt; }
-  .org-name { font-size: 8.5pt; font-weight: bold; text-align: center; }
-  .org-title { font-size: 9pt; font-weight: bold; text-align: center; }
-  .stub-tafqit { font-size: 8pt; line-height: 1.2; text-align: center; }
+  .td-big { font-size: 8.5pt; font-weight: 900; }
+  .td-big2 { font-size: 7.5pt; }
+  .org-name { font-size: 7.5pt; font-weight: bold; text-align: center; }
+  .org-title { font-size: 8pt; font-weight: bold; text-align: center; }
+  .stub-tafqit { font-size: 7pt; line-height: 1.15; text-align: center; }
   .w { white-space: nowrap; }
   .qr-img {
     display: inline-block;
     vertical-align: middle;
-    width: 32px;
-    height: 32px;
+    width: 26px;
+    height: 26px;
     border: 1px solid #000;
     padding: 1px;
     background: #fff;
@@ -73,15 +73,15 @@
       <td class="stub-col">
         <table class="inner-table">
           <tr>
-            <td colspan="2" style="padding: 2px 1px;">
+            <td colspan="2" style="padding: 1px;">
               <div class="org-name">{{ settings.organization_name }}</div>
-              <span class="org-title">كعب الفاتورة</span>
+              <span class="org-title">فاتورة مياه</span>
               {% if qr %}<img class="qr-img" src="{{ qr }}" alt="QR">{% endif %}
             </td>
           </tr>
           <tr>
             <td style="width: 35%;">المشترك</td>
-            <td style="width: 65%; font-size: 9.5pt;">{{ invoice.subscriber_name }}</td>
+            <td style="width: 65%; font-size: 8pt;">{{ invoice.subscriber_name }}</td>
           </tr>
           <tr>
             <td class="bg-gray">شهر / عداد</td>
@@ -100,7 +100,7 @@
             <td class="td-big">{{ final_total|num }} {{ currency }}</td>
           </tr>
           <tr>
-            <td colspan="2" class="stub-tafqit" style="padding: 2px 1px;">
+            <td colspan="2" class="stub-tafqit" style="padding: 1px;">
               {{ final_total|tafqit(currency) }}
             </td>
           </tr>
@@ -111,10 +111,10 @@
       <td class="main-col">
         <table class="inner-table">
           <tr>
-            <td style="width: 22%; font-size: 8.5pt;">فاتورة مياه منزلي</td>
-            <td style="width: 58%;" class="header-title">{{ settings.organization_name }}</td>
-            <td style="width: 20%;" rowspan="2">
-              <svg width="34" height="34" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <td style="width: 22%; font-size: 7.5pt;">فاتورة مياه منزلي</td>
+            <td style="width: 60%;" class="header-title">{{ settings.organization_name }}</td>
+            <td style="width: 18%;" rowspan="2">
+              <svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="50" cy="50" r="46" stroke="#000" stroke-width="4" fill="none" stroke-dasharray="6,3"/>
                 <circle cx="50" cy="50" r="38" stroke="#000" stroke-width="2" fill="none"/>
                 <path d="M50 20 C50 20, 30 50, 30 65 A20 20 0 0 0 70 65 C70 50, 50 20, 50 20 Z" fill="#000"/>
@@ -132,26 +132,34 @@
           </tr>
           <tr>
             <td class="bg-gray">إسم المشترك</td>
-            <td colspan="2" style="font-size: 9.5pt;">{{ invoice.subscriber_name }}</td>
+            <td colspan="2" style="font-size: 8.5pt;">{{ invoice.subscriber_name }}</td>
           </tr>
         </table>
 
         <table class="inner-table" style="margin-top: -1px;">
           <tr>
-            <td style="width: 16%;" class="bg-gray">رقم المشترك</td>
-            <td style="width: 16%;" class="td-big2">{{ invoice.account_number }}</td>
-            <td style="width: 16%;" class="bg-gray">رقم العداد</td>
+            <td style="width: 14%;" class="bg-gray">رقم المشترك</td>
+            <td style="width: 14%;" class="td-big2">{{ invoice.account_number }}</td>
+            <td style="width: 14%;" class="bg-gray">رقم العداد</td>
             <td style="width: 20%;" class="td-big2">{{ invoice.meter_number or '—' }}</td>
-            <td style="width: 16%;" class="bg-gray">حالة التوصيل</td>
-            <td style="width: 16%;" class="td-big2">{{ connection_status }}</td>
+            <td style="width: 14%;" class="bg-gray">حالة التوصيل</td>
+            <td style="width: 24%;" class="td-big2">{{ connection_status }}</td>
           </tr>
           <tr>
             <td class="bg-gray">رقم الفاتورة</td>
             <td class="td-big2">{{ invoice.invoice_no }}</td>
-            <td class="bg-gray">تاريخ الاصدار</td>
-            <td class="td-big2">{{ invoice.invoice_date }}</td>
-            <td class="bg-gray">موعد السداد</td>
-            <td class="td-big2">{% if dl %}{{ dl }}{% else %}خلال 15 يوماً{% endif %}</td>
+            <td class="bg-gray">فترة الاستهلاك</td>
+            <td colspan="3" class="td-big2" style="font-size: 7pt; font-weight: bold;">
+              {% set period_from = invoice.previous_reading_date
+                    or (previous_invoice.current_reading_date if previous_invoice and previous_invoice.current_reading_date else None)
+                    or (previous_invoice.invoice_date if previous_invoice and previous_invoice.invoice_date else None) %}
+              {% set period_to = invoice.current_reading_date or invoice.invoice_date %}
+              {% if period_from and period_to %}
+                من {{ period_from }} إلى {{ period_to }}
+              {% else %}
+                {{ invoice.month_label }}
+              {% endif %}
+            </td>
           </tr>
         </table>
 
@@ -208,16 +216,16 @@
         <table class="inner-table" style="margin-top: -1px;">
           <tr>
             <td class="bg-gray" style="width: 20%;">ملاحظات</td>
-            <td style="text-align: right; font-size: 8pt; padding: 1px 3px;">{{ invoice.notes }}</td>
+            <td style="text-align: right; font-size: 7pt; padding: 1px 2px;">{{ invoice.notes }}</td>
           </tr>
         </table>
         {% endif %}
 
         <table class="inner-table footer-strip" style="margin-top: -1px;">
           <tr>
-            <td style="font-size: 7.5pt;">أُصدرت بواسطة : {{ invoice.created_by_name or '—' }}</td>
-            <td style="font-size: 7.5pt;">التاريخ : {{ invoice.invoice_date }}</td>
-            <td style="font-size: 7.5pt;">برمجة وتصميم : {{ settings.engineer_name or settings.project_name }}</td>
+            <td style="font-size: 6.5pt;">أُصدرت بواسطة : {{ invoice.created_by_name or '—' }}</td>
+            <td style="font-size: 6.5pt;">التاريخ : {{ invoice.invoice_date }}</td>
+            <td style="font-size: 6.5pt;">برمجة وتصميم : {{ settings.engineer_name or settings.project_name }}</td>
           </tr>
         </table>
       </td>
