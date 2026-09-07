@@ -7,61 +7,91 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>طباعة الفواتير — {{ date_from }} إلى {{ date_to }}</title>
   <style>
-    @page { size: A4 portrait; margin: 5mm; }
+    @page { size: A4 portrait; margin: 4mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Amiri', 'Traditional Arabic', 'Tahoma', sans-serif; }
-    body { background-color: #ffffff; color: #000000; direction: rtl; padding: 0; }
-    .page-container { width: 100%; max-width: 200mm; margin: 0 auto; direction: rtl; }
+    html, body { height: 100%; background: #fff; color: #000; direction: rtl; }
+
+    /* ===== صفحة واحدة = 3 فواتير ===== */
+    .page-group {
+      width: 100%;
+      height: 282mm;            /* ارتفاع A4 - الهوامش (297 - 4*2 - 5 بامتياز) */
+      display: flex;
+      flex-direction: column;
+      page-break-after: always;
+      break-after: page;
+      overflow: hidden;
+    }
+    .page-group:last-of-type {
+      page-break-after: auto;
+      break-after: auto;
+    }
+
+    /* ===== خانة الفاتورة الواحدة = ثلث الصفحة ===== */
+    .invoice-slot {
+      flex: 1;                  /* كل slot يأخذ ثلث الارتفاع بالضبط */
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* فاصل القص بين الفواتير */
     .cut-sep {
+      height: 5mm;
+      min-height: 5mm;
+      max-height: 5mm;
       border-top: 1px dashed #000;
-      margin: 1.5mm 0;
       text-align: center;
       position: relative;
-      height: 4px;
+      flex-shrink: 0;
     }
     .cut-sep::before {
       content: "✂ اقطع هنا";
-      position: relative;
-      top: -6.5pt;
+      position: absolute;
+      top: -7pt;
+      right: 50%;
+      transform: translateX(50%);
       background: #fff;
       padding: 0 4px;
-      font-size: 7pt;
+      font-size: 6.5pt;
       font-weight: bold;
       color: #000;
     }
-    .page-group {
-      page-break-after: always;
-      break-after: page;
-    }
-    .page-group:last-of-type { page-break-after: auto; break-after: auto; }
-    .toolbar { padding: 10px 14px; background: #f0f4ff; border-bottom: 1px solid #d0d8ff; text-align: center; }
+
+    /* شريط أدوات - لا يُطبع */
+    .toolbar { padding: 8px 14px; background: #f0f4ff; border-bottom: 1px solid #d0d8ff; text-align: center; }
     .toolbar button, .toolbar a {
-      padding: 8px 18px; border: none; border-radius: 8px; font-weight: 700;
-      cursor: pointer; text-decoration: none; display: inline-block;
+      padding: 7px 16px; border: none; border-radius: 8px; font-weight: 700;
+      cursor: pointer; text-decoration: none; display: inline-block; font-size: 13px;
     }
     .toolbar button { background: #1a56db; color: #fff; }
     .toolbar a { background: #e5e7eb; color: #111; margin-inline-start: 8px; }
-    .batch-title { font-size: 20px; font-weight: 900; margin: 0 0 8px; }
-    .batch-subtitle { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 14px; }
+    .batch-title { font-size: 18px; font-weight: 900; margin: 0 0 4px; }
+    .batch-subtitle { font-size: 12px; font-weight: 700; color: #333; margin-bottom: 10px; }
     @media print { .no-print { display: none !important; } }
   </style>
 </head>
 <body>
+
   <div class="no-print toolbar">
     <div class="batch-title">طباعة الفواتير</div>
-    <div class="batch-subtitle">من {{ date_from }} إلى {{ date_to }} — {{ invoices|length }} فاتورة ({{ (invoices|length + 4) // 5 }} صفحة)</div>
+    <div class="batch-subtitle">من {{ date_from }} إلى {{ date_to }} — {{ invoices|length }} فاتورة ({{ (invoices|length + 2) // 3 }} صفحة)</div>
     <button onclick="window.print()">🖨️ طباعة الكل</button>
     <a href="{{ back_url }}">✕ إغلاق</a>
   </div>
 
-  <div class="page-container">
   {% for single in invoices %}
-    {% if loop.index0 % 5 == 0 %}<div class="page-group">{% endif %}
-      {% if loop.index0 % 5 != 0 %}<div class="cut-sep"></div>{% endif %}
-      {% set invoice = single %}
-      {% set previous_invoice = previous_invoices.get(invoice.id) if previous_invoices else none %}
-      {% include "_invoice_card.html" %}
-    {% if loop.index % 5 == 0 or loop.last %}</div>{% endif %}
+    {% if loop.index0 % 3 == 0 %}<div class="page-group">{% endif %}
+
+      {% if loop.index0 % 3 != 0 %}<div class="cut-sep"></div>{% endif %}
+
+      <div class="invoice-slot">
+        {% set invoice = single %}
+        {% set previous_invoice = previous_invoices.get(invoice.id) if previous_invoices else none %}
+        {% include "_invoice_card.html" %}
+      </div>
+
+    {% if loop.index % 3 == 0 or loop.last %}</div>{% endif %}
   {% endfor %}
-  </div>
+
 </body>
 </html>
