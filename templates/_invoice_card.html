@@ -37,25 +37,25 @@
     padding: 2px 3px;
     text-align: center;
     font-weight: bold;
-    font-size: 11.5pt;
+    font-size: 10.5pt;
     line-height: 1.35;
     color: #000;
     direction: rtl;
   }
-  .header-title { font-size: 13.5pt; font-weight: bold; padding: 1px 0; text-align: center; }
+  .header-title { font-size: 12.5pt; font-weight: bold; padding: 1px 0; text-align: center; }
   .footer-note {
-    font-size: 10.5pt;
+    font-size: 9.5pt;
     font-weight: bold;
     padding: 2px 3px;
     text-align: center;
     line-height: 1.35;
   }
   .bg-gray { background-color: #f2f2f2; }
-  .td-big { font-size: 14pt; font-weight: 900; }
-  .td-big2 { font-size: 11.5pt; }
-  .org-name { font-size: 12.5pt; font-weight: bold; text-align: center; }
-  .org-title { font-size: 12.5pt; font-weight: bold; text-align: center; }
-  .stub-tafqit { font-size: 11pt; line-height: 1.35; text-align: center; }
+  .td-big { font-size: 13pt; font-weight: 900; }
+  .td-big2 { font-size: 10.5pt; }
+  .org-name { font-size: 11.5pt; font-weight: bold; text-align: center; }
+  .org-title { font-size: 11.5pt; font-weight: bold; text-align: center; }
+  .stub-tafqit { font-size: 10pt; line-height: 1.35; text-align: center; }
   .w { white-space: nowrap; }
   .qr-img {
     display: inline-block;
@@ -87,7 +87,7 @@
           </tr>
           <tr>
             <td style="width: 35%;">المشترك</td>
-            <td style="width: 65%; font-size: 10.5pt;">{{ invoice.subscriber_name }}</td>
+            <td style="width: 65%; font-size: 9.5pt;">{{ invoice.subscriber_name }}</td>
           </tr>
           <tr>
             <td class="bg-gray">شهر / عداد</td>
@@ -112,19 +112,19 @@
           </tr>
           <tr>
             <td class="bg-gray">ملاحظات</td>
-            <td style="font-size: 9.5pt; line-height: 1.3;">{{ invoice.notes or '—' }}</td>
+            <td style="font-size: 8.5pt; line-height: 1.3;">{{ invoice.notes or '—' }}</td>
           </tr>
           <tr>
             <td class="bg-gray">أُصدرت بواسطة</td>
-            <td style="font-size: 10pt;">{{ invoice.created_by_name or '—' }}</td>
+            <td style="font-size: 9pt;">{{ invoice.created_by_name or '—' }}</td>
           </tr>
           <tr>
             <td class="bg-gray">التاريخ</td>
-            <td style="font-size: 10pt;">{{ invoice.invoice_date }}</td>
+            <td style="font-size: 9pt;">{{ invoice.invoice_date }}</td>
           </tr>
           <tr>
             <td class="bg-gray">برمجة وتصميم</td>
-            <td style="font-size: 9pt;">{{ settings.engineer_name or settings.project_name }}</td>
+            <td style="font-size: 8pt;">{{ settings.engineer_name or settings.project_name }}</td>
           </tr>
         </table>
       </td>
@@ -133,7 +133,7 @@
       <td class="main-col">
         <table class="inner-table">
           <tr>
-            <td style="width: 22%; font-size: 11pt;">فاتورة مياه منزلي</td>
+            <td style="width: 22%; font-size: 10pt;">فاتورة مياه منزلي</td>
             <td style="width: 60%;" class="header-title">{{ settings.organization_name }}</td>
             <td style="width: 18%;" rowspan="2">
               <svg width="44" height="44" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -154,7 +154,7 @@
           </tr>
           <tr>
             <td class="bg-gray">إسم المشترك</td>
-            <td colspan="2" style="font-size: 12.5pt;">{{ invoice.subscriber_name }}</td>
+            <td colspan="2" style="font-size: 11.5pt;">{{ invoice.subscriber_name }}</td>
           </tr>
         </table>
 
@@ -171,7 +171,7 @@
             <td class="bg-gray">رقم الفاتورة</td>
             <td class="td-big2">{{ invoice.invoice_no }}</td>
             <td class="bg-gray">فترة الاستهلاك</td>
-            <td colspan="3" class="td-big2" style="font-size: 10.5pt; font-weight: bold;">
+            <td colspan="3" class="td-big2" style="font-size: 9.5pt; font-weight: bold;">
               {% set period_from = invoice.previous_reading_date
                     or (previous_invoice.current_reading_date if previous_invoice and previous_invoice.current_reading_date else None)
                     or (previous_invoice.invoice_date if previous_invoice and previous_invoice.invoice_date else None) %}
@@ -239,7 +239,7 @@
   </table>
   <table class="inner-table footer-strip" style="margin-top: -1px;">
     <tr>
-      <td style="font-size: 8.5pt; padding: 1px 3px;">برمجة وتصميم : {{ settings.engineer_name or settings.project_name }}</td>
+      <td style="font-size: 7.5pt; padding: 1px 3px;">برمجة وتصميم : {{ settings.engineer_name or settings.project_name }}</td>
     </tr>
   </table>
 </div>
