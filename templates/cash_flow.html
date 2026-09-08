@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}التدفقات النقدية{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="fw-bold mb-0"><i class="bi bi-cash-stack me-2"></i>قائمة التدفقات النقدية</h3>
+      <div class="text-muted small">من {{ start }} إلى {{ end }}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('accounting_reports') }}">التقارير</a>
+      <a class="btn btn-outline-success" href="{{ url_for('accounting_cash_flow_xlsx', start=start, end=end) }}">Excel</a>
+      <button class="btn btn-outline-dark" onclick="window.print()">طباعة</button>
+    </div>
+  </div>
+  <form method="get" class="card mb-3"><div class="card-body"><div class="row g-3">
+    <div class="col-md-4"><label class="form-label">من</label><input type="date" name="start" value="{{ start }}" class="form-control"></div>
+    <div class="col-md-4"><label class="form-label">إلى</label><input type="date" name="end" value="{{ end }}" class="form-control"></div>
+    <div class="col-md-4 d-flex align-items-end"><button class="btn btn-primary">عرض</button></div>
+  </div></div></form>
+  <div class="card"><table class="table mb-0">
+    <tbody>
+      <tr><td>تحصيل الفواتير (مدفوعات الفترة)</td><td class="text-end fw-bold text-success">+ {{ "%.0f"|format(cf.collections or 0) }}</td></tr>
+      <tr><td>سندات القبض</td><td class="text-end fw-bold text-success">+ {{ "%.0f"|format(cf.receipts or 0) }}</td></tr>
+      <tr><td>سندات الصرف</td><td class="text-end fw-bold text-danger">− {{ "%.0f"|format(cf.payments_out or 0) }}</td></tr>
+      <tr class="table-secondary fw-bold"><td>رصيد النقدية والعهد أول الفترة (صناديق + بنوك + عهد المحصلين)</td><td class="text-end">{{ "%.0f"|format(cf.cash_opening or 0) }}</td></tr>
+      <tr class="table-light fw-bold"><td>رصيد النقدية والعهد آخر الفترة (دفتر الأستاذ)</td><td class="text-end">{{ "%.0f"|format(cf.cash_closing or 0) }} {{ currency }}</td></tr>
+    </tbody>
+  </table></div>
+  <div class="alert alert-info mt-3">صافي حركة النقدية بالدفتر: {{ "%.0f"|format(cf.cash_net or 0) }} {{ currency }} — قارنه مع (التحصيل + القبض − الصرف) لاكتشاف الحركات غير المصنفة.</div>
+  {% include "_report_sign.html" %}
+</div>
+{% endblock %}

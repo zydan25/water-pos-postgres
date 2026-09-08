@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}لوحة المحاسب{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <h3 class="fw-bold mb-3"><i class="bi bi-speedometer2 me-2"></i>لوحة المحاسب <span class="text-muted small fw-normal">{{ today }}</span></h3>
+  <div class="row g-3 mb-3">
+    <div class="col-md-3 col-6"><div class="card"><div class="card-body"><div class="small text-muted">تحصيل اليوم</div><div class="fs-4 fw-bold text-success">{{ "%.0f"|format(dash.today_total or 0) }}</div><div class="small text-muted">{{ dash.today_count }} عملية</div></div></div></div>
+    <div class="col-md-3 col-6"><div class="card"><div class="card-body"><div class="small text-muted">تحصيل الشهر</div><div class="fs-4 fw-bold">{{ "%.0f"|format(dash.month_total or 0) }}</div><div class="small text-muted">صافي الربح: {{ "%.0f"|format(dash.month_net or 0) }}</div></div></div></div>
+    <div class="col-md-3 col-6"><div class="card"><div class="card-body"><div class="small text-muted">ذمم مستحقة</div><div class="fs-4 fw-bold text-danger">{{ "%.0f"|format(dash.overdue_total or 0) }}</div><div class="small text-muted">{{ dash.overdue_count }} فاتورة</div></div></div></div>
+    <div class="col-md-3 col-6"><div class="card"><div class="card-body"><div class="small text-muted">النقدية والعهد</div><div class="fs-4 fw-bold">{{ "%.0f"|format(dash.cash_total or 0) }}</div><div class="small text-muted">{{ currency }}</div></div></div></div>
+  </div>
+  <div class="row g-3">
+    <div class="col-md-6"><div class="card"><div class="card-header bg-white"><strong>تنبيهات تحتاج إجراء</strong></div><div class="list-group list-group-flush">
+      <a class="list-group-item d-flex justify-content-between" href="{{ url_for('accounting_reconciliation') }}">فروقات مطابقة الذمم <span class="badge {% if dash.diff_count %}bg-danger{% else %}bg-success{% endif %}">{{ dash.diff_count }} ({{ "%.0f"|format(dash.diff_total or 0) }})</span></a>
+      <a class="list-group-item d-flex justify-content-between" href="{{ url_for('accounting_counts') }}">جرديات غير معتمدة <span class="badge {% if dash.draft_counts %}bg-warning{% else %}bg-success{% endif %}">{{ dash.draft_counts }}</span></a>
+      <a class="list-group-item d-flex justify-content-between" href="{{ url_for('accounting_fiscal_years') }}">سنوات مالية مفتوحة <span class="badge bg-info">{{ dash.open_years }}</span></a>
+    </div></div></div>
+    <div class="col-md-6"><div class="card"><div class="card-header bg-white d-flex justify-content-between"><strong>أحدث القيود</strong><a href="{{ url_for('accounting_journal') }}" class="small">القيود</a></div><div class="list-group list-group-flush">
+      {% for item in dash.latest_entries %}
+      <div class="list-group-item d-flex justify-content-between"><span><span class="badge bg-primary">{{ item.entry.entry_no }}</span> {{ (item.entry.description or '')[:40] }}</span><span class="fw-bold">{{ "%.0f"|format(item.debit_total or 0) }}</span></div>
+      {% else %}<div class="list-group-item text-muted">لا توجد قيود</div>{% endfor %}
+    </div></div></div>
+  </div>
+</div>
+{% endblock %}

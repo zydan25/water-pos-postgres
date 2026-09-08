@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}السنوات المالية والإقفال{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <h3 class="fw-bold mb-1"><i class="bi bi-calendar-lock me-2"></i>السنوات المالية والإقفال السنوي</h3>
+  <p class="text-muted small">الإقفال يصفّر الإيرادات والمصروفات مقابل الأرباح المحتجزة (3100) ويمنع التعديل على قيود السنة المقفلة.</p>
+  <div class="card mb-3"><div class="card-body"><form method="post" class="row g-3">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="action" value="create">
+    <div class="col-md-4"><label class="form-label">اسم السنة</label><input name="name" class="form-control" placeholder="2026" required></div>
+    <div class="col-md-3"><label class="form-label">من</label><input type="date" name="start_date" class="form-control" required></div>
+    <div class="col-md-3"><label class="form-label">إلى</label><input type="date" name="end_date" class="form-control" required></div>
+    <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100">إنشاء</button></div>
+  </form></div></div>
+  <div class="card"><div class="table-responsive"><table class="table mb-0">
+    <thead class="table-light"><tr><th>السنة</th><th>الفترة</th><th>الحالة</th><th>قيد الإقفال</th><th>القيد الافتتاحي</th><th></th></tr></thead>
+    <tbody>
+    {% for y in years %}
+    <tr><td class="fw-bold">{{ y.name }}</td><td>{{ y.start_date }} ← {{ y.end_date }}</td>
+      <td>{% if y.status == 'closed' %}<span class="badge bg-danger">مقفلة</span>{% else %}<span class="badge bg-success">مفتوحة</span>{% endif %}</td>
+      <td>{{ y.closing_entry_id or '-' }}</td>
+      <td>{{ y.opening_entry_id or '-' }}</td>
+      <td class="text-end"><form method="post" class="d-inline">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        {% if y.status == 'closed' %}
+        {% if not y.opening_entry_id %}
+        <input type="hidden" name="action" value="opening"><input type="hidden" name="year_id" value="{{ y.id }}">
+        <button class="btn btn-sm btn-success" onclick="return confirm('إنشاء القيد الافتتاحي بأرصدة الميزانية؟')">قيد افتتاحي</button>
+        </form><form method="post" class="d-inline">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        {% endif %}
+        <input type="hidden" name="action" value="reopen"><input type="hidden" name="year_id" value="{{ y.id }}">
+        <button class="btn btn-sm btn-outline-info" onclick="return confirm('إعادة فتح السنة؟')">فتح</button>
+        {% else %}
+        <input type="hidden" name="action" value="close"><input type="hidden" name="year_id" value="{{ y.id }}">
+        <button class="btn btn-sm btn-danger" onclick="return confirm('إقفال السنة وترحيل الأرصدة؟ لا يمكن التراجع إلا بالفتح اليدوي.')">إقفال وترحيل</button>
+        {% endif %}
+      </form></td></tr>
+    {% else %}<tr><td colspan="5" class="text-center text-muted py-4">لا توجد سنوات مالية</td></tr>{% endfor %}
+    </tbody>
+  </table></div></div>
+</div>
+{% endblock %}

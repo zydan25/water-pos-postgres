@@ -184,7 +184,10 @@
 async function downloadPdf(url, filename) {
   try {
     const resp = await fetch(url, { credentials: 'same-origin' });
-    if (!resp.ok) throw new Error(await resp.text());
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(errText || 'فشل الاتصال بالخادم');
+    }
     const blob = await resp.blob();
     const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -198,18 +201,41 @@ async function downloadPdf(url, filename) {
     alert('تعذر تنزيل الملف: ' + err.message);
   }
 }
+
 function updateReportLinks() {
-  const village = villageSelect && villageSelect.value ? encodeURIComponent(villageSelect.value) : '';
-  const mode = printMode && printMode.value ? encodeURIComponent(printMode.value) : 'pdf';
-  const baseReadings = "{{ url_for('manual_collection.manual_collection_readings_pdf') }}";
+  const villageSelect  = document.getElementById('villageSelect');
+  const printMode      = document.getElementById('printMode');
+  const readingsBtn    = document.getElementById('readingsBtn');
+  const collectionsBtn = document.getElementById('collectionsBtn');
+
+  if (!villageSelect || !printMode || !readingsBtn || !collectionsBtn) return;
+
+  const village = villageSelect.value ? encodeURIComponent(villageSelect.value) : '';
+  const mode    = printMode.value || 'pdf';
+
+  // كلا المسارين (قراءة + تحصيل) يقبلان ?mode=zip على نفس endpoint الـ PDF
+  // لا يوجد مسار /zip منفصل في الخلفية – نمرّر mode=zip لنفس الدالة
+  const baseReadings    = "{{ url_for('manual_collection.manual_collection_readings_pdf') }}";
   const baseCollections = "{{ url_for('manual_collection.manual_collection_collections_pdf') }}";
-  const qs = village ? `?village=${village}&mode=${mode}` : `?mode=${mode}`;
-  readingsBtn.onclick = () => downloadPdf(baseReadings + qs, `كشف_قراءة_${villageSelect && villageSelect.value ? villageSelect.value : 'جميع_القرى'}.${mode === 'zip' ? 'zip' : 'pdf'}`);
-  collectionsBtn.onclick = () => downloadPdf(baseCollections + qs, `كشف_تحصيل_${villageSelect && villageSelect.value ? villageSelect.value : 'جميع_القرى'}.${mode === 'zip' ? 'zip' : 'pdf'}`);
+
+  const qs           = village ? `?village=${village}&mode=${mode}` : `?mode=${mode}`;
+  const ext          = mode === 'zip' ? 'zip' : 'pdf';
+  const villageLabel = villageSelect.value || 'جميع_القرى';
+
+  readingsBtn.onclick = () =>
+    downloadPdf(baseReadings + qs, `كشف_قراءة_${villageLabel}.${ext}`);
+
+  collectionsBtn.onclick = () =>
+    downloadPdf(baseCollections + qs, `كشف_تحصيل_${villageLabel}.${ext}`);
 }
-if (villageSelect) villageSelect.addEventListener('change', updateReportLinks);
-if (printMode) printMode.addEventListener('change', updateReportLinks);
-updateReportLinks();
+
+document.addEventListener('DOMContentLoaded', function () {
+  const villageSelect  = document.getElementById('villageSelect');
+  const printMode      = document.getElementById('printMode');
+  if (villageSelect) villageSelect.addEventListener('change', updateReportLinks);
+  if (printMode)     printMode.addEventListener('change', updateReportLinks);
+  updateReportLinks();
+});
 </script>
 
 {% endblock %}

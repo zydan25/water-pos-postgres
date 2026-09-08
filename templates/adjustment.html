@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}قيد تسوية{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <h3 class="fw-bold mb-1"><i class="bi bi-pencil-square me-2"></i>قيد تسوية</h3>
+  <p class="text-muted small">قيد متوازن من حسابين (مدين/دائن) لفروقات الجرد والمطابقات — يُحفظ كمصدر <span class="badge bg-secondary">adjustment</span>.</p>
+  <div class="card"><div class="card-body"><form method="post" class="row g-3">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+    <div class="col-md-3"><label class="form-label">التاريخ</label><input type="date" name="entry_date" value="{{ prefill.entry_date }}" class="form-control"></div>
+    <div class="col-md-3"><label class="form-label">المبلغ</label><input type="number" step="0.01" min="0" name="amount" value="{{ prefill.amount }}" class="form-control" required></div>
+    <div class="col-md-6"><label class="form-label">البيان</label><input name="description" value="{{ prefill.description }}" class="form-control"></div>
+    <div class="col-md-6"><label class="form-label">الحساب المدين</label><select name="debit_account_id" class="form-select" required>
+      <option value="">اختر</option>
+      {% for a in accounts %}<option value="{{ a.id }}" {% if a.id == prefill.debit_account_id %}selected{% endif %}>{{ a.code }} — {{ a.name }}</option>{% endfor %}
+    </select></div>
+    <div class="col-md-6"><label class="form-label">الحساب الدائن</label><select name="credit_account_id" class="form-select" required>
+      <option value="">اختر</option>
+      {% for a in accounts %}<option value="{{ a.id }}" {% if a.id == prefill.credit_account_id %}selected{% endif %}>{{ a.code }} — {{ a.name }}</option>{% endfor %}
+    </select></div>
+    <div class="col-12"><button class="btn btn-primary">حفظ قيد التسوية</button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('accounting_reconciliation') }}">المطابقات</a></div>
+  </form></div></div>
+</div>
+{% endblock %}

@@ -1,76 +1,189 @@
-
 {% extends "base.html" %}
+
 {% block head %}
 <style>
 @media print {
-  .no-print { display: none !important; }
-  body { font-size: 10px; }
-  @page { size: A4 landscape; margin: 7mm; }
-  .report-card { box-shadow: none !important; border: 1px solid #cbd5e1 !important; }
-  .village-box { page-break-inside: avoid; }
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    /* تم تكبير خط الطباعة العام من 10px إلى 11px */
+    font-size: 11px;
+  }
+
+  @page {
+    size: A4 landscape;
+    margin: 7mm;
+  }
+
+  .report-card {
+    box-shadow: none !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  .village-box {
+    page-break-inside: avoid;
+    page-break-after: always;
+  }
+
+  /* تكبير خط العناوين داخل الجدول أثناء الطباعة */
+  .sheet-table th {
+    font-size: 11px !important;
+  }
+  
+  /* تكبير خط البيانات داخل الجدول أثناء الطباعة */
+  .sheet-table td {
+    font-size: 11px !important;
+  }
 }
+
+/* تكبير الخط العام للواجهة بمقدار 1 بكسل */
+body {
+  font-size: 16px; /* تم تكبيره من 15px */
+}
+
+/* تكبير خطوط الجدول في العرض على الشاشة */
+.sheet-table th {
+  vertical-align: middle;
+  font-size: 12px; /* تم تكبيره من 11px */
+}
+
+.sheet-table td {
+  vertical-align: middle;
+  font-size: 12px; /* تم تكبيره من 11px */
+}
+
 .report-header {
   border: 1px solid #cbd5e1;
   border-radius: 18px;
   padding: 14px 16px;
   background: #fff;
 }
-.section-title { font-weight: 800; letter-spacing: .2px; }
-.sheet-table th, .sheet-table td { vertical-align: middle; }
-.blank-line { color: #999; letter-spacing: 3px; }
+
+.section-title {
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+
+.blank-line {
+  color: #999;
+  letter-spacing: 3px;
+}
+
+.collection-month {
+  font-size: 15px; /* تم تكبيره من 14px */
+  font-weight: 700;
+  margin-top: 3px;
+}
 </style>
 {% endblock %}
+
 {% block content %}
 <div class="container-fluid">
+
+  <!-- رأس الصفحة -->
   <div class="card p-3 mb-3 no-print shadow-sm rounded-4">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
       <div>
-        <div class="small text-muted">{{ organization_name }}</div>
-        <h4 class="mb-0 section-title">كشف تحصيل</h4>
-        <div class="text-muted small">يُظهر الفواتير غير المسددة فقط للمتحصلين الميدانيين.</div>
+        <div class="small text-muted">
+          {{ organization_name }}
+        </div>
+        <h4 class="mb-0 section-title">
+          كشف تحصيل
+        </h4>
+        <!-- شهر التحصيل -->
+        <div class="collection-month">
+          شهر التحصيل: {{ month_label or print_month or invoice_month or print_date or '-' }}
+        </div>
+        <div class="text-muted small">
+          يُظهر الفواتير غير المسددة فقط للمتحصلين الميدانيين.
+        </div>
       </div>
+
       <div class="d-flex gap-2 flex-wrap">
-        <button type="button" class="btn btn-primary" id="downloadCollectionsPdf">PDF واحد</button>
-        <button type="button" class="btn btn-outline-primary" id="downloadCollectionsZip">PDF لكل قرية</button>
-        <a class="btn btn-outline-secondary" href="{{ url_for('manual_collection.manual_collection_home') }}">رجوع</a>
+        <button type="button" class="btn btn-primary" id="downloadCollectionsPdf">
+          PDF واحد
+        </button>
+        <button type="button" class="btn btn-outline-primary" id="downloadCollectionsZip">
+          PDF لكل قرية
+        </button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('manual_collection.manual_collection_home') }}">
+          رجوع
+        </a>
       </div>
     </div>
+
+    <!-- الملخص -->
     <div class="row g-2 mt-3">
-      <div class="col-md-3"><div class="p-2 bg-light rounded-3 text-center"><div class="small text-muted">القرية</div><div class="fw-bold">{{ village or 'كل القرى' }}</div></div></div>
-      <div class="col-md-3"><div class="p-2 bg-light rounded-3 text-center"><div class="small text-muted">إجمالي المستحق</div><div class="fw-bold">{{ "%.0f"|format(total_amount) }} {{ currency }}</div></div></div>
-      <div class="col-md-3"><div class="p-2 bg-light rounded-3 text-center"><div class="small text-muted">إجمالي المسدد</div><div class="fw-bold">{{ "%.0f"|format(total_paid) }} {{ currency }}</div></div></div>
-      <div class="col-md-3"><div class="p-2 bg-light rounded-3 text-center"><div class="small text-muted">إجمالي المتبقي</div><div class="fw-bold">{{ "%.0f"|format(total_remaining) }} {{ currency }}</div></div></div>
+      <div class="col-md-3">
+        <div class="p-2 bg-light rounded-3 text-center">
+          <div class="small text-muted">القرية</div>
+          <div class="fw-bold">{{ village or 'كل القرى' }}</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-2 bg-light rounded-3 text-center">
+          <div class="small text-muted">إجمالي المستحق</div>
+          <div class="fw-bold">{{ "%.0f"|format(total_amount or 0) }} {{ currency }}</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-2 bg-light rounded-3 text-center">
+          <div class="small text-muted">إجمالي المسدد</div>
+          <div class="fw-bold">{{ "%.0f"|format(total_paid or 0) }} {{ currency }}</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="p-2 bg-light rounded-3 text-center">
+          <div class="small text-muted">إجمالي المتبقي</div>
+          <div class="fw-bold">{{ "%.0f"|format(total_remaining or 0) }} {{ currency }}</div>
+        </div>
+      </div>
     </div>
   </div>
 
+  <!-- القرى -->
   {% for village_name, rows in villages.items() %}
   <div class="card report-card rounded-4 mb-3 village-box">
+    <!-- رأس القرية -->
     <div class="report-header d-flex justify-content-between align-items-center flex-wrap gap-2">
       <div>
-        <div class="small text-muted">{{ project_name }}</div>
-        <div class="h5 mb-0">{{ village_name }}</div>
-        <div class="small text-muted">عدد الفواتير: {{ rows|selectattr('invoice_id')|list|length }}</div>
+        <div class="small text-muted">
+          {{ project_name }}
+        </div>
+        <div class="h5 mb-0 fw-bold">
+          {{ village_name }}
+        </div>
+        <div class="small text-muted">
+          عدد الفواتير: {{ rows|selectattr('invoice_id')|list|length }}
+        </div>
       </div>
       <div class="text-end small">
         <div>القرية: {{ village_name }}</div>
-        <div>التاريخ: {{ print_date }}</div>
+        <div>تاريخ الطباعة: {{ print_date }}</div>
       </div>
     </div>
+
+    <!-- الجدول -->
     <div class="card-body p-0">
       <div class="table-responsive">
         <table class="table table-sm table-bordered mb-0 text-center align-middle sheet-table">
           <thead class="table-light">
             <tr>
-              <th style="width:4%">م</th>
-              <th style="width:11%">رقم الحساب</th>
-              <th style="width:11%">رقم العداد</th>
-              <th style="width:12%">القرية</th>
-              <th style="width:20%">اسم المشترك</th>
-              <th style="width:10%">الفاتورة</th>
-              <th style="width:10%">الشهر</th>
-              <th style="width:9%">الإجمالي</th>
-              <th style="width:9%">المسدد</th>
-              <th style="width:9%">المتبقي</th>
+              <th style="width:3%">م</th>
+              <th style="width:7%">رقم الحساب</th>
+              <th style="width:7%">رقم العداد</th>
+              <th style="width:7%">القرية</th>
+              <th style="width:14%">اسم المشترك</th>
+              <th style="width:6%">الفاتورة</th>
+              <th style="width:5%">السابقة</th>
+              <th style="width:5%">الحالية</th>
+              <th style="width:5%">الاستهلاك</th>
+              <th style="width:7%">قيمة الاستهلاك</th>
+              <th style="width:7%">الإجمالي</th>
+              <th style="width:7%">المسدد</th>
+              <th style="width:7%">المتبقي</th>
               <th>ملاحظات</th>
             </tr>
           </thead>
@@ -79,17 +192,28 @@
             {% if row.invoice_id %}
             <tr>
               <td>{{ loop.index }}</td>
-              <td>{{ row.account_number }}</td>
+              <td>{{ row.account_number or '-' }}</td>
               <td>{{ row.meter_number or '-' }}</td>
               <td>{{ row.village or row.address or '-' }}</td>
               <td class="text-start">
-                <div class="fw-semibold">{{ row.name }}</div>
+                <div class="fw-semibold">{{ row.name or '-' }}</div>
                 <div class="small text-muted">{{ row.phone or '-' }}</div>
               </td>
-              <td>{{ row.invoice_no }}</td>
-              <td>{{ row.month_label or row.invoice_date or '-' }}</td>
+              <td>{{ row.invoice_no or '-' }}</td>
+              <td>{{ "%.0f"|format(row.previous_reading or 0) }}</td>
+              <td>{{ "%.0f"|format(row.current_reading or 0) }}</td>
+              <td>
+                {% if row.consumption is not none %}
+                  {{ "%.0f"|format(row.consumption) }}
+                {% elif row.current_reading is not none and row.previous_reading is not none %}
+                  {{ "%.0f"|format(row.current_reading - row.previous_reading) }}
+                {% else %}
+                  0
+                {% endif %}
+              </td>
+              <td>{{ "%.0f"|format(row.consumption_amount or 0) }}</td>
               <td>{{ "%.0f"|format(row.total_amount or 0) }}</td>
-              <td>{{ "%.0f"|format(row.paid_amount or 0) }}</td>
+              <td></td> <!-- خانة المسدد فارغة للكتابة اليدوية -->
               <td class="fw-bold">{{ "%.0f"|format(row.remaining_amount or 0) }}</td>
               <td class="text-start blank-line">................................</td>
             </tr>
@@ -101,8 +225,8 @@
     </div>
   </div>
   {% endfor %}
-</div>
 
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -110,7 +234,9 @@
 async function downloadPdf(url, filename) {
   try {
     const resp = await fetch(url, { credentials: 'same-origin' });
-    if (!resp.ok) throw new Error(await resp.text());
+    if (!resp.ok) {
+      throw new Error(await resp.text());
+    }
     const blob = await resp.blob();
     const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -124,14 +250,21 @@ async function downloadPdf(url, filename) {
     alert('تعذر تنزيل الملف: ' + err.message);
   }
 }
+
 const villageValue = "{{ village|default('')|replace('"', '\\\\"') }}";
+
 document.getElementById('downloadCollectionsPdf')?.addEventListener('click', () => {
-  const url = `{{ url_for('manual_collection.manual_collection_collections_pdf') }}` + (villageValue ? `?village=${encodeURIComponent(villageValue)}&mode=pdf` : '?mode=pdf');
-  downloadPdf(url, `كشف_تحصيل_${villageValue || 'جميع_القرى'}.pdf`);
+  const url = `{{ url_for('manual_collection.manual_collection_collections_pdf') }}` + 
+              (villageValue ? `?village=${encodeURIComponent(villageValue)}` : '');
+  downloadPdf(url, 'كشف_التحصيل.pdf');
 });
+
 document.getElementById('downloadCollectionsZip')?.addEventListener('click', () => {
-  const url = `{{ url_for('manual_collection.manual_collection_collections_pdf') }}` + (villageValue ? `?village=${encodeURIComponent(villageValue)}&mode=zip` : '?mode=zip');
-  downloadPdf(url, `كشف_تحصيل_${villageValue || 'جميع_القرى'}.zip`);
+  // تفادي استدعاء url_for للـ ZIP لتجنب توقف السيرفر
+  const pdfUrl = `{{ url_for('manual_collection.manual_collection_collections_pdf') }}`;
+  const url = pdfUrl.replace('_pdf', '_zip').replace('/pdf', '/zip') + 
+              (villageValue ? `?village=${encodeURIComponent(villageValue)}` : '');
+  downloadPdf(url, 'كشوفات_القرى.zip');
 });
 </script>
 {% endblock %}

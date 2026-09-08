@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}مراكز التكلفة — ربحية القرى{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="fw-bold mb-0"><i class="bi bi-geo-alt me-2"></i>مراكز التكلفة — ربحية القرى</h3>
+      <div class="text-muted small">من {{ start }} إلى {{ end }} — إجمالي الإيرادات {{ "%.0f"|format(cc.total_revenue or 0) }} {{ currency }}</div>
+    </div>
+    <button class="btn btn-outline-dark" onclick="window.print()">طباعة</button>
+  </div>
+  <form method="get" class="card mb-3"><div class="card-body"><div class="row g-3">
+    <div class="col-md-4"><label class="form-label">من</label><input type="date" name="start" value="{{ start }}" class="form-control"></div>
+    <div class="col-md-4"><label class="form-label">إلى</label><input type="date" name="end" value="{{ end }}" class="form-control"></div>
+    <div class="col-md-4 d-flex align-items-end"><button class="btn btn-primary">عرض</button></div>
+  </div></div></form>
+  <div class="card"><div class="table-responsive"><table class="table mb-0">
+    <thead class="table-light"><tr><th>القرية</th><th>مشتركين</th><th>فواتير</th><th>الإيرادات</th><th>الحصة</th><th>المحصل</th><th>التحصيل%</th><th>المتبقي</th><th>الاستهلاك</th></tr></thead>
+    <tbody>
+    {% for r in cc.rows %}
+    <tr><td class="fw-bold">{{ r.village }}</td><td>{{ r.subs }}</td><td>{{ r.inv_count }}</td>
+      <td>{{ "%.0f"|format(r.revenue or 0) }}</td><td>{{ r.share }}%</td>
+      <td class="text-success">{{ "%.0f"|format(r.collected or 0) }}</td>
+      <td><span class="badge {% if r.rate >= 80 %}bg-success{% elif r.rate >= 50 %}bg-warning{% else %}bg-danger{% endif %}">{{ r.rate }}%</span></td>
+      <td class="text-danger">{{ "%.0f"|format(r.remaining or 0) }}</td>
+      <td>{{ "%.0f"|format(r.consumption or 0) }}</td></tr>
+    {% else %}<tr><td colspan="9" class="text-center text-muted py-4">لا توجد بيانات</td></tr>{% endfor %}
+    </tbody>
+    <tfoot><tr class="table-light fw-bold"><td>الإجمالي</td><td></td><td></td><td>{{ "%.0f"|format(cc.total_revenue or 0) }}</td><td>100%</td><td>{{ "%.0f"|format(cc.total_collected or 0) }}</td><td></td><td>{{ "%.0f"|format(cc.total_remaining or 0) }}</td><td></td></tr></tfoot>
+  </table></div></div>
+  {% include "_report_sign.html" %}
+</div>
+{% endblock %}

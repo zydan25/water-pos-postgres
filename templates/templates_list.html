@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}قوالب القيود المتكررة{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <h3 class="fw-bold mb-3"><i class="bi bi-stickies me-2"></i>قوالب القيود المتكررة</h3>
+  <div class="card mb-3"><div class="card-body">
+    <form method="post">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="action" value="create">
+      <div class="row g-3 mb-3">
+        <div class="col-md-4"><label class="form-label">اسم القالب</label><input name="name" class="form-control" placeholder="راتب شهري" required></div>
+        <div class="col-md-8"><label class="form-label">الوصف</label><input name="description" class="form-control" placeholder="قيد الرواتب الشهرية"></div>
+      </div>
+      <table class="table table-sm"><thead class="table-light"><tr><th>الحساب</th><th>مدين</th><th>دائن</th><th>بيان</th><th></th></tr></thead>
+      <tbody id="tpl-lines"></tbody></table>
+      <button type="button" class="btn btn-sm btn-outline-success" onclick="addTplLine()">+ سطر</button>
+      <button class="btn btn-sm btn-primary">حفظ القالب (يجب أن يتساوى المدين والدائن)</button>
+    </form>
+  </div></div>
+  <div class="card"><div class="table-responsive"><table class="table mb-0">
+    <thead class="table-light"><tr><th>القالب</th><th>السطور</th><th>مدين</th><th>دائن</th><th></th></tr></thead>
+    <tbody>
+    {% for item in templates %}
+    <tr><td><strong>{{ item.template.name }}</strong><div class="small text-muted">{{ item.template.description or '' }}</div></td>
+      <td>{% for ln in item.lines %}<div class="small">{{ ln.account_code }}: {{ ln.debit or 0 }}/{{ ln.credit or 0 }}</div>{% endfor %}</td>
+      <td>{{ "%.0f"|format(item.total_debit or 0) }}</td><td>{{ "%.0f"|format(item.total_credit or 0) }}</td>
+      <td class="text-nowrap"><a class="btn btn-sm btn-success" href="{{ url_for('accounting_template_apply', template_id=item.template.id) }}">ترحيل</a>
+      <form method="post" class="d-inline"><input type="hidden" name="_csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="delete"><input type="hidden" name="template_id" value="{{ item.template.id }}"><button class="btn btn-sm btn-outline-danger" onclick="return confirm('حذف القالب؟')">حذف</button></form></td></tr>
+    {% else %}<tr><td colspan="5" class="text-center text-muted py-4">لا توجد قوالب</td></tr>{% endfor %}
+    </tbody>
+  </table></div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function addTplLine(){
+  const accs = `{% for a in accounts %}<option value="{{ a.id }}">{{ a.code }} — {{ a.name }}</option>{% endfor %}`;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td><select name="account_id" class="form-select form-select-sm">${accs}</select></td>
+    <td><input type="number" step="0.01" min="0" name="debit" value="0" class="form-control form-control-sm"></td>
+    <td><input type="number" step="0.01" min="0" name="credit" value="0" class="form-control form-control-sm"></td>
+    <td><input name="line_desc" class="form-control form-control-sm"></td>
+    <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()">×</button></td>`;
+  document.getElementById('tpl-lines').appendChild(tr);
+}
+addTplLine(); addTplLine();
+</script>
+{% endblock %}

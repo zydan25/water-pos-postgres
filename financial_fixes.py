@@ -317,6 +317,9 @@ def _village_rows(db, only_unpaid: bool = False):
                i.month_label,
                i.previous_reading,
                i.current_reading,
+               i.consumption,
+               i.consumption_amount,
+               i.unit_price,
                COALESCE(i.current_reading, i.previous_reading, s.last_reading, 0) AS last_reading,
                i.total_amount,
                i.paid_amount,
@@ -442,28 +445,50 @@ def manual_collection_collections():
 @login_required
 @role_required(["admin", "staff", "collector", "accountant", "manager", "technician"])
 def manual_collection_collections_pdf():
+    import traceback
     db = get_db()
     village = request.args.get("village", "").strip()
     mode = (request.args.get("mode", "pdf") or "pdf").strip().lower()
-    ctx = _manual_collection_common_context(db, only_unpaid=True)
-    if village:
-        ctx["villages"] = {village: ctx["villages"].get(village, [])}
-        ctx["village_names"] = [village]
 
-    if mode == "zip":
-        def build(zf):
-            target_items = ctx["villages"].items() if not village else [(village, ctx["villages"].get(village, []))]
-            for village_name, rows in target_items:
-                local_ctx = dict(ctx)
-                local_ctx["village"] = village_name
-                local_ctx["villages"] = {village_name: rows}
-                local_ctx["village_names"] = [village_name]
-                pdf = _render_pdf_bytes("manual_collections_pdf.html", print_mode=True, **local_ctx)
-                zf.writestr(f"كشف_تحصيل_{_safe_filename(village_name)}.pdf", pdf)
-        return _send_zip(build, f"كشف_تحصيل_{_safe_filename(village or 'جميع_القرى')}.zip")
+    try:
+        ctx = _manual_collection_common_context(db, only_unpaid=True)
+        if village:
+            ctx["villages"] = {village: ctx["villages"].get(village, [])}
+            ctx["village_names"] = [village]
 
-    pdf = _render_pdf_bytes("manual_collections_pdf.html", print_mode=True, village=village, **ctx)
-    return _send_pdf(pdf, f"كشف_تحصيل_{_safe_filename(village or 'جميع_القرى')}.pdf")
+        if mode == "zip":
+            def build(zf):
+                # عند ZIP بدون قرية محددة نمرّ جميع القرى، وإلا نمرّ القرية المحددة فقط
+                target_items = list(ctx["villages"].items()) if not village else [(village, ctx["villages"].get(village, []))]
+                for village_name, rows in target_items:
+                    local_ctx = dict(ctx)
+                    local_ctx["village"] = village_name
+                    local_ctx["villages"] = {village_name: rows}
+                    local_ctx["village_names"] = [village_name]
+                    try:
+                        pdf = _render_pdf_bytes("manual_collections_pdf.html", print_mode=True, **local_ctx)
+                    except Exception as inner_exc:
+                        print(f"[collections/pdf] خطأ أثناء رندرة قرية '{village_name}': {inner_exc}")
+                        traceback.print_exc()
+                        raise
+                    zf.writestr(f"كشف_تحصيل_{_safe_filename(village_name)}.pdf", pdf)
+            return _send_zip(build, f"كشف_تحصيل_{_safe_filename(village or 'جميع_القرى')}.zip")
+
+        # وضع PDF واحد
+        pdf = _render_pdf_bytes("manual_collections_pdf.html", print_mode=True, village=village, **ctx)
+        return _send_pdf(pdf, f"كشف_تحصيل_{_safe_filename(village or 'جميع_القرى')}.pdf")
+
+    except Exception as exc:
+        print(f"[collections/pdf] خطأ غير متوقع (village={village!r}, mode={mode!r}): {exc}")
+        traceback.print_exc()
+        return (
+            f"حدث خطأ أثناء توليد كشف التحصيل: {exc}\n\n"
+            "تحقق من:\n"
+            "١. تثبيت مكتبة WeasyPrint ومكتبات GTK على هذا الجهاز.\n"
+            "٢. صحة اسم القالب manual_collections_pdf.html داخل مجلد templates/.\n"
+            "٣. سجل الأخطاء في console الخادم للحصول على تفاصيل دقيقة.",
+            500,
+        )
 
 
 @manual_collection_bp.route("/manual-collection/summary")

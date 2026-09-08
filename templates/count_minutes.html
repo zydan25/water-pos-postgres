@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}محضر جرد صندوق{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between mb-3">
+    <a class="btn btn-outline-secondary" href="{{ url_for('accounting_counts') }}">الجرد</a>
+    <button class="btn btn-outline-dark" onclick="window.print()">طباعة المحضر</button>
+  </div>
+  <div class="card"><div class="card-body">
+    <div class="text-center mb-3">
+      <h4 class="fw-bold mb-0">{{ org }}</h4>
+      <h5 class="mt-1">محضر جرد صندوق رقم {{ c.id }}</h5>
+      <div class="text-muted small">بتاريخ {{ c.count_date }}</div>
+    </div>
+    <table class="table table-bordered">
+      <tr><th style="width:30%">الحساب</th><td>{{ c.account_code }} — {{ c.account_name }}</td></tr>
+      <tr><th>الرصيد الدفتري المتوقع</th><td class="fw-bold">{{ "%.0f"|format(c.expected or 0) }} {{ currency }}</td></tr>
+      <tr><th>المبلغ الفعلي الموجود</th><td class="fw-bold">{{ "%.0f"|format(c.actual or 0) }} {{ currency }}</td></tr>
+      <tr><th>الفرق (فعلي − متوقع)</th><td class="fw-bold">{{ "%.0f"|format(c.difference or 0) }} {{ currency }}</td></tr>
+      <tr><th>ملاحظات</th><td>{{ c.notes or '—' }}</td></tr>
+      <tr><th>القائم بالجرد</th><td>{{ c.counter_name or '—' }}</td></tr>
+    </table>
+    <div class="row text-center g-3 mt-2">
+      <div class="col-4"><div class="text-muted small">القائم بالجرد: {{ c.counter_name or '—' }}</div><div class="mt-4 border-top pt-2 small">التوقيع / التاريخ</div></div>
+      <div class="col-4"><div class="text-muted small">المراجع: {{ c.reviewer_name or '—' }}</div><div class="mt-4 border-top pt-2 small">التوقيع / التاريخ</div></div>
+      <div class="col-4"><div class="text-muted small">المعتمد: {{ c.approver_name or '—' }}</div><div class="mt-4 border-top pt-2 small">التوقيع / التاريخ</div></div>
+    </div>
+  </div></div>
+</div>
+{% endblock %}

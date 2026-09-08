@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}دفتر الأستاذ العام{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="fw-bold mb-0"><i class="bi bi-book me-2"></i>دفتر الأستاذ العام</h3>
+      <div class="text-muted small">حركة حساب واحد مع رصيد افتتاحي وختامي — المرحلة 1 من الحزمة المالية</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('accounting_reports') }}">التقارير</a>
+      <a class="btn btn-outline-primary" href="{{ url_for('accounting_trial_balance') }}">ميزان المراجعة</a>
+      {% if ledger %}<a class="btn btn-outline-success" href="{{ url_for('accounting_ledger_xlsx', account_id=account_id, start=start, end=end) }}">Excel</a>{% endif %}
+      <button class="btn btn-outline-dark" onclick="window.print()">طباعة</button>
+    </div>
+  </div>
+  <form method="get" class="card mb-3"><div class="card-body"><div class="row g-3">
+    <div class="col-md-5"><label class="form-label">الحساب</label>
+      <select name="account_id" class="form-select" required>
+        <option value="">اختر الحساب</option>
+        {% for a in all_accounts %}
+        <option value="{{ a.id }}" {% if a.id == account_id %}selected{% endif %}>{{ a.code }} — {{ a.name }}</option>
+        {% endfor %}
+      </select></div>
+    <div class="col-md-3"><label class="form-label">من</label><input type="date" name="start" value="{{ start }}" class="form-control"></div>
+    <div class="col-md-3"><label class="form-label">إلى</label><input type="date" name="end" value="{{ end }}" class="form-control"></div>
+    <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">عرض</button></div>
+  </div></div></form>
+  {% if ledger %}
+  <div class="card"><div class="card-header bg-white d-flex justify-content-between flex-wrap gap-2">
+    <strong>{{ ledger.account.code }} — {{ ledger.account.name }}</strong>
+    <span class="text-muted small">افتتاحي: {{ "%.0f"|format(ledger.opening or 0) }} | ختامي: {{ "%.0f"|format(ledger.closing or 0) }} {{ currency }}</span>
+  </div><div class="table-responsive"><table class="table table-hover mb-0">
+    <thead class="table-light"><tr><th>التاريخ</th><th>رقم القيد</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead>
+    <tbody>
+      <tr class="table-secondary"><td colspan="5">رصيد افتتاحي</td><td class="fw-bold">{{ "%.0f"|format(ledger.opening or 0) }}</td></tr>
+      {% for ln in ledger.lines %}
+      <tr><td>{{ ln.entry_date }}</td><td><span class="badge bg-primary">{{ ln.entry_no }}</span></td>
+        <td>{{ ln.line_desc or ln.entry_desc or '-' }}</td>
+        <td class="text-success fw-bold">{{ "%.0f"|format(ln.debit or 0) }}</td>
+        <td class="text-danger fw-bold">{{ "%.0f"|format(ln.credit or 0) }}</td>
+        <td class="fw-bold">{{ "%.0f"|format(ln.balance or 0) }}</td></tr>
+      {% else %}
+      <tr><td colspan="6" class="text-center text-muted py-4">لا توجد حركات في الفترة</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr class="table-light fw-bold"><td colspan="3">الإجمالي</td><td>{{ "%.0f"|format(ledger.total_debit or 0) }}</td><td>{{ "%.0f"|format(ledger.total_credit or 0) }}</td><td>{{ "%.0f"|format(ledger.closing or 0) }}</td></tr></tfoot>
+  </table></div></div>
+  {% include "_report_sign.html" %}
+  {% elif account_id %}
+  <div class="alert alert-warning">الحساب غير موجود.</div>
+  {% else %}
+  <div class="alert alert-info">اختر حساباً لعرض دفتر أستاذه.</div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -19,6 +19,9 @@
       <div class="text-muted small">صفحة مستقلة لعرض حركة العميل من الفواتير والتسديدات والإجماليات.</div>
     </div>
     <a class="btn btn-outline-secondary" href="{{ url_for('reports') if is_admin else '#' }}">التقارير المحاسبية</a>
+    {% if payload and payload.subscriber %}
+    <a class="btn btn-outline-primary" href="{{ url_for('accounting_subscriber_ledger', subscriber_id=payload.subscriber.id, start=start, end=end) }}">الكشف المحاسبي (دفتر الأستاذ)</a>
+    {% endif %}
   </div>
 
   <div class="card stmt-card p-3 mb-3">

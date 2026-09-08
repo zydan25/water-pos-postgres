@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}ترحيل قالب{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <h3 class="fw-bold mb-3">ترحيل قالب: {{ t.name }}</h3>
+  <div class="card"><div class="card-body"><form method="post">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+    <div class="row g-3 mb-3">
+      <div class="col-md-4"><label class="form-label">التاريخ</label><input type="date" name="entry_date" value="{{ today }}" class="form-control"></div>
+      <div class="col-md-8"><label class="form-label">البيان</label><input name="description" value="{{ t.name }}" class="form-control"></div>
+    </div>
+    <table class="table"><thead class="table-light"><tr><th>الحساب</th><th>مدين</th><th>دائن</th><th>بيان</th></tr></thead>
+    <tbody>
+    {% for ln in lines %}
+    <tr><td>{{ ln.account_code }} — {{ ln.account_name }}</td>
+      <td><input type="number" step="0.01" min="0" name="d_{{ ln.id }}" value="{{ ln.debit or 0 }}" class="form-control"></td>
+      <td><input type="number" step="0.01" min="0" name="c_{{ ln.id }}" value="{{ ln.credit or 0 }}" class="form-control"></td>
+      <td>{{ ln.description or '' }}</td></tr>
+    {% endfor %}
+    </tbody></table>
+    <button class="btn btn-success">ترحيل القيد</button>
+    <a class="btn btn-outline-secondary" href="{{ url_for('accounting_templates') }}">القوالب</a>
+  </form></div></div>
+</div>
+{% endblock %}

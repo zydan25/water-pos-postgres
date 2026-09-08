@@ -670,6 +670,8 @@ def ensure_accounting_seed(db):
         ("1100", "الصناديق", "cash", "1000", 0),
         ("1111", "صندوق الإدارة", "cash", "1100", 1),
         ("1112", "صندوق التحصيل", "cash", "1100", 1),
+        ("1120", "حسابات البنوك", "bank", "1100", 0),
+        ("1121", "البنك الرئيسي", "bank", "1120", 1),
         ("1200", "العملاء", "receivable", "1000", 0),
         ("1210", "حسابات العملاء", "receivable", "1200", 1),
         ("1300", "الموظفون", "employee", "1000", 0),
@@ -878,6 +880,8 @@ def next_voucher_no(db, prefix="VCH"):
 
 
 def create_accounting_voucher(db, *, voucher_type, voucher_date, amount, from_account_id, to_account_id, reference="", description="", created_by=None, source_type="manual", source_id=None):
+    if is_date_in_closed_year(db, voucher_date):
+        raise ValueError("السنة المالية مقفلة لهذا التاريخ.")
     voucher_no = next_voucher_no(db)
     with orm_session_scope() as session:
         voucher = AccountingVoucher(voucher_no=voucher_no, voucher_type=voucher_type, voucher_date=voucher_date, amount=float(amount or 0), from_account_id=from_account_id, to_account_id=to_account_id, reference=reference, description=description, source_type=source_type, source_id=source_id, status="posted", created_by=created_by, created_at=datetime.now().isoformat(), updated_at=datetime.now().isoformat())
@@ -894,12 +898,16 @@ def create_accounting_voucher(db, *, voucher_type, voucher_date, amount, from_ac
         return voucher.id
 
 def update_accounting_voucher(db, voucher_id, *, voucher_type, voucher_date, amount, from_account_id, to_account_id, reference="", description="", updated_by=None):
+    if is_date_in_closed_year(db, voucher_date):
+        raise ValueError("السنة المالية مقفلة لهذا التاريخ.")
     with orm_session_scope() as session:
         row = session.get(AccountingVoucher, voucher_id)
         if not row:
             raise ValueError("السند غير موجود.")
         if row.source_type != "manual":
             raise ValueError("السند الآلي لا يمكن تعديله من هذه الشاشة.")
+        if is_date_in_closed_year(db, row.voucher_date):
+            raise ValueError("السند في سنة مالية مقفلة.")
         if row.journal_entry_id:
             session.execute(delete(JournalLine).where(JournalLine.entry_id == row.journal_entry_id))
             session.execute(delete(JournalEntry).where(JournalEntry.id == row.journal_entry_id))
@@ -928,6 +936,8 @@ def void_accounting_voucher(db, voucher_id):
             raise ValueError("السند غير موجود.")
         if row.source_type != "manual":
             raise ValueError("السند الآلي لا يمكن حذفه من هذه الشاشة.")
+        if is_date_in_closed_year(db, row.voucher_date):
+            raise ValueError("السند في سنة مالية مقفلة.")
         if row.journal_entry_id:
             session.execute(delete(JournalLine).where(JournalLine.entry_id == row.journal_entry_id))
             session.execute(delete(JournalEntry).where(JournalEntry.id == row.journal_entry_id))
@@ -1582,6 +1592,8 @@ def process_invoice_payment(db, invoice_id, user_id, amount, method, notes, atta
 
     today_str = date.today().isoformat()
     now = datetime.now().isoformat()
+    if is_date_in_closed_year(db, today_str):
+        raise ValueError("السنة المالية مقفلة ولا يمكن تسجيل سداد جديد.")
 
     invoice_row = db.execute(
         """
@@ -1791,6 +1803,8 @@ def post_invoice_accounting(db, invoice_id, user_id=None, amount=None, method="�
 
     now = datetime.now().isoformat()
     invoice_date = (invoice["invoice_date"] or date.today().isoformat())
+    if is_date_in_closed_year(db, invoice_date):
+        raise ValueError("السنة المالية مقفلة لهذا التاريخ ولا يمكن ترحيل الفاتورة.")
 
     # عكس أي ترحيل سابق عند التعديل حتى لا تتراكم قيود مزدوجة.
     existing_voucher = db.execute(
@@ -2143,4 +2157,931 @@ def find_main_account_direct_balances(db):
         """
     ).fetchall()
     return rows
+
+
+# =======================================================
+# الحزمة المالية: دفتر الأستاذ + ميزان المراجعة (المرحلة 1)
+# =======================================================
+
+def get_ledger(db, account_id, start=None, end=None):
+    """دفتر الأستاذ العام لحساب واحد: رصيد افتتاحي + حركات + رصيد ختامي."""
+    account = db.execute("SELECT * FROM account_nodes WHERE id=?", (account_id,)).fetchone()
+    if not account:
+        return None
+    opening = 0.0
+    if start:
+        row = db.execute(
+            """
+            SELECT COALESCE(SUM(jl.debit),0) AS d, COALESCE(SUM(jl.credit),0) AS c
+            FROM journal_lines jl
+            JOIN journal_entries je ON je.id = jl.entry_id
+            WHERE jl.account_id=? AND je.entry_date < ?
+            """,
+            (account_id, start),
+        ).fetchone()
+        if row:
+            opening = float(row["d"] or 0) - float(row["c"] or 0)
+    sql = """
+        SELECT je.entry_date AS entry_date, je.entry_no AS entry_no,
+               je.description AS entry_desc, je.source_type AS source_type,
+               jl.debit AS debit, jl.credit AS credit, jl.description AS line_desc
+        FROM journal_lines jl
+        JOIN journal_entries je ON je.id = jl.entry_id
+        WHERE jl.account_id=?
+    """
+    params = [account_id]
+    if start:
+        sql += " AND je.entry_date >= ?"
+        params.append(start)
+    if end:
+        sql += " AND je.entry_date <= ?"
+        params.append(end)
+    sql += " ORDER BY je.entry_date, je.id, jl.id"
+    lines = db.execute(sql, params).fetchall()
+    running = opening
+    out = []
+    total_debit = 0.0
+    total_credit = 0.0
+    for ln in lines:
+        d = float(ln["debit"] or 0)
+        c = float(ln["credit"] or 0)
+        running += d - c
+        total_debit += d
+        total_credit += c
+        out.append({
+            "entry_date": ln["entry_date"],
+            "entry_no": ln["entry_no"],
+            "entry_desc": ln["entry_desc"],
+            "source_type": ln["source_type"],
+            "line_desc": ln["line_desc"],
+            "debit": d,
+            "credit": c,
+            "balance": running,
+        })
+    return {
+        "account": account,
+        "opening": opening,
+        "lines": out,
+        "total_debit": total_debit,
+        "total_credit": total_credit,
+        "closing": running,
+    }
+
+
+def get_trial_balance(db, start=None, end=None):
+    """ميزان المراجعة: رصيد افتتاحي + حركة الفترة + رصيد ختامي لكل حساب تفصيلي."""
+    accounts = db.execute(
+        "SELECT * FROM account_nodes WHERE is_postable=1 AND (active=1 OR id IN (SELECT DISTINCT account_id FROM journal_lines)) ORDER BY code"
+    ).fetchall()
+    rows = []
+    t_open = t_debit = t_credit = t_close = 0.0
+    for acc in accounts:
+        opening = 0.0
+        if start:
+            r = db.execute(
+                """
+                SELECT COALESCE(SUM(jl.debit),0) AS d, COALESCE(SUM(jl.credit),0) AS c
+                FROM journal_lines jl
+                JOIN journal_entries je ON je.id = jl.entry_id
+                WHERE jl.account_id=? AND je.entry_date < ?
+                """,
+                (acc["id"], start),
+            ).fetchone()
+            if r:
+                opening = float(r["d"] or 0) - float(r["c"] or 0)
+        debit = credit = 0.0
+        sql = """
+            SELECT COALESCE(SUM(jl.debit),0) AS d, COALESCE(SUM(jl.credit),0) AS c
+            FROM journal_lines jl
+            JOIN journal_entries je ON je.id = jl.entry_id
+            WHERE jl.account_id=?
+        """
+        params = [acc["id"]]
+        if start:
+            sql += " AND je.entry_date >= ?"
+            params.append(start)
+        if end:
+            sql += " AND je.entry_date <= ?"
+            params.append(end)
+        r2 = db.execute(sql, params).fetchone()
+        if r2:
+            debit = float(r2["d"] or 0)
+            credit = float(r2["c"] or 0)
+        closing = opening + debit - credit
+        if abs(opening) < 0.005 and abs(debit) < 0.005 and abs(credit) < 0.005 and abs(closing) < 0.005:
+            continue
+        t_open += opening
+        t_debit += debit
+        t_credit += credit
+        t_close += closing
+        rows.append({
+            "id": acc["id"],
+            "code": acc["code"],
+            "name": acc["name"],
+            "node_type": acc["node_type"],
+            "opening": opening,
+            "debit": debit,
+            "credit": credit,
+            "closing": closing,
+        })
+    return {
+        "rows": rows,
+        "totals": {"opening": t_open, "debit": t_debit, "credit": t_credit, "closing": t_close,
+                   "balanced": abs(t_debit - t_credit) < 0.01},
+    }
+
+
+def _classify_account(code, node_type):
+    code = str(code or "")
+    nt = str(node_type or "").lower()
+    if code.startswith("1") or nt in ("cash", "receivable", "employee"):
+        return "assets"
+    if code.startswith("2") or nt == "payable":
+        return "liabilities"
+    if code.startswith("3"):
+        return "equity"
+    if code.startswith("4") or nt == "income":
+        return "revenue"
+    if code.startswith("5") or nt == "expense":
+        return "expense"
+    return "other"
+
+
+def get_income_statement(db, start=None, end=None):
+    """قائمة الدخل: إيرادات - مصروفات = صافي الربح للفترة."""
+    tb = get_trial_balance(db, start=start, end=end)
+    rev_rows, exp_rows = [], []
+    rev_total = exp_total = 0.0
+    for r in tb["rows"]:
+        cls = _classify_account(r["code"], r["node_type"])
+        if cls == "revenue":
+            amount = float(r["credit"] or 0) - float(r["debit"] or 0) + (0 if start else float(r["opening"] or 0) * -1)
+            # للفترة: الحركة فقط + الافتتاحي إن لم يوجد فلتر تاريخ
+            if start:
+                amount = float(r["credit"] or 0) - float(r["debit"] or 0)
+            else:
+                amount = float(r["closing"] or 0) * -1
+            if abs(amount) < 0.005:
+                continue
+            rev_total += amount
+            rev_rows.append({"code": r["code"], "name": r["name"], "amount": amount, "id": r["id"]})
+        elif cls == "expense":
+            if start:
+                amount = float(r["debit"] or 0) - float(r["credit"] or 0)
+            else:
+                amount = float(r["closing"] or 0)
+            if abs(amount) < 0.005:
+                continue
+            exp_total += amount
+            exp_rows.append({"code": r["code"], "name": r["name"], "amount": amount, "id": r["id"]})
+    rev_rows.sort(key=lambda x: x["code"])
+    exp_rows.sort(key=lambda x: x["code"])
+    return {"revenues": rev_rows, "expenses": exp_rows,
+            "revenue_total": rev_total, "expense_total": exp_total,
+            "net_income": rev_total - exp_total}
+
+
+def get_balance_sheet(db, start=None, end=None):
+    """الميزانية العمومية كما في تاريخ النهاية + صافي ربح الفترة ضمن الحقوق."""
+    tb = get_trial_balance(db, start=None, end=end)
+    assets, liabs, equity = [], [], []
+    t_assets = t_liabs = t_equity = 0.0
+    for r in tb["rows"]:
+        cls = _classify_account(r["code"], r["node_type"])
+        closing = float(r["closing"] or 0)
+        if cls == "assets":
+            if abs(closing) < 0.005:
+                continue
+            t_assets += closing
+            assets.append({"code": r["code"], "name": r["name"], "amount": closing, "id": r["id"]})
+        elif cls == "liabilities":
+            amount = closing * -1
+            if abs(amount) < 0.005:
+                continue
+            t_liabs += amount
+            liabs.append({"code": r["code"], "name": r["name"], "amount": amount, "id": r["id"]})
+        elif cls == "equity":
+            amount = closing * -1
+            if abs(amount) < 0.005:
+                continue
+            t_equity += amount
+            equity.append({"code": r["code"], "name": r["name"], "amount": amount, "id": r["id"]})
+    income = get_income_statement(db, start=start, end=end)
+    net = float(income["net_income"] or 0)
+    total_equity_liab = t_liabs + t_equity + net
+    return {"assets": sorted(assets, key=lambda x: x["code"]),
+            "liabilities": sorted(liabs, key=lambda x: x["code"]),
+            "equity": sorted(equity, key=lambda x: x["code"]),
+            "assets_total": t_assets, "liabilities_total": t_liabs,
+            "equity_total": t_equity, "net_income": net,
+            "equity_liab_total": total_equity_liab,
+            "balanced": abs(t_assets - total_equity_liab) < 1.0}
+
+
+# =======================================================
+# الحزمة المالية: السنة المالية + الإقفال + الترحيل (المرحلة 3)
+# =======================================================
+
+def ensure_fiscal_tables(db):
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS fiscal_years (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open',
+            closed_at TEXT,
+            closed_by INTEGER,
+            closing_entry_id INTEGER,
+            created_at TEXT NOT NULL
+        )""")
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS cash_counts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            count_date TEXT NOT NULL,
+            account_id INTEGER,
+            expected REAL DEFAULT 0,
+            actual REAL DEFAULT 0,
+            difference REAL DEFAULT 0,
+            notes TEXT,
+            created_by INTEGER,
+            created_at TEXT NOT NULL
+        )""")
+    for _col in ("opening_entry_id", "opening_entry_date"):
+        try:
+            db.execute(f"ALTER TABLE fiscal_years ADD COLUMN {_col} INTEGER" if _col == "opening_entry_id" else f"ALTER TABLE fiscal_years ADD COLUMN {_col} TEXT")
+        except Exception:
+            pass
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS bank_statements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            statement_date TEXT NOT NULL,
+            account_id INTEGER,
+            statement_balance REAL DEFAULT 0,
+            notes TEXT,
+            created_by INTEGER,
+            created_at TEXT NOT NULL
+        )""")
+    for _ccol, _ctype in (("reviewed_by", "INTEGER"), ("reviewed_at", "TEXT"), ("approved_by", "INTEGER"), ("approved_at", "TEXT"), ("status", "TEXT")):
+        for _tbl in ("cash_counts", "bank_statements"):
+            try:
+                db.execute(f"ALTER TABLE {_tbl} ADD COLUMN {_ccol} {_ctype}")
+            except Exception:
+                pass
+    try:
+        db.commit()
+    except Exception:
+        pass
+
+
+def list_fiscal_years(db):
+    ensure_fiscal_tables(db)
+    return db.execute("SELECT * FROM fiscal_years ORDER BY start_date DESC").fetchall()
+
+
+def create_fiscal_year(db, name, start_date, end_date):
+    ensure_fiscal_tables(db)
+    if not name or not start_date or not end_date:
+        raise ValueError("بيانات السنة المالية ناقصة.")
+    if start_date > end_date:
+        raise ValueError("بداية السنة يجب أن تكون قبل نهايتها.")
+    overlap = db.execute(
+        "SELECT 1 FROM fiscal_years WHERE NOT (end_date < ? OR start_date > ?) LIMIT 1",
+        (start_date, end_date),
+    ).fetchone()
+    if overlap:
+        raise ValueError("تتداخل مع سنة مالية موجودة.")
+    db.execute(
+        "INSERT INTO fiscal_years (name, start_date, end_date, status, created_at) VALUES (?, ?, ?, 'open', ?)",
+        (name, start_date, end_date, datetime.now().isoformat()),
+    )
+    new_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+    db.commit()
+    if not new_id:
+        row = db.execute("SELECT id FROM fiscal_years WHERE name=?", (name,)).fetchone()
+        new_id = row["id"] if row else None
+    return new_id
+
+
+def is_date_in_closed_year(db, date_str):
+    ensure_fiscal_tables(db)
+    if not date_str:
+        return False
+    d = str(date_str)[:10]
+    row = db.execute(
+        "SELECT 1 FROM fiscal_years WHERE status='closed' AND start_date <= ? AND end_date >= ? LIMIT 1",
+        (d, d),
+    ).fetchone()
+    return bool(row)
+
+
+def _ensure_retained_earnings_account(db):
+    row = db.execute("SELECT id FROM account_nodes WHERE code='3100' LIMIT 1").fetchone()
+    if row:
+        return row["id"]
+    parent = db.execute("SELECT id FROM account_nodes WHERE code='3000' AND active=1 LIMIT 1").fetchone()
+    parent_id = parent["id"] if parent else None
+    return add_account_node(db, "3100", "أرباح محتجزة", node_type="equity", parent_id=parent_id, is_postable=1)
+
+
+def close_fiscal_year(db, year_id, user_id=None):
+    ensure_fiscal_tables(db)
+    year = db.execute("SELECT * FROM fiscal_years WHERE id=?", (year_id,)).fetchone()
+    if not year:
+        raise ValueError("السنة المالية غير موجودة.")
+    if year["status"] == "closed":
+        raise ValueError("السنة مقفلة مسبقاً.")
+    start, end = year["start_date"], year["end_date"]
+    income = get_income_statement(db, start=start, end=end)
+    tb = get_trial_balance(db, start=start, end=end)
+    retained_id = _ensure_retained_earnings_account(db)
+    net = float(income["net_income"] or 0)
+    lines = []
+    for r in tb["rows"]:
+        cls = _classify_account(r["code"], r["node_type"])
+        if cls == "revenue":
+            amt = float(r["credit"] or 0) - float(r["debit"] or 0)
+            if abs(amt) > 0.005:
+                acc = db.execute("SELECT id FROM account_nodes WHERE code=?", (r["code"],)).fetchone()
+                if acc:
+                    lines.append((acc["id"], amt, 0.0, f"إقفال {r['code']}"))
+        elif cls == "expense":
+            amt = float(r["debit"] or 0) - float(r["credit"] or 0)
+            if abs(amt) > 0.005:
+                acc = db.execute("SELECT id FROM account_nodes WHERE code=?", (r["code"],)).fetchone()
+                if acc:
+                    lines.append((acc["id"], 0.0, amt, f"إقفال {r['code']}"))
+    if abs(net) > 0.005:
+        if net > 0:
+            lines.append((retained_id, 0.0, net, "صافي ربح السنة"))
+        else:
+            lines.append((retained_id, abs(net), 0.0, "صافي خسارة السنة"))
+    entry_id = None
+    if lines:
+        total_d = sum(x[1] for x in lines)
+        total_c = sum(x[2] for x in lines)
+        if abs(total_d - total_c) > 0.01:
+            raise ValueError("قيد الإقفال غير متوازن.")
+        entry_id = post_journal_entry(db, end, "closing", year_id,
+                                      f"إقفال السنة المالية {year['name']}", user_id, lines)
+    db.execute(
+        "UPDATE fiscal_years SET status='closed', closed_at=?, closed_by=?, closing_entry_id=? WHERE id=?",
+        (datetime.now().isoformat(), user_id, entry_id, year_id),
+    )
+    db.commit()
+    return entry_id
+
+
+def reopen_fiscal_year(db, year_id):
+    ensure_fiscal_tables(db)
+    year = db.execute("SELECT * FROM fiscal_years WHERE id=?", (year_id,)).fetchone()
+    if not year:
+        raise ValueError("السنة المالية غير موجودة.")
+    db.execute("UPDATE fiscal_years SET status='open', closed_at=NULL, closed_by=NULL WHERE id=?", (year_id,))
+    db.commit()
+    return True
+
+
+def create_opening_entry(db, year_id, user_id=None, opening_date=None):
+    """القيد الافتتاحي: أرصدة الميزانية كما في نهاية السنة المقفلة تُرحل كأرصدة افتتاحية."""
+    from datetime import timedelta
+    ensure_fiscal_tables(db)
+    year = db.execute("SELECT * FROM fiscal_years WHERE id=?", (year_id,)).fetchone()
+    if not year:
+        raise ValueError("السنة المالية غير موجودة.")
+    if year["status"] != "closed":
+        raise ValueError("يجب إقفال السنة أولاً قبل إنشاء القيد الافتتاحي.")
+    if year["opening_entry_id"]:
+        raise ValueError("القيد الافتتاحي موجود مسبقاً.")
+    end = year["end_date"]
+    try:
+        nxt = date.fromisoformat(str(end)[:10]) + timedelta(days=1)
+        default_opening = nxt.isoformat()
+    except Exception:
+        default_opening = str(end)[:10]
+    opening_date = (opening_date or default_opening)[:10]
+    tb = get_trial_balance(db, start=None, end=end)
+    lines = []
+    for r in tb["rows"]:
+        cls = _classify_account(r["code"], r["node_type"])
+        if cls not in ("assets", "liabilities", "equity"):
+            continue
+        closing = float(r["closing"] or 0)
+        if abs(closing) < 0.005:
+            continue
+        acc = db.execute("SELECT id FROM account_nodes WHERE code=?", (r["code"],)).fetchone()
+        if not acc:
+            continue
+        if cls == "assets":
+            if closing > 0:
+                lines.append((acc["id"], closing, 0.0, f"رصيد افتتاحي {r['code']}"))
+            else:
+                lines.append((acc["id"], 0.0, abs(closing), f"رصيد افتتاحي {r['code']}"))
+        else:
+            if closing < 0:
+                lines.append((acc["id"], 0.0, abs(closing), f"رصيد افتتاحي {r['code']}"))
+            else:
+                lines.append((acc["id"], closing, 0.0, f"رصيد افتتاحي {r['code']}"))
+    if not lines:
+        raise ValueError("لا توجد أرصدة ميزانية لترحيلها.")
+    total_d = sum(x[1] for x in lines)
+    total_c = sum(x[2] for x in lines)
+    if abs(total_d - total_c) > 1.0:
+        raise ValueError(f"القيد الافتتاحي غير متوازن ({total_d:.0f} مقابل {total_c:.0f}). أقفل السنة أولاً.")
+    entry_id = post_journal_entry(db, opening_date, "opening", year_id,
+                                  f"القيد الافتتاحي للسنة {year['name']}", user_id, lines)
+    db.execute("UPDATE fiscal_years SET opening_entry_id=?, opening_entry_date=? WHERE id=?",
+               (entry_id, opening_date, year_id))
+    db.commit()
+    return entry_id
+
+
+# =======================================================
+# الحزمة المالية: الجرد + المطابقات (المرحلة 4)
+# =======================================================
+
+def get_account_closing_balance(db, account_id, end=None):
+    sql = """
+        SELECT COALESCE(SUM(jl.debit),0) AS d, COALESCE(SUM(jl.credit),0) AS c
+        FROM journal_lines jl JOIN journal_entries je ON je.id = jl.entry_id
+        WHERE jl.account_id=?
+    """
+    params = [account_id]
+    if end:
+        sql += " AND je.entry_date <= ?"
+        params.append(end)
+    r = db.execute(sql, params).fetchone()
+    return float(r["d"] or 0) - float(r["c"] or 0) if r else 0.0
+
+
+def save_cash_count(db, count_date, account_id, expected, actual, notes="", created_by=None):
+    ensure_fiscal_tables(db)
+    expected = float(expected or 0)
+    actual = float(actual or 0)
+    diff = actual - expected
+    db.execute(
+        "INSERT INTO cash_counts (count_date, account_id, expected, actual, difference, notes, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (count_date, account_id, expected, actual, diff, notes, created_by, datetime.now().isoformat()),
+    )
+    new_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+    db.commit()
+    return new_id
+
+
+def list_cash_counts(db, start=None, end=None, limit=200):
+    ensure_fiscal_tables(db)
+    sql = """
+        SELECT cc.*, a.code AS account_code, a.name AS account_name
+        FROM cash_counts cc LEFT JOIN account_nodes a ON a.id = cc.account_id
+        WHERE 1=1
+    """
+    params = []
+    if start:
+        sql += " AND cc.count_date >= ?"
+        params.append(start)
+    if end:
+        sql += " AND cc.count_date <= ?"
+        params.append(end)
+    sql += " ORDER BY cc.count_date DESC, cc.id DESC LIMIT ?"
+    params.append(int(limit or 200))
+    return db.execute(sql, params).fetchall()
+
+
+def get_daily_collection_summary(db, day):
+    pay = db.execute(
+        "SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS cnt FROM payments WHERE payment_date=?",
+        (day,),
+    ).fetchone()
+    vch = db.execute(
+        "SELECT voucher_type, COALESCE(SUM(amount),0) AS total, COUNT(*) AS cnt FROM accounting_vouchers WHERE voucher_date=? GROUP BY voucher_type",
+        (day,),
+    ).fetchall()
+    return {"payments_total": float(pay["total"] or 0) if pay else 0.0,
+            "payments_count": int(pay["cnt"] or 0) if pay else 0,
+            "vouchers": [dict(v) for v in vch]}
+
+
+def get_receivable_reconciliation(db, end=None):
+    """مطابقة الذمم: رصيد دفتر الأستاذ لحساب العميل مقابل متبقي فواتيره."""
+    subs = db.execute("SELECT id, name, account_number, account_node_id FROM subscribers ORDER BY name").fetchall()
+    rows = []
+    for s in subs:
+        inv = db.execute(
+            "SELECT COALESCE(SUM(remaining_amount),0) AS rem, COUNT(*) AS cnt FROM invoices WHERE subscriber_id=? AND remaining_amount > 0",
+            (s["id"],),
+        ).fetchone()
+        inv_rem = float(inv["rem"] or 0) if inv else 0.0
+        ledger_bal = 0.0
+        if s["account_node_id"]:
+            ledger_bal = get_account_closing_balance(db, s["account_node_id"], end=end)
+        diff = ledger_bal - inv_rem
+        if abs(inv_rem) < 0.005 and abs(ledger_bal) < 0.005:
+            continue
+        rows.append({"subscriber_id": s["id"], "name": s["name"], "account_number": s["account_number"],
+                     "account_node_id": s["account_node_id"],
+                     "invoices_remaining": inv_rem, "ledger_balance": ledger_bal, "difference": diff})
+    rows.sort(key=lambda x: abs(x["difference"]), reverse=True)
+    return rows
+
+
+def save_bank_statement(db, statement_date, account_id, statement_balance, notes="", created_by=None):
+    ensure_fiscal_tables(db)
+    db.execute(
+        "INSERT INTO bank_statements (statement_date, account_id, statement_balance, notes, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (statement_date, account_id, float(statement_balance or 0), notes, created_by, datetime.now().isoformat()),
+    )
+    new_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+    db.commit()
+    return new_id
+
+
+def get_bank_reconciliation(db, end=None):
+    ensure_fiscal_tables(db)
+    banks = db.execute(
+        "SELECT id, code, name FROM account_nodes WHERE active=1 AND is_postable=1 AND (node_type='bank' OR code LIKE '112%') ORDER BY code"
+    ).fetchall()
+    rows = []
+    for b in banks:
+        ledger = get_account_closing_balance(db, b["id"], end=end)
+        st = db.execute(
+            "SELECT * FROM bank_statements WHERE account_id=?"
+            + (" AND statement_date <= ?" if end else "")
+            + " ORDER BY statement_date DESC, id DESC LIMIT 1",
+            [b["id"]] + ([end] if end else []),
+        ).fetchone()
+        stmt_bal = float(st["statement_balance"] or 0) if st else 0.0
+        rows.append({"account_id": b["id"], "code": b["code"], "name": b["name"],
+                     "ledger_balance": ledger, "statement_balance": stmt_bal,
+                     "statement_date": st["statement_date"] if st else None,
+                     "difference": ledger - stmt_bal})
+    return rows
+
+
+def _cash_account_ids(db):
+    rows = db.execute(
+        "SELECT id FROM account_nodes WHERE is_postable=1 AND (node_type IN ('cash','bank','employee') OR code LIKE '11%' OR code LIKE '13%')"
+    ).fetchall()
+    return [r["id"] for r in rows]
+
+
+def get_cash_flow(db, start=None, end=None):
+    """التدفقات النقدية: مقبوضات - مدفوعات + رصيد أول/آخر النقدية."""
+    pay = db.execute(
+        "SELECT COALESCE(SUM(amount),0) AS t FROM payments WHERE 1=1"
+        + (" AND payment_date >= ?" if start else "")
+        + (" AND payment_date <= ?" if end else ""),
+        [p for p, f in ((start, start), (end, end)) if f],
+    ).fetchone()
+    collections = float(pay["t"] or 0) if pay else 0.0
+    rv = db.execute(
+        "SELECT COALESCE(SUM(amount),0) AS t FROM accounting_vouchers WHERE voucher_type='receipt' AND status='posted'"
+        + (" AND voucher_date >= ?" if start else "")
+        + (" AND voucher_date <= ?" if end else ""),
+        [p for p, f in ((start, start), (end, end)) if f],
+    ).fetchone()
+    receipts = float(rv["t"] or 0) if rv else 0.0
+    pv = db.execute(
+        "SELECT COALESCE(SUM(amount),0) AS t FROM accounting_vouchers WHERE voucher_type='payment' AND status='posted'"
+        + (" AND voucher_date >= ?" if start else "")
+        + (" AND voucher_date <= ?" if end else ""),
+        [p for p, f in ((start, start), (end, end)) if f],
+    ).fetchone()
+    payments_out = float(pv["t"] or 0) if pv else 0.0
+    cash_ids = _cash_account_ids(db)
+    opening = closing = 0.0
+    if cash_ids:
+        marks = ",".join("?" * len(cash_ids))
+        if start:
+            r = db.execute(
+                f"""SELECT COALESCE(SUM(jl.debit),0) AS d, COALESCE(SUM(jl.credit),0) AS c
+                    FROM journal_lines jl JOIN journal_entries je ON je.id=jl.entry_id
+                    WHERE jl.account_id IN ({marks}) AND je.entry_date < ?""",
+                cash_ids + [start],
+            ).fetchone()
+            opening = float(r["d"] or 0) - float(r["c"] or 0) if r else 0.0
+        r2 = db.execute(
+            f"""SELECT COALESCE(SUM(jl.debit),0) AS d, COALESCE(SUM(jl.credit),0) AS c
+                FROM journal_lines jl JOIN journal_entries je ON je.id=jl.entry_id
+                WHERE jl.account_id IN ({marks})""" + (" AND je.entry_date <= ?" if end else ""),
+            cash_ids + ([end] if end else []),
+        ).fetchone()
+        closing = float(r2["d"] or 0) - float(r2["c"] or 0) if r2 else 0.0
+    net_manual = closing - opening
+    return {"collections": collections, "receipts": receipts, "payments_out": payments_out,
+            "cash_opening": opening, "cash_closing": closing, "cash_net": net_manual}
+
+
+def get_equity_statement(db, start=None, end=None):
+    """التغيرات في حقوق الملكية: أول الفترة + صافي الربح + تسويات = آخر الفترة."""
+    eq_open = 0.0
+    if start:
+        r = db.execute(
+            """SELECT COALESCE(SUM(jl.debit),0) AS d, COALESCE(SUM(jl.credit),0) AS c
+               FROM journal_lines jl JOIN journal_entries je ON je.id=jl.entry_id
+               JOIN account_nodes a ON a.id=jl.account_id
+               WHERE je.entry_date < ? AND (a.code LIKE '3%' OR a.node_type='equity')""",
+            [start],
+        ).fetchone()
+        if r:
+            eq_open = float(r["c"] or 0) - float(r["d"] or 0)
+    r2 = db.execute(
+        """SELECT COALESCE(SUM(jl.debit),0) AS d, COALESCE(SUM(jl.credit),0) AS c
+           FROM journal_lines jl JOIN journal_entries je ON je.id=jl.entry_id
+           JOIN account_nodes a ON a.id=jl.account_id
+           WHERE (a.code LIKE '3%' OR a.node_type='equity')""" + (" AND je.entry_date <= ?" if end else ""),
+        ([end] if end else []),
+    ).fetchone()
+    eq_close = float(r2["c"] or 0) - float(r2["d"] or 0) if r2 else 0.0
+    income = get_income_statement(db, start=start, end=end)
+    net = float(income["net_income"] or 0)
+    adjustments = eq_close - eq_open - net
+    return {"equity_opening": eq_open, "net_income": net, "adjustments": adjustments,
+            "equity_closing": eq_close}
+
+
+def review_cash_count(db, count_id, user_id):
+    ensure_fiscal_tables(db)
+    db.execute("UPDATE cash_counts SET reviewed_by=?, reviewed_at=?, status=COALESCE(status,'reviewed') WHERE id=?",
+               (user_id, datetime.now().isoformat(), count_id))
+    db.commit()
+    return True
+
+
+def approve_cash_count(db, count_id, user_id):
+    ensure_fiscal_tables(db)
+    db.execute("UPDATE cash_counts SET approved_by=?, approved_at=?, status='approved' WHERE id=?",
+               (user_id, datetime.now().isoformat(), count_id))
+    db.commit()
+    return True
+
+
+def get_count_minutes(db, count_id):
+    ensure_fiscal_tables(db)
+    row = db.execute(
+        """SELECT cc.*, a.code AS account_code, a.name AS account_name,
+                  cu.username AS counter_name, ru.username AS reviewer_name, au.username AS approver_name
+           FROM cash_counts cc LEFT JOIN account_nodes a ON a.id=cc.account_id
+           LEFT JOIN users cu ON cu.id=cc.created_by
+           LEFT JOIN users ru ON ru.id=cc.reviewed_by
+           LEFT JOIN users au ON au.id=cc.approved_by
+           WHERE cc.id=?""",
+        (count_id,),
+    ).fetchone()
+    return row
+
+
+def get_accountant_dashboard(db, today=None):
+    """ملخص المحاسب اليومي: تحصيل، ذمم، فروقات، جرديات، سنوات، ربح الشهر."""
+    today = today or date.today().isoformat()
+    month = str(today)[:7]
+    tp = db.execute("SELECT COALESCE(SUM(amount),0) AS t, COUNT(*) AS c FROM payments WHERE payment_date=?", (today,)).fetchone()
+    mp = db.execute("SELECT COALESCE(SUM(amount),0) AS t FROM payments WHERE substr(payment_date,1,7)=?", (month,)).fetchone()
+    od = db.execute("SELECT COUNT(*) AS c, COALESCE(SUM(remaining_amount),0) AS t FROM invoices WHERE remaining_amount > 0").fetchone()
+    rec_rows = get_receivable_reconciliation(db, end=today)
+    nonzero = [r for r in rec_rows if abs(r["difference"] or 0) > 0.5]
+    ensure_fiscal_tables(db)
+    drafts = db.execute("SELECT COUNT(*) AS c FROM cash_counts WHERE status IS NULL OR status<>'approved'").fetchone()
+    years = db.execute("SELECT COUNT(*) AS c FROM fiscal_years WHERE status='open'").fetchone()
+    income = get_income_statement(db, start=f"{month}-01", end=today)
+    cash_ids = _cash_account_ids(db)
+    cash_total = 0.0
+    if cash_ids:
+        marks = ",".join("?" * len(cash_ids))
+        r = db.execute(f"SELECT COALESCE(SUM(debit),0)-COALESCE(SUM(credit),0) AS b FROM journal_lines WHERE account_id IN ({marks})", cash_ids).fetchone()
+        cash_total = float(r["b"] or 0) if r else 0.0
+    latest = list_journal_entries(db, limit=5)
+    return {
+        "today_total": float(tp["t"] or 0) if tp else 0.0,
+        "today_count": int(tp["c"] or 0) if tp else 0,
+        "month_total": float(mp["t"] or 0) if mp else 0.0,
+        "overdue_count": int(od["c"] or 0) if od else 0,
+        "overdue_total": float(od["t"] or 0) if od else 0.0,
+        "diff_count": len(nonzero),
+        "diff_total": sum(abs(r["difference"]) for r in nonzero),
+        "draft_counts": int(drafts["c"] or 0) if drafts else 0,
+        "open_years": int(years["c"] or 0) if years else 0,
+        "month_net": float(income["net_income"] or 0),
+        "cash_total": cash_total,
+        "latest_entries": latest,
+    }
+
+
+def _adjustment_accounts(db):
+    exp = db.execute("SELECT id FROM account_nodes WHERE code='5100' AND active=1").fetchone()
+    if not exp:
+        exp = db.execute("SELECT id FROM account_nodes WHERE code='5200' AND active=1").fetchone()
+    inc = db.execute("SELECT id FROM account_nodes WHERE code='4200' AND active=1").fetchone()
+    if not inc:
+        inc = db.execute("SELECT id FROM account_nodes WHERE code='4100' AND active=1").fetchone()
+    return (exp["id"] if exp else None), (inc["id"] if inc else None)
+
+
+def auto_adjust_difference(db, kind, ref_id, user_id=None, entry_date=None):
+    """تسوية تلقائية بالاتجاه الصحيح. يعيد (entry_id, debit_code, credit_code, amount)."""
+    entry_date = (entry_date or date.today().isoformat())[:10]
+    if is_date_in_closed_year(db, entry_date):
+        raise ValueError("السنة المالية مقفلة لهذا التاريخ.")
+    exp_id, inc_id = _adjustment_accounts(db)
+    if kind == "subscriber":
+        s = db.execute("SELECT id, name, account_number, account_node_id FROM subscribers WHERE id=?", (ref_id,)).fetchone()
+        if not s or not s["account_node_id"]:
+            raise ValueError("المشترك بلا حساب محاسبي.")
+        inv = db.execute("SELECT COALESCE(SUM(remaining_amount),0) AS rem FROM invoices WHERE subscriber_id=? AND remaining_amount > 0", (s["id"],)).fetchone()
+        ledger_bal = get_account_closing_balance(db, s["account_node_id"])
+        diff = ledger_bal - float(inv["rem"] or 0)
+        if abs(diff) < 0.5:
+            raise ValueError("لا يوجد فرق يستحق التسوية.")
+        desc = f"تسوية آلية لذمم: {s['name']} ({s['account_number']})"
+        if diff > 0:
+            if not exp_id:
+                raise ValueError("تعذر العثور على حساب مصروفات للتسوية.")
+            lines = [(exp_id, diff, 0.0, desc), (s["account_node_id"], 0.0, diff, desc)]
+        else:
+            if not inc_id:
+                raise ValueError("تعذر العثور على حساب إيرادات للتسوية.")
+            lines = [(s["account_node_id"], abs(diff), 0.0, desc), (inc_id, 0.0, abs(diff), desc)]
+        entry_id = post_journal_entry(db, entry_date, "auto-adjust", s["id"], desc, user_id, lines)
+        return entry_id, abs(diff)
+    if kind == "count":
+        c = db.execute("SELECT * FROM cash_counts WHERE id=?", (ref_id,)).fetchone()
+        if not c:
+            raise ValueError("الجرد غير موجود.")
+        diff = float(c["actual"] or 0) - float(c["expected"] or 0)
+        if abs(diff) < 0.5:
+            raise ValueError("لا يوجد فرق يستحق التسوية.")
+        a = db.execute("SELECT code FROM account_nodes WHERE id=?", (c["account_id"],)).fetchone()
+        desc = f"تسوية آلية لجرد {(a['code'] if a else '')} بتاريخ {c['count_date']}"
+        if diff < 0:
+            if not exp_id:
+                raise ValueError("تعذر العثور على حساب مصروفات للتسوية.")
+            lines = [(exp_id, abs(diff), 0.0, desc), (c["account_id"], 0.0, abs(diff), desc)]
+        else:
+            if not inc_id:
+                raise ValueError("تعذر العثور على حساب إيرادات للتسوية.")
+            lines = [(c["account_id"], diff, 0.0, desc), (inc_id, 0.0, diff, desc)]
+        entry_id = post_journal_entry(db, entry_date, "auto-adjust", c["id"], desc, user_id, lines)
+        return entry_id, abs(diff)
+    if kind == "bank":
+        rows = get_bank_reconciliation(db)
+        row = next((r for r in rows if int(r["account_id"]) == int(ref_id)), None)
+        if not row:
+            raise ValueError("الحساب البنكي غير موجود.")
+        diff = float(row["ledger_balance"] or 0) - float(row["statement_balance"] or 0)
+        if abs(diff) < 0.5:
+            raise ValueError("لا يوجد فرق يستحق التسوية.")
+        desc = f"تسوية آلية بنكية: {row['code']}"
+        if diff < 0:
+            if not exp_id:
+                raise ValueError("تعذر العثور على حساب مصروفات للتسوية.")
+            lines = [(exp_id, abs(diff), 0.0, desc), (row["account_id"], 0.0, abs(diff), desc)]
+        else:
+            if not inc_id:
+                raise ValueError("تعذر العثور على حساب إيرادات للتسوية.")
+            lines = [(row["account_id"], diff, 0.0, desc), (inc_id, 0.0, diff, desc)]
+        entry_id = post_journal_entry(db, entry_date, "auto-adjust", row["account_id"], desc, user_id, lines)
+        return entry_id, abs(diff)
+    raise ValueError("نوع تسوية غير معروف.")
+
+
+def ensure_template_tables(db):
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS journal_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            description TEXT,
+            created_by INTEGER,
+            created_at TEXT NOT NULL
+        )""")
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS journal_template_lines (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            template_id INTEGER NOT NULL REFERENCES journal_templates(id) ON DELETE CASCADE,
+            account_id INTEGER NOT NULL,
+            debit REAL DEFAULT 0,
+            credit REAL DEFAULT 0,
+            description TEXT
+        )""")
+    try:
+        db.commit()
+    except Exception:
+        pass
+
+
+def list_templates(db):
+    ensure_template_tables(db)
+    rows = db.execute("SELECT * FROM journal_templates ORDER BY name").fetchall()
+    out = []
+    for t in rows:
+        lines = db.execute(
+            """SELECT tl.*, a.code AS account_code, a.name AS account_name
+               FROM journal_template_lines tl JOIN account_nodes a ON a.id=tl.account_id
+               WHERE tl.template_id=? ORDER BY tl.id""", (t["id"],)).fetchall()
+        out.append({"template": t, "lines": lines,
+                    "total_debit": sum(float(l["debit"] or 0) for l in lines),
+                    "total_credit": sum(float(l["credit"] or 0) for l in lines)})
+    return out
+
+
+def create_template(db, name, description, lines, created_by=None):
+    ensure_template_tables(db)
+    if not (name or "").strip():
+        raise ValueError("اسم القالب مطلوب.")
+    clean = []
+    for ln in lines:
+        acc = int(ln.get("account_id") or 0)
+        d = float(ln.get("debit") or 0)
+        c = float(ln.get("credit") or 0)
+        if not acc:
+            continue
+        if d <= 0 and c <= 0:
+            raise ValueError("كل سطر يحتاج مدين أو دائن.")
+        if d > 0 and c > 0:
+            raise ValueError("لا يجوز الجمع بين مدين ودائن في السطر نفسه.")
+        clean.append({"account_id": acc, "debit": d, "credit": c, "description": (ln.get("description") or "").strip()})
+    if len(clean) < 2:
+        raise ValueError("القالب يحتاج سطرين على الأقل.")
+    if abs(sum(l["debit"] for l in clean) - sum(l["credit"] for l in clean)) > 0.01:
+        raise ValueError("القالب غير متوازن.")
+    db.execute("INSERT INTO journal_templates (name, description, created_by, created_at) VALUES (?, ?, ?, ?)",
+               (name.strip(), (description or "").strip(), created_by, datetime.now().isoformat()))
+    tid = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+    if not tid:
+        tid = db.execute("SELECT id FROM journal_templates WHERE name=?", (name.strip(),)).fetchone()["id"]
+    for ln in clean:
+        db.execute("INSERT INTO journal_template_lines (template_id, account_id, debit, credit, description) VALUES (?, ?, ?, ?, ?)",
+                   (tid, ln["account_id"], ln["debit"], ln["credit"], ln["description"]))
+    db.commit()
+    return tid
+
+
+def delete_template(db, template_id):
+    ensure_template_tables(db)
+    db.execute("DELETE FROM journal_template_lines WHERE template_id=?", (template_id,))
+    db.execute("DELETE FROM journal_templates WHERE id=?", (template_id,))
+    db.commit()
+    return True
+
+
+def apply_template(db, template_id, entry_date, amounts, user_id=None, description=None):
+    ensure_template_tables(db)
+    t = db.execute("SELECT * FROM journal_templates WHERE id=?", (template_id,)).fetchone()
+    if not t:
+        raise ValueError("القالب غير موجود.")
+    if is_date_in_closed_year(db, entry_date):
+        raise ValueError("السنة المالية مقفلة لهذا التاريخ.")
+    stored = db.execute("SELECT * FROM journal_template_lines WHERE template_id=? ORDER BY id", (template_id,)).fetchall()
+    lines = []
+    for ln in stored:
+        key = str(ln["id"])
+        if amounts and key in amounts:
+            d = float(amounts[key].get("debit") or 0)
+            c = float(amounts[key].get("credit") or 0)
+        else:
+            d = float(ln["debit"] or 0)
+            c = float(ln["credit"] or 0)
+        if d <= 0 and c <= 0:
+            continue
+        lines.append({"account_id": ln["account_id"], "debit": d, "credit": c,
+                      "description": ln["description"] or t["name"]})
+    if len(lines) < 2:
+        raise ValueError("القيد يحتاج سطرين على الأقل.")
+    return create_manual_journal_entry(db, entry_date=entry_date, description=description or t["name"],
+                                       lines=lines, created_by=user_id, source_type="template", source_id=template_id)
+
+
+def get_village_profitability(db, start=None, end=None):
+    """مراكز التكلفة: إيرادات وتحصيل ومتأخرات كل قرية/منطقة."""
+    join_cond = ""
+    params = []
+    if start:
+        join_cond += " AND i.invoice_date >= ?"
+        params.append(start)
+    if end:
+        join_cond += " AND i.invoice_date <= ?"
+        params.append(end)
+    rows = db.execute(
+        f"""SELECT COALESCE(NULLIF(TRIM(s.village),''),'(بدون قرية)') AS village,
+                   COUNT(DISTINCT s.id) AS subs,
+                   COUNT(i.id) AS inv_count,
+                   COALESCE(SUM(i.total_amount),0) AS revenue,
+                   COALESCE(SUM(i.paid_amount),0) AS collected,
+                   COALESCE(SUM(i.remaining_amount),0) AS remaining,
+                   COALESCE(SUM(i.consumption),0) AS consumption
+            FROM subscribers s LEFT JOIN invoices i ON i.subscriber_id=s.id{join_cond}
+            GROUP BY village ORDER BY revenue DESC""",
+        params,
+    ).fetchall()
+    out = []
+    total_rev = sum(float(r["revenue"] or 0) for r in rows)
+    for r in rows:
+        rev = float(r["revenue"] or 0)
+        out.append({"village": r["village"], "subs": r["subs"], "inv_count": r["inv_count"],
+                    "revenue": rev, "collected": float(r["collected"] or 0),
+                    "remaining": float(r["remaining"] or 0),
+                    "consumption": float(r["consumption"] or 0),
+                    "rate": round(float(r["collected"] or 0) / rev * 100) if rev else 0,
+                    "share": round(rev / total_rev * 100, 1) if total_rev else 0})
+    return {"rows": out, "total_revenue": total_rev,
+            "total_collected": sum(o["collected"] for o in out),
+            "total_remaining": sum(o["remaining"] for o in out)}
 

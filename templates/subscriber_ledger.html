@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}الكشف المحاسبي للعميل{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <h3 class="fw-bold mb-3"><i class="bi bi-person-lines-fill me-2"></i>الكشف المحاسبي للعميل <span class="text-muted small fw-normal">من دفتر الأستاذ العام</span></h3>
+  <form method="get" class="card mb-3"><div class="card-body"><div class="row g-3">
+    <div class="col-md-5"><label class="form-label">المشترك</label><select name="subscriber_id" class="form-select" required>
+      <option value="">اختر</option>
+      {% for s in subscribers %}<option value="{{ s.id }}" {% if s.id == subscriber_id %}selected{% endif %}>{{ s.name }} ({{ s.account_number }})</option>{% endfor %}
+    </select></div>
+    <div class="col-md-3"><label class="form-label">من</label><input type="date" name="start" value="{{ start }}" class="form-control"></div>
+    <div class="col-md-3"><label class="form-label">إلى</label><input type="date" name="end" value="{{ end }}" class="form-control"></div>
+    <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">عرض</button></div>
+  </div></div></form>
+  {% if subscriber and ledger %}
+  <div class="card"><div class="card-header bg-white d-flex justify-content-between flex-wrap gap-2">
+    <strong>{{ subscriber.name }} ({{ subscriber.account_number }})</strong>
+    <span class="text-muted small">افتتاحي: {{ "%.0f"|format(ledger.opening or 0) }} | ختامي: {{ "%.0f"|format(ledger.closing or 0) }} {{ currency }}</span>
+  </div><div class="table-responsive"><table class="table mb-0">
+    <thead class="table-light"><tr><th>التاريخ</th><th>القيد</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead>
+    <tbody>
+      <tr class="table-secondary"><td colspan="5">رصيد افتتاحي</td><td class="fw-bold">{{ "%.0f"|format(ledger.opening or 0) }}</td></tr>
+      {% for ln in ledger.lines %}
+      <tr><td>{{ ln.entry_date }}</td><td><span class="badge bg-primary">{{ ln.entry_no }}</span></td>
+        <td>{{ ln.line_desc or ln.entry_desc or '-' }}</td>
+        <td class="text-success fw-bold">{{ "%.0f"|format(ln.debit or 0) }}</td>
+        <td class="text-danger fw-bold">{{ "%.0f"|format(ln.credit or 0) }}</td>
+        <td class="fw-bold">{{ "%.0f"|format(ln.balance or 0) }}</td></tr>
+      {% else %}<tr><td colspan="6" class="text-center text-muted py-4">لا توجد حركات</td></tr>{% endfor %}
+    </tbody>
+  </table></div></div>
+  {% include "_report_sign.html" %}
+  {% elif subscriber_id %}
+  <div class="alert alert-warning">المشترك بلا حساب محاسبي مرتبط.</div>
+  {% endif %}
+</div>
+{% endblock %}

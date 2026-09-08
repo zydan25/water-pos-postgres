@@ -265,7 +265,7 @@
           </li>
           <li class="nav-item dropdown">
 
-          <a class="nav-link dropdown-toggle {% if request.endpoint in ['customer_statement','reports','accounting_reports','arrears_report','collector_daily_report'] %}active{% endif %}" href="#" data-bs-toggle="dropdown">
+          <a class="nav-link dropdown-toggle {% if request.endpoint in ['customer_statement','reports','accounting_reports','accounting_ledger','accounting_trial_balance','accounting_income_statement','accounting_balance_sheet','accounting_cash_flow','accounting_equity_statement','accounting_adjustment','accounting_fiscal_years','accounting_counts','accounting_reconciliation','arrears_report','collector_daily_report'] %}active{% endif %}" href="#" data-bs-toggle="dropdown">
 
           <i class="bi bi-bar-chart-line"></i> التقارير
 
@@ -306,6 +306,156 @@
           <a class="dropdown-item" href="{{ url_for('accounting_reports') }}">
 
           <i class="bi bi-bar-chart-line me-2"></i>التقارير المحاسبية
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_ledger') }}">
+
+          <i class="bi bi-book me-2"></i>دفتر الأستاذ
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_trial_balance') }}">
+
+          <i class="bi bi-scale me-2"></i>ميزان المراجعة
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_income_statement') }}">
+
+          <i class="bi bi-graph-up-arrow me-2"></i>قائمة الدخل
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_balance_sheet') }}">
+
+          <i class="bi bi-bank me-2"></i>الميزانية العمومية
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_fiscal_years') }}">
+
+          <i class="bi bi-calendar-lock me-2"></i>السنوات والإقفال
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_counts') }}">
+
+          <i class="bi bi-clipboard-check me-2"></i>جرد الصناديق
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_reconciliation') }}">
+
+          <i class="bi bi-arrow-left-right me-2"></i>المطابقات
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_cash_flow') }}">
+
+          <i class="bi bi-cash-stack me-2"></i>التدفقات النقدية
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_equity_statement') }}">
+
+          <i class="bi bi-pie-chart me-2"></i>التغيرات في الحقوق
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_adjustment') }}">
+
+          <i class="bi bi-pencil-square me-2"></i>قيد تسوية
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_bank') }}">
+
+          <i class="bi bi-bank2 me-2"></i>مطابقة البنك
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_dashboard') }}">
+
+          <i class="bi bi-speedometer2 me-2"></i>لوحة المحاسب
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_subscriber_ledger') }}">
+
+          <i class="bi bi-person-lines-fill me-2"></i>كشف العميل المحاسبي
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_templates') }}">
+
+          <i class="bi bi-stickies me-2"></i>قوالب القيود
+
+          </a>
+
+          </li>
+
+          <li>
+
+          <a class="dropdown-item" href="{{ url_for('accounting_cost_centers') }}">
+
+          <i class="bi bi-geo-alt me-2"></i>مراكز التكلفة
 
           </a>
 

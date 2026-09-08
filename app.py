@@ -36,6 +36,17 @@ from database import (
     create_accounting_voucher, update_accounting_voucher, void_accounting_voucher,
     vouchers_list, get_voucher_by_id, list_journal_entries, get_journal_entry_by_id,
     create_manual_journal_entry, update_manual_journal_entry, delete_manual_journal_entry, find_main_account_direct_balances,
+    get_ledger, get_trial_balance, get_income_statement, get_balance_sheet,
+    ensure_fiscal_tables, list_fiscal_years, create_fiscal_year, close_fiscal_year, reopen_fiscal_year,
+    create_opening_entry,
+    is_date_in_closed_year, get_account_closing_balance, save_cash_count, list_cash_counts,
+    get_daily_collection_summary, get_receivable_reconciliation,
+    get_cash_flow, get_equity_statement,
+    save_bank_statement, get_bank_reconciliation,
+    review_cash_count, approve_cash_count, get_count_minutes,
+    get_accountant_dashboard, auto_adjust_difference,
+    ensure_template_tables, list_templates, create_template, delete_template, apply_template,
+    get_village_profitability,
     get_default_cash_account_id, get_default_receivable_account_id,
     get_default_expense_account_id, get_default_income_account_id,
     get_employee_account_node_id, get_subscriber_opening_snapshot,
@@ -1354,6 +1365,9 @@ def create_app():
             notes = request.form.get("notes", "").strip()
             invoice_date = request.form.get("invoice_date") or date.today().isoformat()
             month_label = request.form.get("month_label", "").strip()
+            if is_date_in_closed_year(db, invoice_date):
+                flash("السنة المالية مقفلة لهذا التاريخ ولا يمكن إنشاء فاتورة.", "danger")
+                return render_template("invoice_form.html", subscribers=subscribers_list, mode="new", settings={k: get_setting(k, DEFAULT_SETTINGS[k]) for k in DEFAULT_SETTINGS})
             if not month_label:
                 month_label = invoice_date[:7]
             try:
@@ -1514,6 +1528,9 @@ def create_app():
             paid_amount = 0.0
             invoice_date = request.form.get("invoice_date") or invoice["invoice_date"]
             month_label = request.form.get("month_label") or invoice["month_label"]
+            if is_date_in_closed_year(db, invoice_date) or is_date_in_closed_year(db, invoice["invoice_date"]):
+                flash("الفاتورة في سنة مالية مقفلة ولا يمكن تعديلها.", "danger")
+                return redirect(url_for("invoice_detail", invoice_id=invoice_id))
             try:
                 ensure_unique_invoice_month(db, subscriber_id, invoice_date, month_label, exclude_invoice_id=invoice_id)
             except Exception as exc:
@@ -1565,6 +1582,10 @@ def create_app():
     def invoice_delete(invoice_id):
         db = get_db()
         try:
+            inv = db.execute("SELECT invoice_date FROM invoices WHERE id=?", (invoice_id,)).fetchone()
+            if inv and is_date_in_closed_year(db, inv["invoice_date"]):
+                flash("الفاتورة في سنة مالية مقفلة ولا يمكن حذفها.", "danger")
+                return redirect(url_for("invoices"))
             void_invoice_with_reversal(db, invoice_id, session.get("user_id"))
             db.commit()
             flash("تم حذف الفاتورة بعد عكس قيودها المحاسبية.", "warning")
@@ -1963,6 +1984,10 @@ def create_app():
                     continue
 
                 try:
+                    if is_date_in_closed_year(db, reading["reading_date"]):
+                        flash(f"تعذر ترحيل الفاتورة الجماعية للقراءة {rid}: السنة المالية مقفلة.", "danger")
+                        errors += 1
+                        continue
                     ensure_unique_invoice_month(
                         db, subscriber["id"], reading["reading_date"], reading["month_label"]
                     )
@@ -3830,6 +3855,8 @@ def create_app():
         to_account = db.execute("SELECT id FROM account_nodes WHERE id=? AND active=1 AND is_postable=1", (to_account_id,)).fetchone()
         if not from_account or not to_account:
             return jsonify({"error": "account_not_found"}), 400
+        if is_date_in_closed_year(db, voucher_date):
+            return jsonify({"error": "السنة المالية مقفلة لهذا التاريخ."}), 400
         try:
             voucher_id = create_accounting_voucher(
                 db,
@@ -3863,6 +3890,8 @@ def create_app():
             return jsonify(_voucher_json(row))
         if request.method == "DELETE":
             try:
+                if is_date_in_closed_year(db, row["voucher_date"]):
+                    return jsonify({"error": "السند في سنة مالية مقفلة."}), 400
                 void_accounting_voucher(db, voucher_id)
                 db.commit()
                 return jsonify({"ok": True})
@@ -3872,6 +3901,9 @@ def create_app():
 
         payload = request.get_json(silent=True) or request.form
         try:
+            _new_vdate = (payload.get("voucher_date") or row["voucher_date"]).strip()
+            if is_date_in_closed_year(db, row["voucher_date"]) or is_date_in_closed_year(db, _new_vdate):
+                return jsonify({"error": "السند في سنة مالية مقفلة."}), 400
             update_accounting_voucher(
                 db,
                 voucher_id,
@@ -3981,6 +4013,496 @@ def create_app():
             summary=summary,
             balance_issues=balance_issues,
         )
+
+    @app.route("/accounting/ledger")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_ledger():
+        db = get_db()
+        start = request.args.get("start", date(date.today().year, date.today().month, 1).isoformat())
+        end = request.args.get("end", date.today().isoformat())
+        account_id = request.args.get("account_id", type=int)
+        all_accounts = list_account_balances_flat(db)
+        all_accounts = [r for r in all_accounts if r["is_postable"]]
+        ledger = get_ledger(db, account_id, start=start, end=end) if account_id else None
+        return render_template(
+            "ledger.html",
+            start=start, end=end, account_id=account_id,
+            all_accounts=all_accounts, ledger=ledger,
+            currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]),
+        )
+
+    @app.route("/accounting/trial-balance")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_trial_balance():
+        db = get_db()
+        start = request.args.get("start", date(date.today().year, 1, 1).isoformat())
+        end = request.args.get("end", date.today().isoformat())
+        tb = get_trial_balance(db, start=start, end=end)
+        return render_template(
+            "trial_balance.html",
+            start=start, end=end, tb=tb,
+            currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]),
+        )
+
+    @app.route("/accounting/income-statement")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_income_statement():
+        db = get_db()
+        start = request.args.get("start", date(date.today().year, 1, 1).isoformat())
+        end = request.args.get("end", date.today().isoformat())
+        income = get_income_statement(db, start=start, end=end)
+        return render_template(
+            "income_statement.html",
+            start=start, end=end, income=income,
+            currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]),
+        )
+
+    @app.route("/accounting/balance-sheet")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_balance_sheet():
+        db = get_db()
+        start = request.args.get("start", date(date.today().year, 1, 1).isoformat())
+        end = request.args.get("end", date.today().isoformat())
+        bs = get_balance_sheet(db, start=start, end=end)
+        return render_template(
+            "balance_sheet.html",
+            start=start, end=end, bs=bs,
+            currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]),
+        )
+
+    @app.route("/accounting/fiscal-years", methods=["GET", "POST"])
+    @login_required
+    @role_required(["admin"])
+    def accounting_fiscal_years():
+        db = get_db()
+        ensure_fiscal_tables(db)
+        if request.method == "POST":
+            action = request.form.get("action", "create")
+            try:
+                if action == "create":
+                    create_fiscal_year(db, request.form.get("name", "").strip(),
+                                       request.form.get("start_date", "").strip(),
+                                       request.form.get("end_date", "").strip())
+                    flash("تم إنشاء السنة المالية.", "success")
+                elif action == "close":
+                    entry_id = close_fiscal_year(db, int(request.form.get("year_id", 0)), session.get("user_id"))
+                    flash(f"تم إقفال السنة وترحيل الأرصدة (قيد {entry_id}).", "success")
+                elif action == "opening":
+                    entry_id = create_opening_entry(db, int(request.form.get("year_id", 0)), session.get("user_id"))
+                    flash(f"تم إنشاء القيد الافتتاحي (قيد {entry_id}).", "success")
+                elif action == "reopen":
+                    reopen_fiscal_year(db, int(request.form.get("year_id", 0)))
+                    flash("تمت إعادة فتح السنة.", "info")
+            except Exception as exc:
+                db.rollback()
+                flash(f"تعذر تنفيذ العملية: {exc}", "danger")
+            return redirect(url_for("accounting_fiscal_years"))
+        years = list_fiscal_years(db)
+        return render_template("fiscal_years.html", years=years)
+
+    @app.route("/accounting/counts", methods=["GET", "POST"])
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager", "collector"])
+    def accounting_counts():
+        db = get_db()
+        ensure_fiscal_tables(db)
+        if request.method == "POST":
+            action = request.form.get("action", "save")
+            try:
+                if action == "review":
+                    review_cash_count(db, int(request.form.get("count_id", 0)), session.get("user_id"))
+                    flash("تمت مراجعة الجرد.", "success")
+                elif action == "approve":
+                    approve_cash_count(db, int(request.form.get("count_id", 0)), session.get("user_id"))
+                    flash("تم اعتماد الجرد.", "success")
+                else:
+                    account_id = int(request.form.get("account_id", 0))
+                    count_date = request.form.get("count_date", date.today().isoformat()).strip()
+                    actual = float(request.form.get("actual") or 0)
+                    expected = get_account_closing_balance(db, account_id, end=count_date)
+                    save_cash_count(db, count_date, account_id, expected, actual,
+                                    request.form.get("notes", "").strip(), session.get("user_id"))
+                    flash(f"تم حفظ الجرد. الفرق: {actual - expected:.0f}", "success")
+            except Exception as exc:
+                db.rollback()
+                flash(f"تعذر حفظ الجرد: {exc}", "danger")
+            return redirect(url_for("accounting_counts"))
+        cash_accounts = db.execute(
+            "SELECT id, code, name FROM account_nodes WHERE active=1 AND is_postable=1 AND (node_type IN ('cash','bank','employee') OR code LIKE '11%' OR code LIKE '13%') ORDER BY code"
+        ).fetchall()
+        counts = list_cash_counts(db, limit=200)
+        balances = {r["id"]: get_account_closing_balance(db, r["id"]) for r in cash_accounts}
+        return render_template("counts.html", cash_accounts=cash_accounts, counts=counts,
+                               balances=balances, today=date.today().isoformat(),
+                               currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]))
+
+    @app.route("/accounting/counts/<int:count_id>/minutes")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager", "collector"])
+    def accounting_count_minutes(count_id):
+        db = get_db()
+        row = get_count_minutes(db, count_id)
+        if not row:
+            abort(404)
+        return render_template("count_minutes.html", c=row,
+                               org=get_setting("organization_name", DEFAULT_SETTINGS["organization_name"]),
+                               currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]))
+
+    @app.route("/accounting/reconciliation")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_reconciliation():
+        db = get_db()
+        day = request.args.get("day", date.today().isoformat())
+        end = request.args.get("end", date.today().isoformat())
+        daily = get_daily_collection_summary(db, day)
+        rows = get_receivable_reconciliation(db, end=end)
+        diff_total = sum(abs(r["difference"] or 0) for r in rows)
+        return render_template("reconciliation.html", day=day, end=end, daily=daily, rows=rows,
+                               diff_total=diff_total,
+                               currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]))
+
+    @app.route("/accounting/adjustment", methods=["GET", "POST"])
+    @login_required
+    @role_required(["admin", "accountant", "manager", "technician"])
+    def accounting_adjustment():
+        db = get_db()
+        accounts = db.execute(
+            "SELECT id, code, name FROM account_nodes WHERE active=1 AND is_postable=1 ORDER BY code"
+        ).fetchall()
+        if request.method == "POST":
+            try:
+                entry_date = (request.form.get("entry_date") or date.today().isoformat()).strip()
+                debit_id = int(request.form.get("debit_account_id") or 0)
+                credit_id = int(request.form.get("credit_account_id") or 0)
+                amount = parse_decimal(request.form.get("amount"))
+                description = (request.form.get("description") or "قيد تسوية").strip()
+                if not debit_id or not credit_id or debit_id == credit_id:
+                    raise ValueError("اختر حسابين مختلفين.")
+                if amount <= 0:
+                    raise ValueError("المبلغ يجب أن يكون أكبر من صفر.")
+                if is_date_in_closed_year(db, entry_date):
+                    raise ValueError("السنة المالية مقفلة لهذا التاريخ.")
+                entry_id = create_manual_journal_entry(
+                    db, entry_date=entry_date, description=description,
+                    lines=[{"account_id": debit_id, "debit": amount, "credit": 0.0, "description": description},
+                           {"account_id": credit_id, "debit": 0.0, "credit": amount, "description": description}],
+                    created_by=session.get("user_id"), source_type="adjustment", source_id=None,
+                )
+                db.commit()
+                flash(f"تم إنشاء قيد التسوية (قيد {entry_id}).", "success")
+                return redirect(url_for("accounting_journal"))
+            except Exception as exc:
+                db.rollback()
+                flash(f"تعذر إنشاء قيد التسوية: {exc}", "danger")
+        prefill = {
+            "entry_date": request.args.get("entry_date", date.today().isoformat()),
+            "debit_account_id": request.args.get("debit_account_id", type=int),
+            "credit_account_id": request.args.get("credit_account_id", type=int),
+            "amount": request.args.get("amount", ""),
+            "description": request.args.get("description", "قيد تسوية"),
+        }
+        return render_template("adjustment.html", accounts=accounts, prefill=prefill)
+
+    @app.route("/accounting/cash-flow")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_cash_flow():
+        db = get_db()
+        start = request.args.get("start", date(date.today().year, 1, 1).isoformat())
+        end = request.args.get("end", date.today().isoformat())
+        cf = get_cash_flow(db, start=start, end=end)
+        return render_template("cash_flow.html", start=start, end=end, cf=cf,
+                               currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]))
+
+    @app.route("/accounting/dashboard")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_dashboard():
+        db = get_db()
+        dash = get_accountant_dashboard(db)
+        return render_template("accountant_dashboard.html", dash=dash, today=date.today().isoformat(),
+                               currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]))
+
+    @app.route("/accounting/equity-statement")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_equity_statement():
+        db = get_db()
+        start = request.args.get("start", date(date.today().year, 1, 1).isoformat())
+        end = request.args.get("end", date.today().isoformat())
+        eq = get_equity_statement(db, start=start, end=end)
+        return render_template("equity_statement.html", start=start, end=end, eq=eq,
+                               currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]))
+
+    @app.route("/accounting/bank", methods=["GET", "POST"])
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_bank():
+        db = get_db()
+        ensure_fiscal_tables(db)
+        if request.method == "POST":
+            try:
+                save_bank_statement(db, request.form.get("statement_date", date.today().isoformat()).strip(),
+                                    int(request.form.get("account_id", 0)),
+                                    float(request.form.get("statement_balance") or 0),
+                                    request.form.get("notes", "").strip(), session.get("user_id"))
+                flash("تم حفظ كشف البنك.", "success")
+            except Exception as exc:
+                db.rollback()
+                flash(f"تعذر الحفظ: {exc}", "danger")
+            return redirect(url_for("accounting_bank"))
+        end = request.args.get("end", date.today().isoformat())
+        rows = get_bank_reconciliation(db, end=end)
+        banks = db.execute(
+            "SELECT id, code, name FROM account_nodes WHERE active=1 AND is_postable=1 AND (node_type='bank' OR code LIKE '112%') ORDER BY code"
+        ).fetchall()
+        balances = {b["id"]: get_account_closing_balance(db, b["id"], end=end) for b in banks}
+        return render_template("bank.html", rows=rows, banks=banks, balances=balances, end=end,
+                               today=date.today().isoformat(),
+                               currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]))
+
+    @app.route("/accounting/auto-adjust", methods=["POST"])
+    @login_required
+    @role_required(["admin", "accountant", "manager"])
+    def accounting_auto_adjust():
+        db = get_db()
+        kind = (request.form.get("kind") or "").strip()
+        ref_id = request.form.get("ref_id", type=int)
+        back = request.form.get("back") or url_for("accounting_reconciliation")
+        try:
+            entry_id, amount = auto_adjust_difference(db, kind, ref_id, session.get("user_id"))
+            db.commit()
+            flash(f"تم إنشاء قيد التسوية الآلية ({amount:.0f}) — قيد {entry_id}.", "success")
+        except Exception as exc:
+            db.rollback()
+            flash(f"تعذر التسوية الآلية: {exc}", "danger")
+        return redirect(back)
+
+    @app.route("/accounting/templates", methods=["GET", "POST"])
+    @login_required
+    @role_required(["admin", "accountant", "manager", "technician"])
+    def accounting_templates():
+        db = get_db()
+        ensure_template_tables(db)
+        if request.method == "POST":
+            action = request.form.get("action", "create")
+            try:
+                if action == "delete":
+                    delete_template(db, int(request.form.get("template_id", 0)))
+                    flash("تم حذف القالب.", "info")
+                else:
+                    accs = request.form.getlist("account_id")
+                    debits = request.form.getlist("debit")
+                    credits = request.form.getlist("credit")
+                    descs = request.form.getlist("line_desc")
+                    lines = []
+                    for i in range(len(accs)):
+                        try:
+                            d = float(debits[i] or 0) if i < len(debits) else 0.0
+                        except Exception:
+                            d = 0.0
+                        try:
+                            c = float(credits[i] or 0) if i < len(credits) else 0.0
+                        except Exception:
+                            c = 0.0
+                        lines.append({"account_id": accs[i], "debit": d, "credit": c,
+                                      "description": descs[i] if i < len(descs) else ""})
+                    create_template(db, request.form.get("name", ""), request.form.get("description", ""),
+                                    lines, session.get("user_id"))
+                    flash("تم إنشاء القالب.", "success")
+            except Exception as exc:
+                db.rollback()
+                flash(f"تعذر حفظ القالب: {exc}", "danger")
+            return redirect(url_for("accounting_templates"))
+        accounts = db.execute("SELECT id, code, name FROM account_nodes WHERE active=1 AND is_postable=1 ORDER BY code").fetchall()
+        templates = list_templates(db)
+        return render_template("templates_list.html", accounts=accounts, templates=templates)
+
+    @app.route("/accounting/templates/<int:template_id>", methods=["GET", "POST"])
+    @login_required
+    @role_required(["admin", "accountant", "manager", "technician"])
+    def accounting_template_apply(template_id):
+        db = get_db()
+        ensure_template_tables(db)
+        t = db.execute("SELECT * FROM journal_templates WHERE id=?", (template_id,)).fetchone()
+        if not t:
+            abort(404)
+        lines = db.execute(
+            """SELECT tl.*, a.code AS account_code, a.name AS account_name
+               FROM journal_template_lines tl JOIN account_nodes a ON a.id=tl.account_id
+               WHERE tl.template_id=? ORDER BY tl.id""", (template_id,)).fetchall()
+        if request.method == "POST":
+            try:
+                amounts = {}
+                for ln in lines:
+                    amounts[str(ln["id"])] = {"debit": request.form.get(f"d_{ln['id']}", "0"),
+                                              "credit": request.form.get(f"c_{ln['id']}", "0")}
+                entry_id = apply_template(db, template_id,
+                                          (request.form.get("entry_date") or date.today().isoformat()).strip(),
+                                          amounts, session.get("user_id"),
+                                          (request.form.get("description") or t["name"]).strip())
+                db.commit()
+                flash(f"تم ترحيل القالب (قيد {entry_id}).", "success")
+                return redirect(url_for("accounting_journal"))
+            except Exception as exc:
+                db.rollback()
+                flash(f"تعذر الترحيل: {exc}", "danger")
+        return render_template("template_apply.html", t=t, lines=lines, today=date.today().isoformat())
+
+    @app.route("/accounting/cost-centers")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_cost_centers():
+        db = get_db()
+        start = request.args.get("start", date(date.today().year, 1, 1).isoformat())
+        end = request.args.get("end", date.today().isoformat())
+        cc = get_village_profitability(db, start=start, end=end)
+        return render_template("cost_centers.html", start=start, end=end, cc=cc,
+                               currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]))
+
+    @app.route("/accounting/subscriber-ledger")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager", "staff", "collector"])
+    def accounting_subscriber_ledger():
+        db = get_db()
+        subscriber_id = request.args.get("subscriber_id", type=int)
+        start = request.args.get("start", date(date.today().year, 1, 1).isoformat())
+        end = request.args.get("end", date.today().isoformat())
+        subscribers_list = db.execute("SELECT id, name, account_number, account_node_id FROM subscribers ORDER BY name").fetchall()
+        subscriber = None
+        ledger = None
+        if subscriber_id:
+            subscriber = db.execute("SELECT * FROM subscribers WHERE id=?", (subscriber_id,)).fetchone()
+            if subscriber and subscriber["account_node_id"]:
+                ledger = get_ledger(db, subscriber["account_node_id"], start=start, end=end)
+        return render_template("subscriber_ledger.html", subscribers=subscribers_list, subscriber=subscriber,
+                               subscriber_id=subscriber_id, start=start, end=end, ledger=ledger,
+                               currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]))
+
+    def _excel_file_response(wb, filename):
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return send_file(buf, as_attachment=True, download_name=filename,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    def _excel_header(ws, title, start, end):
+        ws["A1"] = get_setting("organization_name", DEFAULT_SETTINGS["organization_name"])
+        ws["A2"] = title
+        ws["A3"] = f"الفترة: {start} إلى {end}"
+
+    @app.route("/accounting/ledger.xlsx")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_ledger_xlsx():
+        db = get_db()
+        start = request.args.get("start", "")
+        end = request.args.get("end", "")
+        account_id = request.args.get("account_id", type=int)
+        ledger = get_ledger(db, account_id, start=start or None, end=end or None) if account_id else None
+        if not ledger:
+            abort(404)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "دفتر الأستاذ"
+        _excel_header(ws, f"دفتر الأستاذ: {ledger['account']['code']} - {ledger['account']['name']}", start, end)
+        ws.append(["التاريخ", "رقم القيد", "البيان", "مدين", "دائن", "الرصيد"])
+        ws.append(["", "", "رصيد افتتاحي", "", "", ledger["opening"]])
+        for ln in ledger["lines"]:
+            ws.append([ln["entry_date"], ln["entry_no"], ln["line_desc"] or ln["entry_desc"] or "",
+                       ln["debit"], ln["credit"], ln["balance"]])
+        ws.append(["", "", "الإجمالي", ledger["total_debit"], ledger["total_credit"], ledger["closing"]])
+        return _excel_file_response(wb, f"ledger-{ledger['account']['code']}.xlsx")
+
+    @app.route("/accounting/trial-balance.xlsx")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_trial_balance_xlsx():
+        db = get_db()
+        start = request.args.get("start", "")
+        end = request.args.get("end", "")
+        tb = get_trial_balance(db, start=start or None, end=end or None)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "ميزان المراجعة"
+        _excel_header(ws, "ميزان المراجعة", start, end)
+        ws.append(["الرمز", "الحساب", "افتتاحي", "مدين", "دائن", "ختامي"])
+        for r in tb["rows"]:
+            ws.append([r["code"], r["name"], r["opening"], r["debit"], r["credit"], r["closing"]])
+        t = tb["totals"]
+        ws.append(["", "الإجمالي", t["opening"], t["debit"], t["credit"], t["closing"]])
+        return _excel_file_response(wb, "trial-balance.xlsx")
+
+    @app.route("/accounting/income-statement.xlsx")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_income_statement_xlsx():
+        db = get_db()
+        start = request.args.get("start", "")
+        end = request.args.get("end", "")
+        income = get_income_statement(db, start=start or None, end=end or None)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "قائمة الدخل"
+        _excel_header(ws, "قائمة الدخل", start, end)
+        ws.append(["البند", "الرمز", "المبلغ"])
+        for r in income["revenues"]:
+            ws.append([r["name"], r["code"], r["amount"]])
+        ws.append(["إجمالي الإيرادات", "", income["revenue_total"]])
+        for r in income["expenses"]:
+            ws.append([r["name"], r["code"], -r["amount"]])
+        ws.append(["إجمالي المصروفات", "", -income["expense_total"]])
+        ws.append(["صافي الربح", "", income["net_income"]])
+        return _excel_file_response(wb, "income-statement.xlsx")
+
+    @app.route("/accounting/balance-sheet.xlsx")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_balance_sheet_xlsx():
+        db = get_db()
+        start = request.args.get("start", "")
+        end = request.args.get("end", "")
+        bs = get_balance_sheet(db, start=start or None, end=end or None)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "الميزانية"
+        _excel_header(ws, "الميزانية العمومية", start, end)
+        ws.append(["القسم", "الرمز", "الحساب", "المبلغ"])
+        for r in bs["assets"]:
+            ws.append(["الأصول", r["code"], r["name"], r["amount"]])
+        ws.append(["إجمالي الأصول", "", "", bs["assets_total"]])
+        for r in bs["liabilities"]:
+            ws.append(["الخصوم", r["code"], r["name"], r["amount"]])
+        for r in bs["equity"]:
+            ws.append(["الحقوق", r["code"], r["name"], r["amount"]])
+        ws.append(["صافي ربح الفترة", "", "", bs["net_income"]])
+        ws.append(["إجمالي الخصوم والحقوق", "", "", bs["equity_liab_total"]])
+        return _excel_file_response(wb, "balance-sheet.xlsx")
+
+    @app.route("/accounting/cash-flow.xlsx")
+    @login_required
+    @role_required(["admin", "technician", "accountant", "manager"])
+    def accounting_cash_flow_xlsx():
+        db = get_db()
+        start = request.args.get("start", "")
+        end = request.args.get("end", "")
+        cf = get_cash_flow(db, start=start or None, end=end or None)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "التدفقات"
+        _excel_header(ws, "التدفقات النقدية", start, end)
+        ws.append(["البند", "المبلغ"])
+        ws.append(["تحصيل الفواتير", cf["collections"]])
+        ws.append(["سندات القبض", cf["receipts"]])
+        ws.append(["سندات الصرف", -cf["payments_out"]])
+        ws.append(["رصيد أول الفترة", cf["cash_opening"]])
+        ws.append(["رصيد آخر الفترة", cf["cash_closing"]])
+        return _excel_file_response(wb, "cash-flow.xlsx")
     @app.route("/customer-statement")
     @login_required
     def customer_statement():
@@ -4036,9 +4558,12 @@ def create_app():
                     "credit": float(line.get("credit") or 0),
                     "description": (line.get("description") or "").strip(),
                 })
+            _new_date = (payload.get("date") or payload.get("entry_date") or date.today().isoformat()).strip()
+            if is_date_in_closed_year(db, _new_date):
+                return jsonify({"error": "السنة المالية مقفلة لهذا التاريخ."}), 400
             entry_id = create_manual_journal_entry(
                 db,
-                entry_date=(payload.get("date") or payload.get("entry_date") or date.today().isoformat()).strip(),
+                entry_date=_new_date,
                 description=(payload.get("description") or "").strip(),
                 lines=lines,
                 created_by=g.user["id"],
@@ -4065,6 +4590,8 @@ def create_app():
 
         if request.method == "DELETE":
             try:
+                if is_date_in_closed_year(db, item["entry"]["entry_date"]):
+                    return jsonify({"error": "السنة المالية مقفلة لهذا القيد."}), 400
                 delete_manual_journal_entry(db, entry_id)
                 db.commit()
                 return jsonify({"ok": True})
@@ -4093,10 +4620,13 @@ def create_app():
                     "credit": float(line.get("credit") or 0),
                     "description": (line.get("description") or "").strip(),
                 })
+            _upd_date = (payload.get("date") or payload.get("entry_date") or item["entry"]["entry_date"]).strip()
+            if is_date_in_closed_year(db, item["entry"]["entry_date"]) or is_date_in_closed_year(db, _upd_date):
+                return jsonify({"error": "السنة المالية مقفلة لهذا القيد."}), 400
             update_manual_journal_entry(
                 db,
                 entry_id,
-                entry_date=(payload.get("date") or payload.get("entry_date") or item["entry"]["entry_date"]).strip(),
+                entry_date=_upd_date,
                 description=(payload.get("description") or item["entry"]["description"] or "").strip(),
                 lines=lines,
             )

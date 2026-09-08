@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}جرد الصناديق{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <h3 class="fw-bold mb-1"><i class="bi bi-clipboard-check me-2"></i>جرد الصناديق والعهد</h3>
+  <p class="text-muted small">الرصيد المتوقع = رصيد دفتر الأستاذ حتى تاريخ الجرد. الفرق = الفعلي − المتوقع.</p>
+  <div class="card mb-3"><div class="card-body"><form method="post" class="row g-3">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="action" value="save">
+    <div class="col-md-4"><label class="form-label">الصندوق</label><select name="account_id" class="form-select" required>
+      {% for a in cash_accounts %}<option value="{{ a.id }}">{{ a.code }} — {{ a.name }} ({{ "%.0f"|format(balances.get(a.id, 0)) }})</option>{% endfor %}
+    </select></div>
+    <div class="col-md-3"><label class="form-label">التاريخ</label><input type="date" name="count_date" value="{{ today }}" class="form-control"></div>
+    <div class="col-md-3"><label class="form-label">الفعلي</label><input type="number" step="0.01" name="actual" class="form-control" required></div>
+    <div class="col-md-2"><label class="form-label">ملاحظات</label><input name="notes" class="form-control"></div>
+    <div class="col-12"><button class="btn btn-primary">حفظ الجرد</button></div>
+  </form></div></div>
+  <div class="card"><div class="table-responsive"><table class="table mb-0">
+    <thead class="table-light"><tr><th>التاريخ</th><th>الحساب</th><th>متوقع</th><th>فعلي</th><th>فرق</th><th>الحالة</th><th>ملاحظات</th><th></th></tr></thead>
+    <tbody>
+    {% for c in counts %}
+    <tr><td>{{ c.count_date }}</td><td>{{ c.account_code }} — {{ c.account_name }}</td>
+      <td>{{ "%.0f"|format(c.expected or 0) }}</td><td>{{ "%.0f"|format(c.actual or 0) }}</td>
+      <td class="fw-bold {% if (c.difference or 0) == 0 %}text-success{% else %}text-danger{% endif %}">{{ "%.0f"|format(c.difference or 0) }}</td>
+      <td>{% if c.status == 'approved' %}<span class="badge bg-success">معتمد</span>{% elif c.reviewed_by %}<span class="badge bg-info">مُراجع</span>{% else %}<span class="badge bg-secondary">مسودة</span>{% endif %}</td>
+      <td>{{ c.notes or '-' }}</td>
+      <td class="text-nowrap">
+        <a class="btn btn-sm btn-outline-dark" href="{{ url_for('accounting_count_minutes', count_id=c.id) }}">محضر</a>
+        {% if (c.difference or 0) != 0 %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('accounting_adjustment', entry_date=c.count_date, amount=(c.difference|abs)|round(0, 'floor'), description='تسوية جرد: ' ~ (c.account_code or '') ~ ' بتاريخ ' ~ c.count_date) }}">تسوية</a>
+        <form method="post" action="{{ url_for('accounting_auto_adjust') }}" class="d-inline"><input type="hidden" name="_csrf_token" value="{{ csrf_token }}"><input type="hidden" name="kind" value="count"><input type="hidden" name="ref_id" value="{{ c.id }}"><button class="btn btn-sm btn-success" onclick="return confirm('تسوية آلية لفرق الجرد؟')">تلقائية</button></form>{% endif %}
+        {% if not c.reviewed_by %}<form method="post" class="d-inline"><input type="hidden" name="_csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="review"><input type="hidden" name="count_id" value="{{ c.id }}"><button class="btn btn-sm btn-outline-info">مراجعة</button></form>{% endif %}
+        {% if c.status != 'approved' %}<form method="post" class="d-inline"><input type="hidden" name="_csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="approve"><input type="hidden" name="count_id" value="{{ c.id }}"><button class="btn btn-sm btn-outline-success" onclick="return confirm('اعتماد الجرد؟')">اعتماد</button></form>{% endif %}
+      </td></tr>
+    {% else %}<tr><td colspan="8" class="text-center text-muted py-4">لا توجد جرديات</td></tr>{% endfor %}
+    </tbody>
+  </table></div></div>
+</div>
+{% endblock %}

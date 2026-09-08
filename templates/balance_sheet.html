@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}الميزانية العمومية{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+      <h3 class="fw-bold mb-0"><i class="bi bi-bank me-2"></i>الميزانية العمومية</h3>
+      <div class="text-muted small">كما في {{ end }} (الفترة من {{ start }}) — {% if bs.balanced %}<span class="badge bg-success">متوازنة</span>{% else %}<span class="badge bg-danger">غير متوازنة</span>{% endif %}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('accounting_reports') }}">التقارير</a>
+      <a class="btn btn-outline-primary" href="{{ url_for('accounting_income_statement') }}">قائمة الدخل</a>
+      <a class="btn btn-outline-success" href="{{ url_for('accounting_balance_sheet_xlsx', start=start, end=end) }}">Excel</a>
+      <button class="btn btn-outline-dark" onclick="window.print()">طباعة</button>
+    </div>
+  </div>
+  <form method="get" class="card mb-3"><div class="card-body"><div class="row g-3">
+    <div class="col-md-4"><label class="form-label">من (لصافي الربح)</label><input type="date" name="start" value="{{ start }}" class="form-control"></div>
+    <div class="col-md-4"><label class="form-label">كما في</label><input type="date" name="end" value="{{ end }}" class="form-control"></div>
+    <div class="col-md-4 d-flex align-items-end"><button class="btn btn-primary">عرض</button></div>
+  </div></div></form>
+  <div class="row g-3">
+    <div class="col-md-6"><div class="card h-100"><div class="card-header bg-white"><strong>الأصول ({{ "%.0f"|format(bs.assets_total or 0) }})</strong></div>
+      <table class="table mb-0"><tbody>
+      {% for r in bs.assets %}<tr><td>{{ r.code }} — {{ r.name }}</td><td class="text-end fw-bold">{{ "%.0f"|format(r.amount or 0) }}</td></tr>
+      {% else %}<tr><td class="text-muted text-center">لا توجد أصول</td></tr>{% endfor %}
+      </tbody></table></div></div>
+    <div class="col-md-6">
+      <div class="card mb-3"><div class="card-header bg-white"><strong>الخصوم ({{ "%.0f"|format(bs.liabilities_total or 0) }})</strong></div>
+        <table class="table mb-0"><tbody>
+        {% for r in bs.liabilities %}<tr><td>{{ r.code }} — {{ r.name }}</td><td class="text-end fw-bold">{{ "%.0f"|format(r.amount or 0) }}</td></tr>
+        {% else %}<tr><td class="text-muted text-center">لا توجد خصوم</td></tr>{% endfor %}
+        </tbody></table></div>
+      <div class="card"><div class="card-header bg-white"><strong>حقوق الملكية ({{ "%.0f"|format(bs.equity_total or 0) }}) + صافي الربح ({{ "%.0f"|format(bs.net_income or 0) }})</strong></div>
+        <table class="table mb-0"><tbody>
+        {% for r in bs.equity %}<tr><td>{{ r.code }} — {{ r.name }}</td><td class="text-end fw-bold">{{ "%.0f"|format(r.amount or 0) }}</td></tr>{% endfor %}
+        <tr class="table-light fw-bold"><td>صافي ربح الفترة</td><td class="text-end">{{ "%.0f"|format(bs.net_income or 0) }}</td></tr>
+        <tr class="table-secondary fw-bold"><td>إجمالي الخصوم والحقوق</td><td class="text-end">{{ "%.0f"|format(bs.equity_liab_total or 0) }}</td></tr>
+        </tbody></table></div>
+    </div>
+  </div>
+  {% include "_report_sign.html" %}
+</div>
+{% endblock %}
