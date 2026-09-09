@@ -64,6 +64,18 @@
     }
     .navbar-brand { font-weight: 800; }
     .nav-link.active { font-weight: 700; color: var(--app-primary) !important; }
+    /* Reports dropdown: compact + scrollable */
+    .reports-menu {
+      max-height: 70vh;
+      overflow-y: auto;
+      font-size: .85rem;
+      min-width: 13rem;
+    }
+    .reports-menu .dropdown-item {
+      padding: .3rem .8rem;
+      white-space: nowrap;
+    }
+    .reports-menu .dropdown-item i { font-size: .8rem; }
     body {
       background: var(--app-bg);
       color: var(--app-text);
@@ -265,13 +277,13 @@
           </li>
           <li class="nav-item dropdown">
 
-          <a class="nav-link dropdown-toggle {% if request.endpoint in ['customer_statement','reports','accounting_reports','accounting_ledger','accounting_trial_balance','accounting_income_statement','accounting_balance_sheet','accounting_cash_flow','accounting_equity_statement','accounting_adjustment','accounting_fiscal_years','accounting_counts','accounting_reconciliation','arrears_report','collector_daily_report'] %}active{% endif %}" href="#" data-bs-toggle="dropdown">
+          <a class="nav-link dropdown-toggle {% if request.endpoint in ['customer_statement','reports','accounting_reports','accounting_ledger','accounting_trial_balance','accounting_income_statement','accounting_balance_sheet','accounting_cash_flow','accounting_equity_statement','accounting_adjustment','accounting_fiscal_years','accounting_counts','accounting_reconciliation','accounting_bank','accounting_dashboard','accounting_subscriber_ledger','accounting_templates','accounting_cost_centers','arrears_report','collector_daily_report'] %}active{% endif %}" href="#" data-bs-toggle="dropdown">
 
           <i class="bi bi-bar-chart-line"></i> التقارير
 
           </a>
 
-          <ul class="dropdown-menu">
+          <ul class="dropdown-menu reports-menu">
 
           <!-- كشف حساب عميل -->
 
