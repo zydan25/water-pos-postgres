@@ -26,16 +26,16 @@
 
   <div class="card stmt-card p-3 mb-3">
     <form method="get" class="row g-3 align-items-end">
-      <div class="col-md-4">
+      <div class="col-md-6">
         <label class="form-label">العميل</label>
-        <select class="form-select" name="subscriber_id" required>
-          <option value="">— اختر العميل —</option>
-          {% for s in subscribers %}
-            <option value="{{ s.id }}" {% if payload and payload.subscriber and payload.subscriber.id == s.id %}selected{% endif %}>
-              {{ s.name }} — {{ s.account_number }}
-            </option>
-          {% endfor %}
-        </select>
+        <div class="position-relative">
+          <input type="text" id="subSearch" class="form-control" autocomplete="off"
+                 placeholder="اكتب الاسم أو رقم الحساب أو الهاتف..."
+                 value="{% if payload and payload.subscriber %}{{ payload.subscriber.name }} — {{ payload.subscriber.account_number }}{% endif %}">
+          <input type="hidden" name="subscriber_id" id="subscriberId"
+                 value="{% if payload and payload.subscriber %}{{ payload.subscriber.id }}{% endif %}">
+          <div id="subList" class="list-group position-absolute w-100 shadow" style="display:none; max-height:240px; overflow-y:auto; z-index:1050;"></div>
+        </div>
       </div>
       <div class="col-md-2">
         <label class="form-label">من</label>
@@ -44,10 +44,6 @@
       <div class="col-md-2">
         <label class="form-label">إلى</label>
         <input type="date" class="form-control" name="end" value="{{ end }}">
-      </div>
-      <div class="col-md-2">
-        <label class="form-label">بحث</label>
-        <input type="text" class="form-control" name="q" value="{{ q }}" placeholder="اسم أو رقم">
       </div>
       <div class="col-md-2">
         <button class="btn btn-primary w-100">عرض الكشف</button>
@@ -169,4 +165,64 @@
     </div>
   {% endif %}
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  const subs = [
+    {% for s in subscribers %}
+    {id: {{ s.id }}, name: {{ (s.name or '')|tojson }}, account: {{ (s.account_number or '')|tojson }}, phone: {{ (s.phone or '')|tojson }} },
+    {% endfor %}
+  ];
+  const input = document.getElementById('subSearch');
+  const hidden = document.getElementById('subscriberId');
+  const list = document.getElementById('subList');
+  if(!input || !hidden || !list) return;
+  let activeIdx = -1, matches = [];
+
+  function render(){
+    if(!matches.length){ list.style.display = 'none'; return; }
+    list.innerHTML = matches.slice(0, 8).map((m, i) =>
+      `<button type="button" class="list-group-item list-group-item-action ${i === activeIdx ? 'active' : ''}" data-id="${m.id}">
+         <div class="fw-bold">${escapeHtml(m.name)}</div>
+         <div class="small text-muted">${escapeHtml(m.account)}${m.phone ? ' — ' + escapeHtml(m.phone) : ''}</div>
+       </button>`).join('');
+    list.style.display = 'block';
+    list.querySelectorAll('button').forEach(b => b.addEventListener('mousedown', e => {
+      e.preventDefault();
+      pick(parseInt(b.dataset.id));
+    }));
+  }
+  function escapeHtml(v){
+    return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function pick(id){
+    const m = subs.find(x => x.id === id);
+    if(!m) return;
+    hidden.value = m.id;
+    input.value = m.name + ' — ' + m.account;
+    list.style.display = 'none';
+    input.closest('form').submit();
+  }
+  input.addEventListener('input', () => {
+    hidden.value = '';
+    activeIdx = -1;
+    const q = input.value.trim();
+    matches = q ? subs.filter(s => s.name.includes(q) || s.account.includes(q) || (s.phone || '').includes(q)) : [];
+    render();
+  });
+  input.addEventListener('focus', () => { if(matches.length) render(); });
+  input.addEventListener('keydown', e => {
+    const shown = matches.slice(0, 8);
+    if(e.key === 'ArrowDown' && shown.length){ e.preventDefault(); activeIdx = (activeIdx + 1) % shown.length; render(); }
+    else if(e.key === 'ArrowUp' && shown.length){ e.preventDefault(); activeIdx = (activeIdx - 1 + shown.length) % shown.length; render(); }
+    else if(e.key === 'Enter' && list.style.display !== 'none' && shown.length){
+      e.preventDefault();
+      pick(shown[activeIdx >= 0 ? activeIdx : 0].id);
+    }
+    else if(e.key === 'Escape'){ list.style.display = 'none'; }
+  });
+  document.addEventListener('click', e => { if(!e.target.closest('#subSearch') && !e.target.closest('#subList')) list.style.display = 'none'; });
+})();
+</script>
 {% endblock %}
