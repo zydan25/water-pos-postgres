@@ -3,6 +3,7 @@ import csv
 import io
 import os
 import secrets
+import threading
 import uuid
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -28,6 +29,7 @@ from werkzeug.utils import secure_filename
 # استيراد الأدوات والدوال المعزولة من ملف database.py المطور
 from database import (
     get_db, init_db, get_setting, set_setting, user_name,
+    SQLAlchemyDBProxy,
     get_opening_balance, next_invoice_no, next_subscriber_account_number, process_invoice_payment,
     post_journal_entry, log_transaction, log_audit, add_user, link_user_wallet, DEFAULT_SETTINGS,
     get_account_tree, add_account_node, ensure_employee_profile,
@@ -1939,6 +1941,109 @@ def create_app():
         )
 
 
+    def _create_invoice_from_reading(db, rid, user_id):
+        """إنشاء فاتورة واحدة من قراءة جماعية. يعيد (created|skipped|error, رسالة)."""
+        try:
+            rid = int(rid)
+        except (TypeError, ValueError):
+            return "error", "رقم قراءة غير صالح."
+        reading = db.execute("SELECT * FROM bulk_readings WHERE id=?", (rid,)).fetchone()
+        if not reading:
+            return "error", "القراءة غير موجودة."
+        subscriber = db.execute(
+            "SELECT * FROM subscribers WHERE id=?",
+            (reading["subscriber_id"],),
+        ).fetchone()
+        if not subscriber:
+            return "error", "المشترك غير موجود."
+        try:
+            if is_date_in_closed_year(db, reading["reading_date"]):
+                return "error", "السنة المالية مقفلة."
+            ensure_unique_invoice_month(
+                db, subscriber["id"], reading["reading_date"], reading["month_label"]
+            )
+        except ValueError as _dup_exc:
+            return "skipped", str(_dup_exc)
+        try:
+            unit_price = float(
+                subscriber["default_unit_price"]
+                or get_setting("default_unit_price", "0")
+                or 0
+            )
+            subscription_fee = float(
+                subscriber["default_subscription_fee"]
+                or get_setting("default_subscription_fee", "0")
+                or 0
+            )
+            start_ctx = get_subscriber_opening_snapshot(db, subscriber["id"])
+            last_inv = db.execute(
+                "SELECT current_reading, current_reading_date FROM invoices WHERE subscriber_id=? ORDER BY id DESC LIMIT 1",
+                (subscriber["id"],),
+            ).fetchone()
+            if last_inv and last_inv["current_reading"] is not None:
+                previous_reading = float(last_inv["current_reading"] or 0)
+                previous_arrears = 0.0
+            else:
+                previous_reading = float(start_ctx.get("previous_reading") or subscriber["last_reading"] or 0)
+                previous_arrears = float(start_ctx.get("previous_arrears") or 0)
+            previous_reading_date = None
+            if last_inv and last_inv["current_reading_date"]:
+                previous_reading_date = last_inv["current_reading_date"]
+            else:
+                previous_reading_date = previous_reading_date_for(db, subscriber["id"], reading["reading_date"])
+            current_reading_date = reading["reading_date"]
+            opening_balance = float(get_opening_balance(db, subscriber["id"]) or 0) + previous_arrears
+            consumption = max(0.0, float(reading["current_reading"]) - float(previous_reading or 0))
+            consumption_amount = consumption * unit_price
+            total_amount = opening_balance + consumption_amount + subscription_fee
+            invoice_no = next_invoice_no(db)
+            db.execute(
+                """
+                INSERT INTO invoices (
+                    invoice_no, subscriber_id, invoice_date, month_label,
+                    previous_reading, current_reading, previous_reading_date, current_reading_date,
+                    consumption, unit_price,
+                    consumption_amount, subscription_fee, other_charges, opening_balance,
+                    total_amount, paid_amount, remaining_amount, notes,
+                    created_by, created_at, updated_at
+                )
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    invoice_no,
+                    subscriber["id"],
+                    reading["reading_date"],
+                    reading["month_label"],
+                    previous_reading,
+                    reading["current_reading"],
+                    previous_reading_date,
+                    current_reading_date,
+                    consumption,
+                    unit_price,
+                    consumption_amount,
+                    subscription_fee,
+                    0,
+                    opening_balance,
+                    total_amount,
+                    0,
+                    total_amount,
+                    "",
+                    user_id,
+                    now_iso(),
+                    now_iso(),
+                ),
+            )
+            invoice_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+            # ترحيل محاسبي إلزامي: سند إثبات + قيد مرتبط به.
+            post_invoice_accounting(db, invoice_id, user_id, reverse_existing=False)
+            db.execute(
+                "UPDATE bulk_readings SET invoiced=1, updated_at=? WHERE id=?",
+                (now_iso(), rid),
+            )
+            return "created", None
+        except Exception as exc:
+            return "error", str(exc)
+
     @app.route("/invoices/bulk-create", methods=["GET", "POST"])
     @login_required
     @role_required(["admin", "staff"])
@@ -1970,120 +2075,123 @@ def create_app():
             errors = 0
 
             for rid in selected_ids:
-                reading = db.execute("SELECT * FROM bulk_readings WHERE id=?", (rid,)).fetchone()
-                if not reading:
-                    errors += 1
-                    continue
-
-                subscriber = db.execute(
-                    "SELECT * FROM subscribers WHERE id=?",
-                    (reading["subscriber_id"],),
-                ).fetchone()
-                if not subscriber:
-                    errors += 1
-                    continue
-
-                try:
-                    if is_date_in_closed_year(db, reading["reading_date"]):
-                        flash(f"تعذر ترحيل الفاتورة الجماعية للقراءة {rid}: السنة المالية مقفلة.", "danger")
-                        errors += 1
-                        continue
-                    ensure_unique_invoice_month(
-                        db, subscriber["id"], reading["reading_date"], reading["month_label"]
-                    )
-                except ValueError as _dup_exc:
-                    flash(f"تم تخطي القراءة {rid}: {_dup_exc}", "warning")
-                    continue
-
-                try:
-                    unit_price = float(
-                        subscriber["default_unit_price"]
-                        or get_setting("default_unit_price", "0")
-                        or 0
-                    )
-                    subscription_fee = float(
-                        subscriber["default_subscription_fee"]
-                        or get_setting("default_subscription_fee", "0")
-                        or 0
-                    )
-                    start_ctx = get_subscriber_opening_snapshot(db, subscriber["id"])
-                    last_inv = db.execute(
-                        "SELECT current_reading, current_reading_date FROM invoices WHERE subscriber_id=? ORDER BY id DESC LIMIT 1",
-                        (subscriber["id"],),
-                    ).fetchone()
-                    if last_inv and last_inv["current_reading"] is not None:
-                        previous_reading = float(last_inv["current_reading"] or 0)
-                        previous_arrears = 0.0
-                    else:
-                        previous_reading = float(start_ctx.get("previous_reading") or subscriber["last_reading"] or 0)
-                        previous_arrears = float(start_ctx.get("previous_arrears") or 0)
-                    previous_reading_date = None
-                    if last_inv and last_inv["current_reading_date"]:
-                        previous_reading_date = last_inv["current_reading_date"]
-                    else:
-                        previous_reading_date = previous_reading_date_for(db, subscriber["id"], reading["reading_date"])
-                    current_reading_date = reading["reading_date"]
-                    opening_balance = float(get_opening_balance(db, subscriber["id"]) or 0) + previous_arrears
-                    consumption = max(0.0, float(reading["current_reading"]) - float(previous_reading or 0))
-                    consumption_amount = consumption * unit_price
-                    total_amount = opening_balance + consumption_amount + subscription_fee
-                    invoice_no = next_invoice_no(db)
-
-                    db.execute(
-                        """
-                        INSERT INTO invoices (
-                            invoice_no, subscriber_id, invoice_date, month_label,
-                            previous_reading, current_reading, previous_reading_date, current_reading_date,
-                            consumption, unit_price,
-                            consumption_amount, subscription_fee, other_charges, opening_balance,
-                            total_amount, paid_amount, remaining_amount, notes,
-                            created_by, created_at, updated_at
-                        )
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                        """,
-                        (
-                            invoice_no,
-                            subscriber["id"],
-                            reading["reading_date"],
-                            reading["month_label"],
-                            previous_reading,
-                            reading["current_reading"],
-                            previous_reading_date,
-                            current_reading_date,
-                            consumption,
-                            unit_price,
-                            consumption_amount,
-                            subscription_fee,
-                            0,
-                            opening_balance,
-                            total_amount,
-                            0,
-                            total_amount,
-                            "",
-                            session.get("user_id"),
-                            now_iso(),
-                            now_iso(),
-                        ),
-                    )
-                    invoice_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
-                    # ترحيل محاسبي إلزامي: سند إثبات + قيد مرتبط به.
-                    post_invoice_accounting(db, invoice_id, session["user_id"], reverse_existing=False)
-
-                    db.execute(
-                        "UPDATE bulk_readings SET invoiced=1, updated_at=? WHERE id=?",
-                        (now_iso(), rid),
-                    )
+                outcome, msg = _create_invoice_from_reading(db, rid, session.get("user_id"))
+                if outcome == "created":
                     created += 1
-                except Exception as exc:
+                elif outcome == "skipped":
+                    flash(f"تم تخطي القراءة {rid}: {msg}", "warning")
+                else:
                     errors += 1
-                    flash(f"تعذر ترحيل الفاتورة الجماعية للقراءة {rid}: {exc}", "danger")
-                    continue
+                    flash(f"تعذر ترحيل الفاتورة الجماعية للقراءة {rid}: {msg}", "danger")
 
             db.commit()
             flash(f"✅ تم إنشاء {created} فاتورة. أخطاء: {errors}.", "success" if created else "warning")
             return redirect(url_for("invoices"))
 
         return render_template("invoices_bulk_create.html", pending=pending)
+
+    def _bulk_create_worker(flask_app, job_id, reading_ids, user_id):
+        """عامل التوليد الجماعي في خيط خلفي مع تحديث التقدم."""
+        import jobs as _jobs
+        try:
+            with flask_app.test_request_context("/"):
+                db = get_db()
+                total = len(reading_ids)
+                created = 0
+                errors = 0
+                for idx, rid in enumerate(reading_ids, 1):
+                    try:
+                        outcome, msg = _create_invoice_from_reading(db, rid, user_id)
+                        if outcome == "created":
+                            created += 1
+                            try:
+                                db.commit()
+                            except Exception:
+                                db.rollback()
+                        elif outcome == "skipped":
+                            try:
+                                db.commit()
+                            except Exception:
+                                db.rollback()
+                        else:
+                            errors += 1
+                            _jobs.update_job(job_id, error_list=_append_job_error(job_id, rid, msg))
+                            try:
+                                db.rollback()
+                            except Exception:
+                                pass
+                    except Exception as exc:
+                        errors += 1
+                        _jobs.update_job(job_id, error_list=_append_job_error(job_id, rid, str(exc)))
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
+                    _jobs.progress_job(job_id, idx, stage=f"فاتورة {idx} من {total}", errors_count=errors)
+                    try:
+                        _jobs.update_job(job_id, created=created)
+                    except Exception:
+                        pass
+                try:
+                    db.commit()
+                except Exception:
+                    pass
+                _jobs.update_job(job_id, created=created)
+                _jobs.finish_job(job_id, message=f"تم إنشاء {created} فاتورة. أخطاء: {errors}.")
+        except Exception as exc:
+            import jobs as _jobs2
+            _jobs2.fail_job(job_id, f"تعذر إكمال المهمة: {exc}")
+            try:
+                flask_app.logger.exception("bulk-create job %s failed", job_id)
+            except Exception:
+                pass
+
+    def _append_job_error(job_id, rid, msg):
+        import jobs as _jobs
+        job = _jobs.get_job(job_id) or {}
+        lst = list(job.get("error_list") or [])
+        lst.append(f"قراءة {rid}: {msg}")
+        return lst[-50:]
+
+    @app.route("/invoices/bulk-create/start", methods=["POST"])
+    @login_required
+    @role_required(["admin", "staff"])
+    def invoices_bulk_create_start():
+        import jobs as _jobs
+        payload = request.get_json(silent=True) or {}
+        reading_ids = payload.get("reading_ids")
+        if reading_ids is None:
+            reading_ids = request.form.getlist("reading_id")
+        if isinstance(reading_ids, str):
+            reading_ids = [reading_ids]
+        try:
+            reading_ids = [int(x) for x in (reading_ids or [])]
+        except (TypeError, ValueError):
+            return jsonify({"error": "أرقام القراءات غير صالحة."}), 400
+        if not reading_ids:
+            return jsonify({"error": "لم تختر أي قراءة."}), 400
+        job_id = _jobs.create_job("bulk-create", total=len(reading_ids), label="توليد الفواتير الجماعية")
+        thread = threading.Thread(target=_bulk_create_worker, args=(app, job_id, reading_ids, session.get("user_id")), daemon=True)
+        thread.start()
+        return jsonify({"job_id": job_id})
+
+    @app.route("/jobs/<job_id>")
+    @login_required
+    def job_status(job_id):
+        import jobs as _jobs
+        job = _jobs.public_job(job_id)
+        if not job:
+            return jsonify({"error": "not_found"}), 404
+        return jsonify(job)
+
+    @app.route("/jobs/<job_id>/download")
+    @login_required
+    def job_download(job_id):
+        import jobs as _jobs
+        data, filename = _jobs.take_result(job_id)
+        if not data:
+            abort(404)
+        return send_file(io.BytesIO(data), mimetype="application/pdf", as_attachment=True, download_name=filename or "export.pdf")
 
 
     @app.route("/invoices/<int:invoice_id>/print")
@@ -2150,22 +2258,7 @@ def create_app():
             return send_file(io.BytesIO(pdf), mimetype="application/pdf", as_attachment=True, download_name=f"invoice-{invoice['invoice_no']}.pdf")
         return html
 
-    @app.route("/export/invoices")
-    @login_required
-    def export_invoices():
-        ids = request.args.get("ids", "").strip()
-        q = request.args.get("q", "").strip()
-        valid_per_page = (1, 2, 3, 4, 6, 8, 9, 12)
-        try:
-            default_pp = int(float(get_setting("invoice_rows_per_pdf", "2")))
-        except (TypeError, ValueError):
-            default_pp = 2
-        per_page = request.args.get("per_page", type=int, default=default_pp)
-        if per_page not in valid_per_page:
-            per_page = default_pp
-        if per_page not in valid_per_page:
-            per_page = 2
-        db = get_db()
+    def _get_export_rows(db, ids, q):
         params = []
         sql = """
             SELECT i.*, s.name subscriber_name, s.account_number, s.phone, s.village, s.address, s.meter_number,
@@ -2182,7 +2275,7 @@ def create_app():
         if ids:
             ids_list = [int(x) for x in ids.split(",") if x.strip().isdigit()]
             if not ids_list:
-                abort(400)
+                return None
             placeholders = ",".join(["?"] * len(ids_list))
             sql += f" WHERE i.id IN ({placeholders})"
             params = ids_list
@@ -2191,7 +2284,119 @@ def create_app():
             sql += " WHERE i.invoice_no LIKE ? OR s.name LIKE ? OR s.account_number LIKE ?"
             params = [like, like, like]
         sql += " ORDER BY i.id DESC"
-        rows = db.execute(sql, params).fetchall()
+        return db.execute(sql, params).fetchall()
+
+    def _get_by_date_rows(db, date_from, date_to, q):
+        sql = """
+            SELECT i.*, s.name subscriber_name, s.account_number, s.phone,
+                   s.village, s.address, s.meter_number,
+                   s.active AS subscriber_active,
+                   uc.username AS created_by_name
+            FROM invoices i
+            JOIN subscribers s ON s.id = i.subscriber_id
+            LEFT JOIN users uc ON uc.id = i.created_by
+            WHERE date(i.invoice_date) BETWEEN date(?) AND date(?)
+        """
+        params = [date_from, date_to]
+        if q:
+            sql += " AND (i.invoice_no LIKE ? OR s.name LIKE ? OR s.account_number LIKE ?)"
+            like = f"%{q}%"
+            params += [like, like, like]
+        sql += " ORDER BY i.invoice_date ASC, i.id ASC"
+        invoices = db.execute(sql, params).fetchall()
+        previous_invoices = {}
+        for inv in invoices:
+            previous_invoices[inv["id"]] = fetch_previous_invoice_summary(db, inv["subscriber_id"], inv["id"])
+        return invoices, previous_invoices
+
+    def _render_invoices_pdf(html):
+        if not PLAYWRIGHT_AVAILABLE:
+            raise ValueError("Playwright غير مثبت.")
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.set_content(html)
+            pdf = page.pdf(format="A4", print_background=True, prefer_css_page_size=True)
+            browser.close()
+        return bytes(pdf)
+
+    def _export_worker(flask_app, job_id, ids, q, per_page, filename):
+        import jobs as _jobs
+        try:
+            with flask_app.test_request_context("/"):
+                db = get_db()
+                _jobs.progress_job(job_id, 0, stage="جمع بيانات الفواتير...")
+                rows = _get_export_rows(db, ids, q)
+                if not rows:
+                    _jobs.fail_job(job_id, "لا توجد فواتير للتصدير.")
+                    return
+                _jobs.progress_job(job_id, 0, stage=f"تجهيز {len(rows)} فاتورة...")
+                html = render_template(
+                    "export_invoices.html",
+                    invoices=rows,
+                    per_page=per_page,
+                    settings={k: get_setting(k, DEFAULT_SETTINGS[k]) for k in DEFAULT_SETTINGS},
+                )
+                _jobs.progress_job(job_id, 0, stage="توليد ملف PDF...")
+                pdf = _render_invoices_pdf(html)
+                _jobs.finish_job(job_id, message=f"تم تجهيز {len(rows)} فاتورة.", result_bytes=pdf, filename=filename)
+        except Exception as exc:
+            import jobs as _jobs2
+            _jobs2.fail_job(job_id, f"تعذر التصدير: {exc}")
+            try:
+                flask_app.logger.exception("export job %s failed", job_id)
+            except Exception:
+                pass
+
+    def _by_date_pdf_worker(flask_app, job_id, date_from, date_to, q, filename):
+        import jobs as _jobs
+        try:
+            with flask_app.test_request_context("/"):
+                db = get_db()
+                _jobs.progress_job(job_id, 0, stage="جمع بيانات الفواتير...")
+                invoices, previous_invoices = _get_by_date_rows(db, date_from, date_to, q)
+                if not invoices:
+                    _jobs.fail_job(job_id, "لا توجد فواتير في الفترة.")
+                    return
+                _jobs.progress_job(job_id, 0, stage=f"تجهيز {len(invoices)} فاتورة...")
+                html = render_template(
+                    "invoices_batch_print.html",
+                    invoices=invoices,
+                    settings={k: get_setting(k, DEFAULT_SETTINGS[k]) for k in DEFAULT_SETTINGS},
+                    previous_invoices=previous_invoices,
+                    date_from=date_from,
+                    date_to=date_to,
+                    q=q,
+                    back_url=url_for("invoices"),
+                )
+                _jobs.progress_job(job_id, 0, stage="توليد ملف PDF...")
+                pdf = _render_invoices_pdf(html)
+                _jobs.finish_job(job_id, message=f"تم تجهيز {len(invoices)} فاتورة.", result_bytes=pdf, filename=filename)
+        except Exception as exc:
+            import jobs as _jobs2
+            _jobs2.fail_job(job_id, f"تعذر التصدير: {exc}")
+            try:
+                flask_app.logger.exception("by-date pdf job %s failed", job_id)
+            except Exception:
+                pass
+
+    @app.route("/export/invoices")
+    @login_required
+    def export_invoices():
+        ids = request.args.get("ids", "").strip()
+        q = request.args.get("q", "").strip()
+        valid_per_page = (1, 2, 3, 4, 6, 8, 9, 12)
+        try:
+            default_pp = int(float(get_setting("invoice_rows_per_pdf", "2")))
+        except (TypeError, ValueError):
+            default_pp = 2
+        per_page = request.args.get("per_page", type=int, default=default_pp)
+        if per_page not in valid_per_page:
+            per_page = default_pp
+        if per_page not in valid_per_page:
+            per_page = 2
+        db = get_db()
+        rows = _get_export_rows(db, ids, q)
         if not rows:
             flash("لا توجد فواتير للتصدير.", "warning")
             return redirect(url_for("invoices"))
@@ -2201,15 +2406,33 @@ def create_app():
             per_page=per_page,
             settings={k: get_setting(k, DEFAULT_SETTINGS[k]) for k in DEFAULT_SETTINGS},
         )
-        if not PLAYWRIGHT_AVAILABLE:
+        try:
+            pdf = _render_invoices_pdf(html)
+        except ValueError:
             return "ميزة تصدير الـ PDF غير متاحة بسبب عدم تثبيت Playwright", 500
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page()
-            page.set_content(html)
-            pdf = page.pdf(format="A4", print_background=True, prefer_css_page_size=True)
-            browser.close()
+        except Exception as exc:
+            try:
+                app.logger.exception("sync export failed")
+            except Exception:
+                pass
+            return f"تعذر توليد ملف PDF (عدد الفواتير: {len(rows)}). جرّب التصدير من النافذة الخلفية أو قلل العدد. التفاصيل: {exc}", 500
         return send_file(io.BytesIO(pdf), mimetype="application/pdf", as_attachment=True, download_name="invoices.pdf")
+
+    @app.route("/export/invoices/start", methods=["POST"])
+    @login_required
+    def export_invoices_start():
+        import jobs as _jobs
+        payload = request.get_json(silent=True) or request.form
+        ids = (payload.get("ids") or "").strip()
+        q = (payload.get("q") or "").strip()
+        try:
+            per_page = int(payload.get("per_page") or 2)
+        except (TypeError, ValueError):
+            per_page = 2
+        job_id = _jobs.create_job("export-pdf", label="تصدير الفواتير PDF")
+        thread = threading.Thread(target=_export_worker, args=(app, job_id, ids, q, per_page, "invoices.pdf"), daemon=True)
+        thread.start()
+        return jsonify({"job_id": job_id})
 
     # --- مسارات واتساب الفواتير ---
     @app.route("/invoices/<int:invoice_id>/send-whatsapp", methods=["POST"])
@@ -3288,35 +3511,12 @@ def create_app():
             flash("يرجى تحديد الفترة الزمنية.", "warning")
             return redirect(url_for("invoices_print_by_date"))
 
-        db   = get_db()
-        sql  = """
-            SELECT i.*, s.name subscriber_name, s.account_number, s.phone,
-                   s.village, s.address, s.meter_number,
-                   s.active AS subscriber_active,
-                   uc.username AS created_by_name
-            FROM invoices i
-            JOIN subscribers s ON s.id = i.subscriber_id
-            LEFT JOIN users uc ON uc.id = i.created_by
-            WHERE date(i.invoice_date) BETWEEN date(?) AND date(?)
-        """
-        params = [date_from, date_to]
-        if q:
-            sql   += " AND (i.invoice_no LIKE ? OR s.name LIKE ? OR s.account_number LIKE ?)"
-            like   = f"%{q}%"
-            params += [like, like, like]
-        sql += " ORDER BY i.invoice_date ASC, i.id ASC"
-        invoices = db.execute(sql, params).fetchall()
+        db = get_db()
+        invoices, previous_invoices = _get_by_date_rows(db, date_from, date_to, q)
 
         if not invoices:
             flash(f"لا توجد فواتير في الفترة من {date_from} إلى {date_to}.", "warning")
             return redirect(url_for("invoices_print_by_date", date_from=date_from, date_to=date_to, q=q))
-
-        previous_invoices = {}
-        for inv in invoices:
-            previous_invoices[inv["id"]] = fetch_previous_invoice_summary(db, inv["subscriber_id"], inv["id"])
-
-        if not PLAYWRIGHT_AVAILABLE:
-            return "ميزة تصدير الـ PDF غير متاحة بسبب عدم تثبيت Playwright", 500
 
         html = render_template(
             "invoices_batch_print.html",
@@ -3328,14 +3528,37 @@ def create_app():
             q=q,
             back_url=url_for("invoices"),
         )
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page()
-            page.set_content(html)
-            pdf = page.pdf(format="A4", print_background=True, prefer_css_page_size=True)
-            browser.close()
+        try:
+            pdf = _render_invoices_pdf(html)
+        except ValueError:
+            return "ميزة تصدير الـ PDF غير متاحة بسبب عدم تثبيت Playwright", 500
+        except Exception as exc:
+            try:
+                app.logger.exception("sync by-date pdf failed")
+            except Exception:
+                pass
+            return f"تعذر توليد ملف PDF (عدد الفواتير: {len(invoices)}). جرّب التصدير من النافذة الخلفية أو قلل الفترة. التفاصيل: {exc}", 500
         fname = f"invoices_{date_from}_to_{date_to}.pdf"
         return send_file(io.BytesIO(pdf), mimetype="application/pdf", as_attachment=True, download_name=fname)
+
+    @app.route("/invoices/print-by-date/pdf/start", methods=["POST"])
+    @login_required
+    def invoices_print_by_date_pdf_start():
+        import jobs as _jobs
+        payload = request.get_json(silent=True) or request.form
+        date_from = (payload.get("date_from") or "").strip()
+        date_to = (payload.get("date_to") or "").strip()
+        q = (payload.get("q") or "").strip()
+        if not date_from or not date_to:
+            return jsonify({"error": "حدد الفترة الزمنية أولاً."}), 400
+        job_id = _jobs.create_job("export-pdf", label="تصدير الفواتير بالتاريخ PDF")
+        thread = threading.Thread(
+            target=_by_date_pdf_worker,
+            args=(app, job_id, date_from, date_to, q, f"invoices_{date_from}_to_{date_to}.pdf"),
+            daemon=True,
+        )
+        thread.start()
+        return jsonify({"job_id": job_id})
 
     # ═══════════════════════════════════════════════════════════════════
     # ① جولة التحصيل اليومية

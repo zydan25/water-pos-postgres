@@ -15,7 +15,7 @@
     يوجد <strong>{{ pending|length }}</strong> قراءة جاهزة لتحويلها إلى فواتير.
   </div>
 
-  <form method="post">
+  <form method="post" id="bulkCreateForm">
     <div class="mb-3">
       <button type="button" class="btn btn-sm btn-outline-secondary" id="selectAll">تحديد الكل</button>
       <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAll">إلغاء التحديد</button>
@@ -67,7 +67,21 @@
   });
   document.getElementById('selectAll').onclick = function(){ document.querySelectorAll('.row-check').forEach(function(c){ c.checked=true; }); };
   document.getElementById('deselectAll').onclick = function(){ document.querySelectorAll('.row-check').forEach(function(c){ c.checked=false; }); };
+  document.getElementById('bulkCreateForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    const ids = Array.from(document.querySelectorAll('.row-check:checked')).map(c => parseInt(c.value));
+    if(!ids.length){ alert('حدد قراءة واحدة على الأقل.'); return; }
+    runJobWithProgress({
+      title: 'توليد الفواتير...',
+      startUrl: "{{ url_for('invoices_bulk_create_start') }}",
+      payload: {reading_ids: ids},
+      percentMode: true,
+      doneRedirect: "{{ url_for('invoices') }}",
+      doneLabel: 'عرض الفواتير'
+    });
+  });
   </script>
+  {% include "_progress_modal.html" %}
   {% else %}
   <div class="alert alert-warning">
     <i class="bi bi-exclamation-triangle me-1"></i>

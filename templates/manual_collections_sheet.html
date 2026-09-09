@@ -232,23 +232,7 @@ body {
 {% block scripts %}
 <script>
 async function downloadPdf(url, filename) {
-  try {
-    const resp = await fetch(url, { credentials: 'same-origin' });
-    if (!resp.ok) {
-      throw new Error(await resp.text());
-    }
-    const blob = await resp.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = objectUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(objectUrl);
-  } catch (err) {
-    alert('تعذر تنزيل الملف: ' + err.message);
-  }
+  await runDownloadWithProgress({title: 'توليد كشف التحصيل...', url: url, filename: filename});
 }
 
 const villageValue = "{{ village|default('')|replace('"', '\\\\"') }}";
@@ -260,11 +244,10 @@ document.getElementById('downloadCollectionsPdf')?.addEventListener('click', () 
 });
 
 document.getElementById('downloadCollectionsZip')?.addEventListener('click', () => {
-  // تفادي استدعاء url_for للـ ZIP لتجنب توقف السيرفر
   const pdfUrl = `{{ url_for('manual_collection.manual_collection_collections_pdf') }}`;
-  const url = pdfUrl.replace('_pdf', '_zip').replace('/pdf', '/zip') + 
-              (villageValue ? `?village=${encodeURIComponent(villageValue)}` : '');
+  const url = pdfUrl + (villageValue ? `?village=${encodeURIComponent(villageValue)}&mode=zip` : '?mode=zip');
   downloadPdf(url, 'كشوفات_القرى.zip');
 });
 </script>
+{% include "_progress_modal.html" %}
 {% endblock %}

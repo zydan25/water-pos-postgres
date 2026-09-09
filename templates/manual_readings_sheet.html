@@ -219,21 +219,7 @@
 {% block scripts %}
 <script>
 async function downloadPdf(url, filename) {
-  try {
-    const resp = await fetch(url, { credentials: 'same-origin' });
-    if (!resp.ok) throw new Error(await resp.text());
-    const blob = await resp.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = objectUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(objectUrl);
-  } catch (err) {
-    alert('تعذر تنزيل الملف: ' + err.message);
-  }
+  await runDownloadWithProgress({title: 'توليد كشف القراءة...', url: url, filename: filename});
 }
 const villageValue = "{{ village|default('')|replace('"', '\\\\"') }}";
 document.getElementById('downloadReadingsPdf')?.addEventListener('click', () => {
@@ -245,4 +231,5 @@ document.getElementById('downloadReadingsZip')?.addEventListener('click', () => 
   downloadPdf(url, `كشف_قراءة_${villageValue || 'جميع_القرى'}.zip`);
 });
 </script>
+{% include "_progress_modal.html" %}
 {% endblock %}

@@ -1,0 +1,150 @@
+{# نافذة تقدم المهام الخلفية: وضع نسبة % أو وضع مراحل (للـ PDF) #}
+<div class="modal fade" id="jobProgressModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="mb-0" id="jobProgressTitle">جاري التنفيذ...</h5>
+      </div>
+      <div class="modal-body">
+        <div class="progress mb-2" style="height:26px;">
+          <div id="jobProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+               role="progressbar" style="width:0%">0%</div>
+        </div>
+        <div class="d-flex justify-content-between small text-muted">
+          <span id="jobProgressStage">بدء...</span>
+          <span><span id="jobProgressCount"></span> <span id="jobProgressElapsed"></span></span>
+        </div>
+        <div id="jobProgressErrors" class="small text-danger mt-2"></div>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <button type="button" class="btn btn-outline-secondary" id="jobProgressHideBtn">إخفاء (يستمر العمل بالخلفية)</button>
+        <a id="jobProgressDoneBtn" class="btn btn-success" style="display:none;" href="#">تم</a>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function runJobWithProgress(opts){
+  const modalEl = document.getElementById('jobProgressModal');
+  const modal = new bootstrap.Modal(modalEl);
+  const bar = document.getElementById('jobProgressBar');
+  const stage = document.getElementById('jobProgressStage');
+  const count = document.getElementById('jobProgressCount');
+  const elapsed = document.getElementById('jobProgressElapsed');
+  const errors = document.getElementById('jobProgressErrors');
+  const doneBtn = document.getElementById('jobProgressDoneBtn');
+  const hideBtn = document.getElementById('jobProgressHideBtn');
+  document.getElementById('jobProgressTitle').textContent = opts.title || 'جاري التنفيذ...';
+  doneBtn.style.display = 'none';
+  hideBtn.style.display = '';
+  errors.innerHTML = '';
+  bar.classList.remove('bg-danger', 'bg-success');
+  modal.show();
+
+  const t0 = Date.now();
+  let finished = false;
+  const tick = setInterval(() => {
+    if(finished) return;
+    elapsed.textContent = '⏱ ' + Math.floor((Date.now() - t0) / 1000) + ' ث';
+  }, 500);
+
+  hideBtn.onclick = () => modal.hide();
+
+  function setBar(pct, label){
+    bar.style.width = pct + '%';
+    bar.textContent = (opts.percentMode === false) ? (label || '') : (pct + '%');
+  }
+  function finishOk(msg, onDone){
+    finished = true;
+    clearInterval(timer);
+    clearInterval(tick);
+    setBar(100);
+    bar.classList.add('bg-success');
+    stage.textContent = msg;
+    setTimeout(() => { modal.hide(); onDone && onDone(); }, 1500);
+  }
+  setBar(0);
+
+  let timer = null;
+  fetch(opts.startUrl, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(opts.payload || {})
+  }).then(r => r.json()).then(data => {
+    if(!data.job_id){ throw new Error(data.error || 'تعذر بدء المهمة'); }
+    const jobId = data.job_id;
+    timer = setInterval(() => {
+      fetch('/jobs/' + jobId).then(r => r.json()).then(job => {
+        if(job.status === 'error'){ clearInterval(timer); clearInterval(tick); finished = true; throw new Error(job.message || 'فشلت المهمة'); }
+        if(opts.percentMode === false){
+          bar.style.width = '100%';
+          bar.textContent = '';
+          stage.textContent = job.stage || 'جاري التجهيز...';
+          count.textContent = '';
+        } else {
+          setBar(job.percent || 0);
+          stage.textContent = job.stage || '';
+          count.textContent = job.total ? (job.done + ' من ' + job.total) : '';
+        }
+        if(job.errors_count){ errors.textContent = 'أخطاء: ' + job.errors_count; }
+        if(job.status === 'done'){
+          clearInterval(timer);
+          if(job.has_file){
+            if(opts.autoDownload){ window.location = '/jobs/' + jobId + '/download'; }
+            finishOk(job.message || 'اكتمل التصدير.');
+          } else if(opts.doneRedirect){
+            finishOk((job.message || 'اكتمل.') + ' جاري التحويل...', () => { window.location = opts.doneRedirect; });
+          } else {
+            finishOk(job.message || 'اكتمل.');
+          }
+        }
+      }).catch(err => { clearInterval(timer); clearInterval(tick); finished = true; stage.textContent = 'خطأ: ' + err.message; bar.classList.add('bg-danger'); });
+    }, 700);
+  }).catch(err => { clearInterval(tick); finished = true; stage.textContent = 'خطأ: ' + err.message; bar.classList.add('bg-danger'); });
+}
+
+async function runDownloadWithProgress(opts){
+  const modalEl = document.getElementById('jobProgressModal');
+  const modal = new bootstrap.Modal(modalEl);
+  const bar = document.getElementById('jobProgressBar');
+  const stage = document.getElementById('jobProgressStage');
+  const count = document.getElementById('jobProgressCount');
+  const elapsed = document.getElementById('jobProgressElapsed');
+  const errors = document.getElementById('jobProgressErrors');
+  document.getElementById('jobProgressTitle').textContent = opts.title || 'جاري تجهيز الملف...';
+  document.getElementById('jobProgressDoneBtn').style.display = 'none';
+  document.getElementById('jobProgressHideBtn').style.display = '';
+  errors.innerHTML = '';
+  count.textContent = '';
+  bar.classList.remove('bg-danger', 'bg-success');
+  bar.style.width = '100%';
+  bar.textContent = '';
+  stage.textContent = 'جاري توليد الملف على الخادم...';
+  modal.show();
+  const t0 = Date.now();
+  const tick = setInterval(() => { elapsed.textContent = '⏱ ' + Math.floor((Date.now() - t0) / 1000) + ' ث'; }, 500);
+  document.getElementById('jobProgressHideBtn').onclick = () => modal.hide();
+  try {
+    const resp = await fetch(opts.url, { credentials: 'same-origin' });
+    if(!resp.ok){ throw new Error((await resp.text()).slice(0, 300) || ('خطأ ' + resp.status)); }
+    stage.textContent = 'جاري تنزيل الملف...';
+    const blob = await resp.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = opts.filename || 'file.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+    clearInterval(tick);
+    bar.classList.add('bg-success');
+    stage.textContent = 'تم التنزيل بنجاح.';
+    setTimeout(() => modal.hide(), 1200);
+  } catch(err) {
+    clearInterval(tick);
+    bar.classList.add('bg-danger');
+    stage.textContent = 'خطأ: ' + err.message;
+  }
+}
+</script>

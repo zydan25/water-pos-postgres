@@ -18,6 +18,13 @@ except Exception as _weasyprint_import_error:
     print("weasyprint unavailable:", _weasyprint_import_error)
     WEASYPRINT_AVAILABLE = False
 
+try:
+    from playwright.sync_api import sync_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except Exception as _playwright_import_error:
+    print("playwright unavailable:", _playwright_import_error)
+    PLAYWRIGHT_AVAILABLE = False
+
 from database import (
     DEFAULT_SETTINGS,
     get_db,
@@ -40,12 +47,22 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 def _render_pdf_bytes(template_name: str, **context) -> bytes:
     """Render a standalone PDF template quickly without loading base.html/bootstrap."""
+    html = render_template(template_name, **context)
+    if PLAYWRIGHT_AVAILABLE:
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.set_content(html)
+                pdf = page.pdf(format="A4", print_background=True, prefer_css_page_size=True)
+                browser.close()
+            return bytes(pdf)
+        except Exception as _playwright_error:
+            print("playwright render failed, falling back to weasyprint:", _playwright_error)
     if not WEASYPRINT_AVAILABLE:
         raise ValueError(
-            "توليد PDF عبر WeasyPrint غير متاح على هذا الجهاز (مكتبات GTK/Pango غير مثبتة). "
-            "قم بتثبيت مكتبات GTK من https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#windows."
+            "تعذر توليد ملف PDF: لا Playwright ولا WeasyPrint متاحان على هذا الجهاز."
         )
-    html = render_template(template_name, **context)
     return HTML(string=html, base_url=str(BASE_DIR)).write_pdf()
 
 
@@ -484,7 +501,7 @@ def manual_collection_collections_pdf():
         return (
             f"حدث خطأ أثناء توليد كشف التحصيل: {exc}\n\n"
             "تحقق من:\n"
-            "١. تثبيت مكتبة WeasyPrint ومكتبات GTK على هذا الجهاز.\n"
+            "١. توفر متصفح Chromium الخاص بـ Playwright (شغّل: playwright install chromium).\n"
             "٢. صحة اسم القالب manual_collections_pdf.html داخل مجلد templates/.\n"
             "٣. سجل الأخطاء في console الخادم للحصول على تفاصيل دقيقة.",
             500,

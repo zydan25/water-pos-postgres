@@ -89,6 +89,18 @@
       url.searchParams.set('per_page', sel.value);
       link.href = url.toString();
     });
+    link.addEventListener('click', function (e) {
+      e.preventDefault();
+      var url = new URL(link.href, location.origin);
+      runJobWithProgress({
+        title: 'تصدير الفواتير PDF...',
+        startUrl: "{{ url_for('export_invoices_start') }}",
+        payload: {q: url.searchParams.get('q') || '', per_page: url.searchParams.get('per_page') || '2'},
+        percentMode: false,
+        autoDownload: true
+      });
+    });
   })();
 </script>
+{% include "_progress_modal.html" %}
 {% endblock %}

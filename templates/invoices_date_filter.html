@@ -41,7 +41,7 @@
         <button class="btn btn-primary btn-lg" type="submit">
           <i class="bi bi-printer me-1"></i> معاينة وطباعة الفواتير
         </button>
-        <button class="btn btn-success btn-lg" type="submit"
+        <button class="btn btn-success btn-lg" type="submit" id="pdfBtn"
                 formaction="{{ url_for('invoices_print_by_date_pdf') }}">
           <i class="bi bi-download me-1"></i> حفظ جميع الفواتير (PDF)
         </button>
@@ -110,5 +110,21 @@
   // Last 30 days
   const t30 = new Date(today); t30.setDate(t30.getDate() - 29);
   addShortcut('آخر 30 يوم', t30, today);
+
+  document.getElementById('pdfBtn').addEventListener('click', function (e) {
+    e.preventDefault();
+    const f = document.querySelector('[name=date_from]').value;
+    const t = document.querySelector('[name=date_to]').value;
+    const q = (document.querySelector('[name=q]') || {}).value || '';
+    if(!f || !t){ alert('حدد الفترة أولاً.'); return; }
+    runJobWithProgress({
+      title: 'تصدير فواتير الفترة PDF...',
+      startUrl: "{{ url_for('invoices_print_by_date_pdf_start') }}",
+      payload: {date_from: f, date_to: t, q: q},
+      percentMode: false,
+      autoDownload: true
+    });
+  });
 </script>
+{% include "_progress_modal.html" %}
 {% endblock %}
