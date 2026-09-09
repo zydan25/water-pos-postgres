@@ -61,6 +61,8 @@ from financial_fixes import (
     recalculate_invoice_payment_totals,
     void_invoice_with_reversal,
     invoice_month_uniqueness_enabled,
+    _render_pdf_bytes,
+    _send_pdf,
 )
 
 try:
@@ -785,7 +787,7 @@ def build_reports_payload(db, subscriber_id=None, start=None, end=None, q=""):
     start = start or date(date.today().year, date.today().month, 1).isoformat()
     end = end or date.today().isoformat()
     if subscriber_id:
-        subscriber = db.execute("SELECT id, name, account_number FROM subscribers WHERE id = ?", (subscriber_id,)).fetchone()
+        subscriber = db.execute("SELECT id, name, account_number, phone FROM subscribers WHERE id = ?", (subscriber_id,)).fetchone()
         invoices = db.execute(
             """
             SELECT i.*, u.username AS created_by_name, pu.username AS printed_by_name, su.username AS sent_by_name
@@ -4745,6 +4747,72 @@ def create_app():
             q=q,
             payload=payload,
         )
+
+    @app.route("/customer-statement/pdf")
+    @login_required
+    def customer_statement_pdf():
+        db = get_db()
+        subscriber_id = request.args.get("subscriber_id", type=int)
+        start = request.args.get("start", date(date.today().year, date.today().month, 1).isoformat())
+        end = request.args.get("end", date.today().isoformat())
+        if not subscriber_id:
+            return "يجب اختيار عميل", 400
+        payload = build_reports_payload(db, subscriber_id=subscriber_id, start=start, end=end)
+        sub = payload["subscriber"]
+        invoices = list(payload["invoices"])
+        payments = list(payload["payments"])
+        rows = []
+        for inv in invoices:
+            rows.append({
+                "date": inv["invoice_date"] or "",
+                "desc": f"فاتورة رقم {inv['invoice_no']}" + (f" — استهلاك {inv['consumption']}" if inv["consumption"] else ""),
+                "debit": float(inv["total_amount"] or 0),
+                "credit": 0,
+                "notes": "",
+                "sort_key": inv["invoice_date"] or "9999",
+                "sort_type": 0,
+            })
+        for pay in payments:
+            sign = -1 if (pay["amount"] or 0) < 0 else 1
+            rows.append({
+                "date": pay["payment_date"] or "",
+                "desc": "تسديد" + (f" فاتورة {pay['invoice_no']}" if pay.get("invoice_no") else "") + (" (عكس)" if pay.get("is_reversal") else ""),
+                "debit": 0,
+                "credit": abs(float(pay["amount"] or 0)),
+                "notes": (pay["method"] or "") + (f" — {pay['notes']}" if pay.get("notes") else ""),
+                "sort_key": pay["payment_date"] or "9999",
+                "sort_type": 1,
+            })
+        rows.sort(key=lambda r: (r["sort_key"], r["sort_type"]))
+        balance = 0
+        for r in rows:
+            balance += r["debit"] - r["credit"]
+            r["balance"] = balance
+        total_debit = sum(r["debit"] for r in rows)
+        total_credit = sum(r["credit"] for r in rows)
+        remaining = payload["summary"]["remaining_total"]
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        printed_by = g.user.get("username", "—") if g.user else "—"
+        currency = get_setting("currency_name", DEFAULT_SETTINGS["currency_name"])
+        try:
+            pdf = _render_pdf_bytes(
+                "customer_statement_print.html",
+                subscriber=sub,
+                rows=rows,
+                total_debit=total_debit,
+                total_credit=total_credit,
+                remaining=remaining,
+                start=start,
+                end=end,
+                now=now_str,
+                printed_by=printed_by,
+                currency=currency,
+            )
+        except Exception as exc:
+            return f"تعذر توليد كشف الحساب: {exc}", 500
+        fname = f"كشف_حساب_{sub['name']}.pdf"
+        return _send_pdf(pdf, fname)
+
     @app.route("/api/v1/accounting/journal-entries/", methods=["GET", "POST"])
     @login_required
     @role_required(["admin", "technician", "accountant", "manager"])

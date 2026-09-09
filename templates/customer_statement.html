@@ -26,7 +26,7 @@
 
   <div class="card stmt-card p-3 mb-3">
     <form method="get" class="row g-3 align-items-end">
-      <div class="col-md-6">
+      <div class="col-md-4">
         <label class="form-label">العميل</label>
         <div class="position-relative">
           <input type="text" id="subSearch" class="form-control" autocomplete="off"
@@ -47,6 +47,11 @@
       </div>
       <div class="col-md-2">
         <button class="btn btn-primary w-100">عرض الكشف</button>
+      </div>
+      <div class="col-md-2">
+        <button type="button" id="saveStmtPdf" class="btn btn-success w-100" {% if not (payload and payload.subscriber) %}disabled{% endif %}>
+          <i class="bi bi-save me-1"></i>حفظ كشف الحساب
+        </button>
       </div>
     </form>
   </div>
@@ -224,5 +229,21 @@
   });
   document.addEventListener('click', e => { if(!e.target.closest('#subSearch') && !e.target.closest('#subList')) list.style.display = 'none'; });
 })();
+
+const saveBtn = document.getElementById('saveStmtPdf');
+if(saveBtn){
+  saveBtn.addEventListener('click', () => {
+    const cid = document.getElementById('subscriberId').value;
+    const start = document.querySelector('input[name="start"]').value;
+    const end = document.querySelector('input[name="end"]').value;
+    const subName = document.getElementById('subSearch').value.split(' — ')[0] || 'عميل';
+    runDownloadWithProgress({
+      title: 'حفظ كشف الحساب...',
+      url: `/customer-statement/pdf?subscriber_id=${encodeURIComponent(cid)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
+      filename: `كشف_حساب_${subName}.pdf`
+    });
+  });
+}
 </script>
+{% include "_progress_modal.html" %}
 {% endblock %}

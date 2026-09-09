@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Tahoma, Arial, sans-serif; color: #111; padding: 20px; margin: 0; font-size: 12px; }
+  h2 { text-align: center; margin: 0 0 2px; font-size: 16px; }
+  .sub { text-align: center; color: #555; font-size: 11px; margin-bottom: 10px; }
+  .info { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 11px; border: 1px solid #ccc; padding: 8px 12px; border-radius: 6px; background: #fafafa; }
+  .info div { flex: 1; }
+  .info .lbl { color: #888; font-size: 10px; }
+  .info .val { font-weight: bold; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th, td { border: 1px solid #aaa; padding: 5px 7px; text-align: center; }
+  th { background: #e8e8e8; font-size: 11px; }
+  td { vertical-align: middle; }
+  .dr { color: #b45309; font-weight: bold; }
+  .cr { color: #16a34a; font-weight: bold; }
+  .bal-pos { color: #16a34a; font-weight: bold; }
+  .bal-neg { color: #dc2626; font-weight: bold; }
+  tfoot td { font-weight: bold; background: #f0f0f0; font-size: 12px; }
+  .footer { margin-top: 24px; border-top: 1px solid #ccc; padding-top: 10px; font-size: 11px; color: #555; }
+  .footer-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .sign-area { margin-top: 30px; display: flex; justify-content: space-between; }
+  .sign-box { text-align: center; width: 30%; border-top: 1px solid #999; padding-top: 6px; font-size: 10px; color: #666; }
+  @media print { body { padding: 10px; } }
+</style>
+</head>
+<body>
+  <h2>كشف حساب العميل</h2>
+  <div class="sub">فترة من {{ start }} إلى {{ end }}</div>
+
+  <div class="info">
+    <div><div class="lbl">اسم العميل</div><div class="val">{{ subscriber.name }}</div></div>
+    <div><div class="lbl">رقم الحساب</div><div class="val">{{ subscriber.account_number }}</div></div>
+    <div><div class="lbl">الهاتف</div><div class="val">{{ subscriber.phone or '—' }}</div></div>
+    <div><div class="lbl">المبلغ المتبقي</div><div class="val {% if (remaining or 0) > 0 %}bal-neg{% else %}bal-pos{% endif %}">{{ "%.0f"|format(remaining or 0) }} {{ currency }}</div></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:12%">التاريخ</th>
+        <th style="width:34%">البيان</th>
+        <th style="width:14%">مدين</th>
+        <th style="width:14%">دائن</th>
+        <th style="width:14%">الرصيد</th>
+        <th style="width:12%">ملاحظات</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.date }}</td>
+        <td style="text-align:right">{{ r.desc }}</td>
+        <td class="dr">{{ "%.0f"|format(r.debit) if r.debit else '' }}</td>
+        <td class="cr">{{ "%.0f"|format(r.credit) if r.credit else '' }}</td>
+        <td class="{% if r.balance >= 0 %}bal-pos{% else %}bal-neg{% endif %}">{{ "%.0f"|format(r.balance) }}</td>
+        <td>{{ r.notes }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="2">الإجمالي</td>
+        <td class="dr">{{ "%.0f"|format(total_debit) }}</td>
+        <td class="cr">{{ "%.0f"|format(total_credit) }}</td>
+        <td class="{% if remaining and remaining > 0 %}bal-neg{% else %}bal-pos{% endif %}">{{ "%.0f"|format(remaining or 0) }}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="footer">
+    <div class="footer-row"><span>تاريخ الطباعة: {{ now }}</span><span>بواسطة: {{ printed_by }}</span></div>
+  </div>
+  <div class="sign-area">
+    <div class="sign-box">أعدّه (المحاسب)</div>
+    <div class="sign-box">راجعه (المدير المالي)</div>
+    <div class="sign-box">اعتمده (مدير المنظمة)</div>
+  </div>
+</body>
+</html>
