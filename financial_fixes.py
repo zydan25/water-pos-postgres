@@ -529,6 +529,32 @@ def manual_collection_summary():
     )
 
 
+@manual_collection_bp.route("/manual-collection/summary/pdf")
+@login_required
+@role_required(["admin", "staff", "collector", "accountant", "manager", "technician"])
+def manual_collection_summary_pdf():
+    db = get_db()
+    villages = _village_rows(db, only_unpaid=False)
+    summary = []
+    for village, rows in villages.items():
+        total = sum(float(r["total_amount"] or 0) for r in rows if r["invoice_id"])
+        remaining = sum(float(r["remaining_amount"] or 0) for r in rows if r["invoice_id"])
+        paid = sum(float(r["paid_amount"] or 0) for r in rows if r["invoice_id"])
+        count = sum(1 for r in rows if r["invoice_id"])
+        summary.append({"village": village, "count": count, "total": total, "paid": paid, "remaining": remaining})
+    summary.sort(key=lambda x: x["village"])
+    try:
+        pdf = _render_pdf_bytes(
+            "manual_summary_pdf.html",
+            summary=summary,
+            org=get_setting("organization_name", DEFAULT_SETTINGS["organization_name"]),
+            today=date.today().isoformat(),
+        )
+    except Exception as exc:
+        return f"تعذر توليد كشف الملخصات: {exc}", 500
+    return _send_pdf(pdf, "كشف_الملخصات.pdf")
+
+
 
 
 @manual_collection_bp.route("/manual-collection/financial-reset", methods=["POST"])

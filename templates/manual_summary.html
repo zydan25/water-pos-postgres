@@ -9,6 +9,7 @@
         <div class="text-muted small">ملخص حسب القرية/المنطقة.</div>
       </div>
       <a class="btn btn-outline-secondary" href="{{ url_for('manual_collection.manual_collection_home') }}">رجوع</a>
+      <button class="btn btn-success" id="downloadSummaryPdf">تنزيل PDF</button>
     </div>
     <div class="table-responsive">
       <table class="table table-striped align-middle">
@@ -38,4 +39,16 @@
     </div>
   </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('downloadSummaryPdf')?.addEventListener('click', () => {
+  runDownloadWithProgress({
+    title: 'توليد كشف الملخصات...',
+    url: "{{ url_for('manual_collection.manual_collection_summary_pdf') }}",
+    filename: 'كشف_الملخصات.pdf'
+  });
+});
+</script>
+{% include "_progress_modal.html" %}
 {% endblock %}

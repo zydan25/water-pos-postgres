@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: Tahoma, Arial, sans-serif; color: #111; padding: 18px; }
+  h2 { text-align: center; margin: 0 0 4px; }
+  .sub { text-align: center; color: #555; font-size: 12px; margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { border: 1px solid #999; padding: 6px 8px; text-align: center; }
+  th { background: #eee; }
+  tfoot td { font-weight: bold; background: #f7f7f7; }
+</style>
+</head>
+<body>
+  <h2>كشف الملخصات حسب القرية</h2>
+  <div class="sub">{{ org }} — {{ today }}</div>
+  <table>
+    <thead><tr><th>القرية/المنطقة</th><th>عدد الفواتير</th><th>الإجمالي</th><th>المسدد</th><th>المتبقي</th></tr></thead>
+    <tbody>
+      {% for row in summary %}
+      <tr><td>{{ row.village }}</td><td>{{ row.count }}</td><td>{{ "%.0f"|format(row.total) }}</td><td>{{ "%.0f"|format(row.paid) }}</td><td>{{ "%.0f"|format(row.remaining) }}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr><td>الإجمالي</td><td>{{ summary|sum(attribute='count') }}</td><td>{{ "%.0f"|format(summary|sum(attribute='total')) }}</td><td>{{ "%.0f"|format(summary|sum(attribute='paid')) }}</td><td>{{ "%.0f"|format(summary|sum(attribute='remaining')) }}</td></tr></tfoot>
+  </table>
+</body>
+</html>

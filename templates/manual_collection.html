@@ -181,25 +181,8 @@
 
 {% block scripts %}
 <script>
-async function downloadPdf(url, filename) {
-  try {
-    const resp = await fetch(url, { credentials: 'same-origin' });
-    if (!resp.ok) {
-      const errText = await resp.text();
-      throw new Error(errText || 'فشل الاتصال بالخادم');
-    }
-    const blob = await resp.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = objectUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(objectUrl);
-  } catch (err) {
-    alert('تعذر تنزيل الملف: ' + err.message);
-  }
+async function downloadPdf(url, filename, title) {
+  await runDownloadWithProgress({title: title || 'توليد الكشف...', url: url, filename: filename});
 }
 
 function updateReportLinks() {
@@ -223,10 +206,10 @@ function updateReportLinks() {
   const villageLabel = villageSelect.value || 'جميع_القرى';
 
   readingsBtn.onclick = () =>
-    downloadPdf(baseReadings + qs, `كشف_قراءة_${villageLabel}.${ext}`);
+    downloadPdf(baseReadings + qs, `كشف_قراءة_${villageLabel}.${ext}`, 'توليد كشف القراءة...');
 
   collectionsBtn.onclick = () =>
-    downloadPdf(baseCollections + qs, `كشف_تحصيل_${villageLabel}.${ext}`);
+    downloadPdf(baseCollections + qs, `كشف_تحصيل_${villageLabel}.${ext}`, 'توليد كشف التحصيل...');
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -237,5 +220,5 @@ document.addEventListener('DOMContentLoaded', function () {
   updateReportLinks();
 });
 </script>
-
+{% include "_progress_modal.html" %}
 {% endblock %}
