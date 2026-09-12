@@ -8,8 +8,7 @@
   }
 
   body {
-    /* تم تكبير خط الطباعة العام من 10px إلى 11px */
-    font-size: 11px;
+    font-size: 9px;
   }
 
   @page {
@@ -23,42 +22,64 @@
   }
 
   .village-box {
-    page-break-inside: avoid;
     page-break-after: always;
   }
 
-  /* تكبير خط العناوين داخل الجدول أثناء الطباعة */
   .sheet-table th {
-    font-size: 11px !important;
+    font-size: 9px !important;
   }
-  
-  /* تكبير خط البيانات داخل الجدول أثناء الطباعة */
+
   .sheet-table td {
-    font-size: 11px !important;
+    font-size: 9px !important;
   }
 }
 
-/* تكبير الخط العام للواجهة بمقدار 1 بكسل */
 body {
-  font-size: 16px; /* تم تكبيره من 15px */
+  font-size: 15px;
 }
 
-/* تكبير خطوط الجدول في العرض على الشاشة */
 .sheet-table th {
   vertical-align: middle;
-  font-size: 12px; /* تم تكبيره من 11px */
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .sheet-table td {
   vertical-align: middle;
-  font-size: 12px; /* تم تكبيره من 11px */
+  font-size: 11px;
 }
 
 .report-header {
   border: 1px solid #cbd5e1;
-  border-radius: 18px;
-  padding: 14px 16px;
+  border-radius: 14px;
+  padding: 10px 12px;
   background: #fff;
+}
+
+.headline {
+  border: 1px solid #94a3b8;
+  border-radius: 14px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+.headline .lbl {
+  background: #e2e8f0;
+  border-radius: 8px;
+  font-weight: 800;
+  padding: 4px 10px;
+}
+
+.headline .val {
+  font-weight: 800;
+}
+
+.summary-box {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  text-align: center;
+  padding: 6px 8px;
 }
 
 .section-title {
@@ -68,11 +89,11 @@ body {
 
 .blank-line {
   color: #999;
-  letter-spacing: 3px;
+  letter-spacing: 2px;
 }
 
 .collection-month {
-  font-size: 15px; /* تم تكبيره من 14px */
+  font-size: 14px;
   font-weight: 700;
   margin-top: 3px;
 }
@@ -92,9 +113,9 @@ body {
         <h4 class="mb-0 section-title">
           كشف تحصيل
         </h4>
-        <!-- شهر التحصيل -->
         <div class="collection-month">
-          شهر التحصيل: {{ month_label or print_month or invoice_month or print_date or '-' }}
+          كشف شهر: {{ report_month_name or '' }}{% if report_year %} {{ report_year }}{% endif %}
+          – {{ hijri_month_name or '' }}{% if hijri_year %} {{ hijri_year }}{% endif %}
         </div>
         <div class="text-muted small">
           يُظهر الفواتير غير المسددة فقط للمتحصلين الميدانيين.
@@ -113,78 +134,77 @@ body {
         </a>
       </div>
     </div>
-
-    <!-- الملخص -->
-    <div class="row g-2 mt-3">
-      <div class="col-md-3">
-        <div class="p-2 bg-light rounded-3 text-center">
-          <div class="small text-muted">القرية</div>
-          <div class="fw-bold">{{ village or 'كل القرى' }}</div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="p-2 bg-light rounded-3 text-center">
-          <div class="small text-muted">إجمالي المستحق</div>
-          <div class="fw-bold">{{ "%.0f"|format(total_amount or 0) }} {{ currency }}</div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="p-2 bg-light rounded-3 text-center">
-          <div class="small text-muted">إجمالي المسدد</div>
-          <div class="fw-bold">{{ "%.0f"|format(total_paid or 0) }} {{ currency }}</div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="p-2 bg-light rounded-3 text-center">
-          <div class="small text-muted">إجمالي المتبقي</div>
-          <div class="fw-bold">{{ "%.0f"|format(total_remaining or 0) }} {{ currency }}</div>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- القرى -->
   {% for village_name, rows in villages.items() %}
+  {% set s = villages_summary.get(village_name, {'count': 0, 'units': 0, 'consumption_amount': 0, 'received': 0}) %}
   <div class="card report-card rounded-4 mb-3 village-box">
-    <!-- رأس القرية -->
-    <div class="report-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <div>
-        <div class="small text-muted">
-          {{ project_name }}
+    <div class="card-body">
+      <!-- السطر الأول: القرية / كشف شهر / هجري -->
+      <div class="headline d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="lbl">القرية</span>
+          <span class="val h6 mb-0">{{ village_name }}</span>
         </div>
-        <div class="h5 mb-0 fw-bold">
-          {{ village_name }}
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="lbl">كشف شهر</span>
+          <span class="val">{{ report_month_name or '' }} {{ report_year or '' }}</span>
         </div>
-        <div class="small text-muted">
-          عدد الفواتير: {{ rows|selectattr('invoice_id')|list|length }}
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="lbl">{{ hijri_month_name or '' }}</span>
+          <span class="val">{{ hijri_year or '' }}</span>
         </div>
       </div>
-      <div class="text-end small">
-        <div>القرية: {{ village_name }}</div>
-        <div>تاريخ الطباعة: {{ print_date }}</div>
-      </div>
-    </div>
 
-    <!-- الجدول -->
-    <div class="card-body p-0">
+      <!-- السطر الثاني: الملخص -->
+      <div class="row g-2 mb-2">
+        <div class="col-3">
+          <div class="summary-box">
+            <div class="small text-muted">عدد المشتركين</div>
+            <div class="fw-bold">{{ "{:,.0f}".format(s.count or 0) }}</div>
+          </div>
+        </div>
+        <div class="col-3">
+          <div class="summary-box">
+            <div class="small text-muted">اجمالي الاستهلاك</div>
+            <div class="fw-bold">{{ "{:,.0f}".format(s.consumption_amount or 0) }}</div>
+          </div>
+        </div>
+        <div class="col-3">
+          <div class="summary-box">
+            <div class="small text-muted">اجمالي الوحدات</div>
+            <div class="fw-bold">{{ "{:,.0f}".format(s.units or 0) }}</div>
+          </div>
+        </div>
+        <div class="col-3">
+          <div class="summary-box">
+            <div class="small text-muted">اجمالي المستلمة</div>
+            <div class="fw-bold">{{ "{:,.0f}".format(s.received or 0) }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- جدول البيانات -->
       <div class="table-responsive">
         <table class="table table-sm table-bordered mb-0 text-center align-middle sheet-table">
           <thead class="table-light">
             <tr>
               <th style="width:3%">م</th>
-              <th style="width:7%">رقم الحساب</th>
+              <th style="width:5%">رقم الحساب</th>
+              <th style="width:6%">القرية</th>
+              <th style="width:6%">الحارة</th>
               <th style="width:7%">رقم العداد</th>
-              <th style="width:7%">القرية</th>
-              <th style="width:14%">اسم المشترك</th>
-              <th style="width:6%">الفاتورة</th>
+              <th style="width:20%">أسماء المشتركين</th>
               <th style="width:5%">السابقة</th>
               <th style="width:5%">الحالية</th>
-              <th style="width:5%">الاستهلاك</th>
-              <th style="width:7%">قيمة الاستهلاك</th>
-              <th style="width:7%">الإجمالي</th>
-              <th style="width:7%">المسدد</th>
-              <th style="width:7%">المتبقي</th>
-              <th>ملاحظات</th>
+              <th style="width:6%">إجمالي الوحدات</th>
+              <th style="width:7%">مقدار الاستهلاك</th>
+              <th style="width:7%">المتاخرات</th>
+              <th style="width:7%">إجمالي الفاتورة</th>
+              <th style="width:6%">المستلم</th>
+              <th style="width:4%">ملاحظات</th>
+              <th style="width:6%">{{ received_prev_label }}</th>
             </tr>
           </thead>
           <tbody>
@@ -193,29 +213,29 @@ body {
             <tr>
               <td>{{ loop.index }}</td>
               <td>{{ row.account_number or '-' }}</td>
+              <td>{{ row.village_name or '-' }}</td>
+              <td>{{ row.hara or '' }}</td>
               <td>{{ row.meter_number or '-' }}</td>
-              <td>{{ row.village or row.address or '-' }}</td>
               <td class="text-start">
                 <div class="fw-semibold">{{ row.name or '-' }}</div>
-                <div class="small text-muted">{{ row.phone or '-' }}</div>
               </td>
-              <td>{{ row.invoice_no or '-' }}</td>
-              <td>{{ "%.0f"|format(row.previous_reading or 0) }}</td>
-              <td>{{ "%.0f"|format(row.current_reading or 0) }}</td>
+              <td>{{ "{:,.0f}".format(row.previous_reading or 0) }}</td>
+              <td>{{ "{:,.0f}".format(row.current_reading or 0) }}</td>
               <td>
                 {% if row.consumption is not none %}
-                  {{ "%.0f"|format(row.consumption) }}
+                  {{ "{:,.0f}".format(row.consumption) }}
                 {% elif row.current_reading is not none and row.previous_reading is not none %}
-                  {{ "%.0f"|format(row.current_reading - row.previous_reading) }}
+                  {{ "{:,.0f}".format(row.current_reading - row.previous_reading) }}
                 {% else %}
                   0
                 {% endif %}
               </td>
-              <td>{{ "%.0f"|format(row.consumption_amount or 0) }}</td>
-              <td>{{ "%.0f"|format(row.total_amount or 0) }}</td>
-              <td></td> <!-- خانة المسدد فارغة للكتابة اليدوية -->
-              <td class="fw-bold">{{ "%.0f"|format(row.remaining_amount or 0) }}</td>
-              <td class="text-start blank-line">................................</td>
+              <td>{{ "{:,.0f}".format(row.consumption_amount or 0) }}</td>
+              <td>{{ "{:,.0f}".format(row.opening_balance or 0) }}</td>
+              <td class="fw-bold">{{ "{:,.0f}".format(row.total_amount or 0) }}</td>
+              <td></td>
+              <td class="blank-line">..</td>
+              <td>{{ "{:,.0f}".format(row.previous_paid_amount or 0) }}</td>
             </tr>
             {% endif %}
             {% endfor %}

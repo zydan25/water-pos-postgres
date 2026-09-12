@@ -295,20 +295,120 @@ def void_invoice_with_reversal(db, invoice_id: int, user_id: int | None = None):
     db.execute("DELETE FROM invoices WHERE id=?", (invoice_id,))
     log_audit(db, user_id, "DELETE", "invoices", invoice_id, f"حذف/إلغاء الفاتورة رقم {invoice['invoice_no']} مع عكس القيود المحاسبية.")
     return True
-def _current_village(row) -> str:
-    village = ""
-    if row is None:
-        return "غير محدد"
-    try:
-        village = (row["village"] or "").strip()
-    except Exception:
-        village = ""
+_AR_GR_MONTHS = (
+    "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+    "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+)
+_AR_HJ_MONTHS = (
+    "محرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة",
+    "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة",
+)
+
+
+def _gregorian_to_hijri(year: int, month: int, day: int):
+    """تحويل تاريخ ميلادي إلى هجري (تقويم إسلامي مدني يقارب أم القرى)."""
+    gy, gm, gd = year, month, day
+    jd = (1461 * (gy + 4800 + (gm - 14) // 12)) // 4 \
+        + (367 * (gm - 2 - 12 * ((gm - 14) // 12))) // 12 \
+        - (3 * ((gy + 4900 + (gm - 14) // 12) // 100)) // 4 \
+        + gd - 32075
+    l = jd - 1948440 + 10632
+    n = (l - 1) // 10631
+    l = l - 10631 * n + 354
+    j = ((10985 - l) // 5316) * ((50 * l) // 17719) + (l // 5670) * ((43 * l) // 15238)
+    l = l - ((30 - j) // 15) * ((17719 * j) // 50) - (j // 16) * ((15238 * j) // 43) + 29
+    m = (24 * l) // 709
+    d = l - (709 * m) // 24
+    y = 30 * n + j - 30
+    return y, m, d
+
+
+def _split_village_hara(row) -> tuple[str, str]:
+    """فصل القرية والحارة من حقل القرية والعنوان (مثال: 'الجبوب - الاكمة')."""
+    village = (row.get("village") or "").strip()
+    address = (row.get("address") or "").strip()
     if village:
-        return village
-    try:
-        village = (row["address"] or "").strip()
-    except Exception:
-        village = ""
+        hara = ""
+        if " - " in address:
+            hara = address.split(" - ", 1)[1].strip()
+        elif "-" in address:
+            part = address.split("-", 1)
+            hara = part[1].strip() if len(part) > 1 else ""
+        return village, hara
+    if " - " in address:
+        parts = address.split(" - ", 1)
+        return parts[0].strip(), parts[1].strip()
+    if "-" in address:
+        parts = address.split("-", 1)
+        return parts[0].strip(), (parts[1].strip() if len(parts) > 1 else "")
+    return address, ""
+
+
+def _report_header_info(rows) -> dict:
+    """معلومات ترويسة الكشف: شهر الميلادي، السنة، الشهر الهجري وسنته، وشهر التحصيل السابق."""
+    month_key = None
+    sample_date = None
+    for row in rows:
+        if not row.get("invoice_id"):
+            continue
+        label = (row.get("month_label") or "").strip()
+        inv_date = (row.get("invoice_date") or "").strip()
+        key = (label[:7] or inv_date[:7] or "").strip()
+        if key and (not month_key or key > month_key):
+            month_key = key
+        if len(inv_date) >= 10 and (not sample_date or inv_date > sample_date):
+            sample_date = inv_date
+    today = date.today()
+    gy, gm = today.year, today.month
+    if month_key and len(month_key) >= 7:
+        try:
+            gy = int(month_key[:4])
+            gm = int(month_key[5:7])
+            if not 1 <= gm <= 12:
+                gm = today.month
+        except (TypeError, ValueError):
+            gy, gm = today.year, today.month
+    day = 1
+    if sample_date:
+        try:
+            day = int(sample_date[8:10])
+        except (TypeError, ValueError):
+            day = 1
+    hy, hm, _ = _gregorian_to_hijri(gy, gm, day)
+    prev_gm = gm - 1 if gm > 1 else 12
+    return {
+        "month_key": month_key,
+        "report_year": gy,
+        "report_month_name": _AR_GR_MONTHS[gm - 1],
+        "hijri_year": hy,
+        "hijri_month_name": _AR_HJ_MONTHS[hm - 1],
+        "prev_month_name": _AR_GR_MONTHS[prev_gm - 1],
+        "received_prev_label": f"المستلم شهر {_AR_GR_MONTHS[prev_gm - 1]}",
+    }
+
+
+def _summarize_rows(rows) -> dict:
+    rows = [r for r in rows if r.get("invoice_id")]
+    return {
+        "count": len(rows),
+        "units": sum(float(r.get("consumption") or 0) for r in rows),
+        "consumption_amount": sum(float(r.get("consumption_amount") or 0) for r in rows),
+        "received": sum(float(r.get("paid_amount") or 0) for r in rows),
+    }
+
+
+def _apply_village_filter(ctx: dict, village: str) -> dict:
+    if not village:
+        return ctx
+    ctx = dict(ctx)
+    ctx["villages"] = {village: ctx["villages"].get(village, [])}
+    ctx["village_names"] = [village]
+    ctx["villages_summary"] = {v: _summarize_rows(rows) for v, rows in ctx["villages"].items()}
+    return ctx
+
+
+def _current_village(row) -> str:
+    village, _ = _split_village_hara(row)
     return village or "غير محدد"
 
 
@@ -342,7 +442,15 @@ def _village_rows(db, only_unpaid: bool = False):
                i.paid_amount,
                i.remaining_amount,
                i.credit_amount,
-               i.opening_balance
+               i.opening_balance,
+               COALESCE((
+                   SELECT i2.paid_amount
+                   FROM invoices i2
+                   WHERE i2.subscriber_id = s.id
+                     AND i2.id < i.id
+                   ORDER BY i2.id DESC
+                   LIMIT 1
+               ), 0) AS previous_paid_amount
         FROM subscribers s
         LEFT JOIN invoices i ON i.id = (
             SELECT i2.id
@@ -357,7 +465,11 @@ def _village_rows(db, only_unpaid: bool = False):
     ).fetchall()
     bucket = defaultdict(list)
     for row in rows:
-        bucket[_current_village(row)].append(row)
+        item = dict(row)
+        village_name, hara = _split_village_hara(item)
+        item["village_name"] = village_name
+        item["hara"] = hara
+        bucket[village_name or "غير محدد"].append(item)
     return bucket
 
 
@@ -369,9 +481,12 @@ def _manual_collection_common_context(db, only_unpaid: bool = False):
     total_amount = db.execute("SELECT COALESCE(SUM(total_amount), 0) s FROM invoices").fetchone()["s"]
     total_paid = db.execute("SELECT COALESCE(SUM(paid_amount), 0) s FROM invoices").fetchone()["s"]
     total_remaining = db.execute("SELECT COALESCE(SUM(remaining_amount), 0) s FROM invoices").fetchone()["s"]
+    all_rows = [r for rows in villages.values() for r in rows]
+    header_info = _report_header_info(all_rows)
     return {
         "villages": villages,
         "village_names": village_names,
+        "villages_summary": {v: _summarize_rows(rows) for v, rows in villages.items()},
         "total_subscribers": total_subscribers,
         "total_invoices": total_invoices,
         "total_amount": float(total_amount or 0),
@@ -381,6 +496,7 @@ def _manual_collection_common_context(db, only_unpaid: bool = False):
         "organization_name": get_setting("organization_name", DEFAULT_SETTINGS["organization_name"]),
         "project_name": get_setting("project_name", DEFAULT_SETTINGS["project_name"]),
         "print_date": date.today().isoformat(),
+        **header_info,
     }
 
 
@@ -451,10 +567,7 @@ def manual_collection_readings_pdf():
 def manual_collection_collections():
     db = get_db()
     village = request.args.get("village", "").strip()
-    ctx = _manual_collection_common_context(db, only_unpaid=True)
-    if village:
-        ctx["villages"] = {village: ctx["villages"].get(village, [])}
-        ctx["village_names"] = [village]
+    ctx = _apply_village_filter(_manual_collection_common_context(db, only_unpaid=True), village)
     return render_template("manual_collections_sheet.html", print_mode=False, village=village, **ctx)
 
 
@@ -468,10 +581,7 @@ def manual_collection_collections_pdf():
     mode = (request.args.get("mode", "pdf") or "pdf").strip().lower()
 
     try:
-        ctx = _manual_collection_common_context(db, only_unpaid=True)
-        if village:
-            ctx["villages"] = {village: ctx["villages"].get(village, [])}
-            ctx["village_names"] = [village]
+        ctx = _apply_village_filter(_manual_collection_common_context(db, only_unpaid=True), village)
 
         if mode == "zip":
             def build(zf):
@@ -482,6 +592,7 @@ def manual_collection_collections_pdf():
                     local_ctx["village"] = village_name
                     local_ctx["villages"] = {village_name: rows}
                     local_ctx["village_names"] = [village_name]
+                    local_ctx["villages_summary"] = {village_name: _summarize_rows(rows)}
                     try:
                         pdf = _render_pdf_bytes("manual_collections_pdf.html", print_mode=True, **local_ctx)
                     except Exception as inner_exc:
