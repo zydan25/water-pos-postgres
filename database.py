@@ -601,8 +601,8 @@ def init_db(app):
         from werkzeug.security import generate_password_hash
         if not db.execute("SELECT 1 FROM users WHERE username=?", ("zydan",)).fetchone():
             db.execute(
-                "INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)",
-                ("zydan", generate_password_hash("774952665"), "Admin", datetime.now().isoformat()),
+                "INSERT INTO users (username, password_hash, role, active, created_at) VALUES (?, ?, ?, ?, ?)",
+                ("zydan", generate_password_hash("774952665"), "Admin", 1, datetime.now().isoformat()),
             )
 
         # تشغيل التحديثات التلقائية للبنية القديمة لتجنب كراش الحقول المفقودة

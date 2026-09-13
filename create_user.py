@@ -14,9 +14,9 @@ def create_user(username, password, role="Collector", wallet_id=None):
         password_hash = generate_password_hash(password)
         now = datetime.now().isoformat()
         cursor.execute("""
-            INSERT INTO users (username, password_hash, role, wallet_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (username, password_hash, role, wallet_id, now, now))
+            INSERT INTO users (username, password_hash, role, wallet_id, active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (username, password_hash, role, wallet_id, 1, now, now))
         conn.commit()
         print(f"✅ تم إنشاء المستخدم: {username}")
     except sqlite3.IntegrityError:
