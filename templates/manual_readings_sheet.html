@@ -4,7 +4,7 @@
 @media print {
   @page {
     size: A4 landscape;
-    margin: 7mm;
+    margin: 6mm;
   }
 
   html, body {
@@ -24,21 +24,8 @@
   .report-card {
     box-shadow: none !important;
     border: 1px solid #cbd5e1 !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
   }
 
-  .village-box {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  .report-header {
-    border: 1px solid #cbd5e1 !important;
-    background: #fff !important;
-  }
-
-  /* مهم جدًا: إلغاء تأثير responsive عند الطباعة */
   .table-responsive {
     overflow: visible !important;
     display: block !important;
@@ -60,32 +47,37 @@
     color: #000 !important;
     opacity: 1 !important;
     visibility: visible !important;
+    border: 1px solid #94a3b8 !important;
   }
 
   .sheet-table th {
-    background: #f8fafc !important;
-    font-weight: 700 !important;
+    background: #e2e8f0 !important;
+    font-weight: 800 !important;
   }
 
-  /* منع Bootstrap من إخفاء أو قص أي شيء في الطباعة */
+  .summary-bar td {
+    border: 1px solid #94a3b8 !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+  }
+
+  .summary-bar .lbl {
+    background: #e2e8f0 !important;
+  }
+
   .card, .card-body, .container-fluid {
     overflow: visible !important;
   }
 
-  /* أعمدة الطباعة */
   .col-m { width: 4% !important; }
-  .col-account { width: 12% !important; }
-  .col-meter { width: 10% !important; }
-  .col-village { width: 12% !important; }
-  .col-name { width: 24% !important; }
-  .col-prev { width: 10% !important; }
-  .col-current { width: 10% !important; }
-  .col-notes { width: 18% !important; }
-
-  .blank-line {
-    color: #666 !important;
-    letter-spacing: 2px;
-  }
+  .col-account { width: 9% !important; }
+  .col-village { width: 9% !important; }
+  .col-hara { width: 9% !important; }
+  .col-meter { width: 12% !important; }
+  .col-name { width: 28% !important; }
+  .col-prev { width: 9% !important; }
+  .col-current { width: 11% !important; }
+  .col-notes { width: 9% !important; }
 }
 
 .report-header {
@@ -106,12 +98,7 @@
 }
 
 .sheet-table td {
-  height: 28px;
-}
-
-.blank-line {
-  color: #999;
-  letter-spacing: 3px;
+  height: 30px;
 }
 </style>
 {% endblock %}
@@ -122,9 +109,9 @@
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
       <div>
         <div class="small text-muted">{{ organization_name }}</div>
-        <h4 class="mb-0 section-title">كشف قراءة</h4>
+        <h4 class="mb-0 section-title">كشف قراءة  {{ hijri_month_name }}  {{ hijri_year }}هـ    {{ report_month_name }} {{ report_year }}م</h4>
         <div class="text-muted small">
-          القراءة السابقة والحالية مأخوذتان من آخر فاتورة مسجلة.
+          قراءة السابقة من آخر فاتورة والقراءة الحالية تُترك فارغة للمتحصل الميداني.
         </div>
       </div>
       <div class="d-flex gap-2 flex-wrap">
@@ -135,25 +122,19 @@
     </div>
 
     <div class="row g-2 mt-3">
-      <div class="col-md-3">
+      <div class="col-md-4">
         <div class="p-2 bg-light rounded-3 text-center">
           <div class="small text-muted">القرية</div>
           <div class="fw-bold">{{ village or 'كل القرى' }}</div>
         </div>
       </div>
-      <div class="col-md-3">
-        <div class="p-2 bg-light rounded-3 text-center">
-          <div class="small text-muted">عدد القرى</div>
-          <div class="fw-bold">{{ villages|length }}</div>
-        </div>
-      </div>
-      <div class="col-md-3">
+      <div class="col-md-4">
         <div class="p-2 bg-light rounded-3 text-center">
           <div class="small text-muted">عدد المشتركين</div>
-          <div class="fw-bold">{{ total_subscribers }}</div>
+          <div class="fw-bold">{{ flat_rows|length }}</div>
         </div>
       </div>
-      <div class="col-md-3">
+      <div class="col-md-4">
         <div class="p-2 bg-light rounded-3 text-center">
           <div class="small text-muted">تاريخ الطباعة</div>
           <div class="fw-bold">{{ print_date }}</div>
@@ -162,48 +143,47 @@
     </div>
   </div>
 
-  {% for village_name, rows in villages.items() %}
-  <div class="card report-card rounded-4 mb-3 village-box">
-    <div class="report-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <div>
-        <div class="small text-muted">{{ project_name }}</div>
-        <div class="h5 mb-0">{{ village_name }}</div>
-        <div class="small text-muted">عدد المشتركين: {{ rows|length }}</div>
-      </div>
-      <div class="text-end small">
-        <div>القرية: {{ village_name }}</div>
-        <div>التاريخ: {{ print_date }}</div>
-      </div>
-    </div>
-
+  <div class="card report-card rounded-4 mb-3">
     <div class="card-body p-0">
       <div class="table-responsive">
         <table class="table table-sm table-bordered mb-0 text-center sheet-table">
+          <colgroup>
+            <col class="col-m">
+            <col class="col-account">
+            <col class="col-village">
+            <col class="col-hara">
+            <col class="col-meter">
+            <col class="col-name">
+            <col class="col-prev">
+            <col class="col-current">
+            <col class="col-notes">
+          </colgroup>
           <thead class="table-light">
             <tr>
-              <th class="col-m">م</th>
-              <th class="col-account">رقم الحساب</th>
-              <th class="col-meter">رقم العداد</th>
-              <th class="col-village">القرية</th>
-              <th class="col-name">اسم المشترك</th>
-              <th class="col-prev">القراءة السابقة</th>
-              <th class="col-current">الحالية</th>
-              <th class="col-notes">ملاحظات / توقيع</th>
+              <th>م</th>
+              <th>رقم الحساب</th>
+              <th>القرية</th>
+              <th>الحارة</th>
+              <th>رقم العداد</th>
+              <th>أسماء المشتركين</th>
+              <th>السابقة</th>
+              <th>الحالية</th>
+              <th>ملاحظة</th>
             </tr>
           </thead>
           <tbody>
-            {% for row in rows %}
-              {% set prev_reading = row.previous_reading if row.previous_reading is not none else row.last_reading %}
-              {% set curr_reading = row.current_reading if row.current_reading is not none else none %}
+            {% for row in flat_rows %}
+              {% set prev_reading = row.last_reading if row.last_reading is not none else row.previous_reading %}
               <tr>
                 <td>{{ loop.index }}</td>
                 <td>{{ row.account_number or '-' }}</td>
+                <td>{{ row.village_name or row.village or row.address or '-' }}</td>
+                <td>{{ row.hara or '-' }}</td>
                 <td>{{ row.meter_number or '-' }}</td>
-                <td>{{ row.village or row.address or row.village_name or '-' }}</td>
                 <td class="text-start">{{ row.name or row.full_name or '-' }}</td>
-                <td>{% if prev_reading is not none %}{{ "%.0f"|format(prev_reading) }}{% endif %}</td>
-                <td>{% if curr_reading is not none %}{{ "%.0f"|format(curr_reading) }}{% endif %}</td>
-                <td class="text-start blank-line">........................................</td>
+                <td>{% if prev_reading is not none %}{{ "%.0f"|format(prev_reading) }}{% else %}0{% endif %}</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -211,7 +191,6 @@
       </div>
     </div>
   </div>
-  {% endfor %}
 </div>
 
 {% endblock %}

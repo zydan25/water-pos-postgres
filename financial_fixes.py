@@ -407,6 +407,14 @@ def _apply_village_filter(ctx: dict, village: str) -> dict:
     return ctx
 
 
+def _flat_village_rows(villages: dict) -> list:
+    """صفّ جميع المشتركين من كل القرى في قائمة واحدة مرتّبة حسب القرية."""
+    flat = []
+    for v in sorted(villages.keys()):
+        flat.extend(villages[v])
+    return flat
+
+
 def _current_village(row) -> str:
     village, _ = _split_village_hara(row)
     return village or "غير محدد"
@@ -530,6 +538,8 @@ def manual_collection_readings():
     if village:
         all_rows["villages"] = {village: all_rows["villages"].get(village, [])}
         all_rows["village_names"] = [village]
+    all_rows["flat_rows"] = _flat_village_rows(all_rows["villages"])
+    all_rows["reading_label"] = village or "جميع القرى"
     return render_template("manual_readings_sheet.html", print_mode=False, village=village, **all_rows)
 
 
@@ -553,11 +563,15 @@ def manual_collection_readings_pdf():
                 local_ctx["village"] = village_name
                 local_ctx["villages"] = {village_name: rows}
                 local_ctx["village_names"] = [village_name]
+                local_ctx["flat_rows"] = rows
+                local_ctx["reading_label"] = village_name
                 pdf = _render_pdf_bytes("manual_readings_pdf.html", print_mode=True, **local_ctx)
                 zf.writestr(f"كشف_قراءة_{_safe_filename(village_name)}.pdf", pdf)
         return _send_zip(build, f"كشف_قراءة_{_safe_filename(village or 'جميع_القرى')}.zip")
 
-    pdf = _render_pdf_bytes("manual_readings_pdf.html", print_mode=True, village=village, **ctx)
+    pdf = _render_pdf_bytes("manual_readings_pdf.html", print_mode=True, village=village,
+                            flat_rows=_flat_village_rows(ctx["villages"]),
+                            reading_label=village or "جميع القرى", **ctx)
     return _send_pdf(pdf, f"كشف_قراءة_{_safe_filename(village or 'جميع_القرى')}.pdf")
 
 
