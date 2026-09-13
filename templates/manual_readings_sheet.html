@@ -3,14 +3,14 @@
 <style>
 @media print {
   @page {
-    size: A4 landscape;
+    size: A4 portrait;
     margin: 6mm;
   }
 
   html, body {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    font-size: 10px !important;
+    font-size: 13px !important;
   }
 
   body {
@@ -48,21 +48,17 @@
     opacity: 1 !important;
     visibility: visible !important;
     border: 1px solid #94a3b8 !important;
+    padding: 2px 2px !important;
   }
 
   .sheet-table th {
     background: #e2e8f0 !important;
     font-weight: 800 !important;
-  }
-
-  .summary-bar td {
-    border: 1px solid #94a3b8 !important;
     font-size: 11px !important;
-    font-weight: 800 !important;
   }
 
-  .summary-bar .lbl {
-    background: #e2e8f0 !important;
+  .sheet-table td {
+    font-size: 10px !important;
   }
 
   .card, .card-body, .container-fluid {
@@ -70,14 +66,14 @@
   }
 
   .col-m { width: 4% !important; }
-  .col-account { width: 9% !important; }
-  .col-village { width: 9% !important; }
-  .col-hara { width: 9% !important; }
-  .col-meter { width: 12% !important; }
-  .col-name { width: 28% !important; }
-  .col-prev { width: 9% !important; }
-  .col-current { width: 11% !important; }
-  .col-notes { width: 9% !important; }
+  .col-account { width: 8% !important; }
+  .col-village { width: 8% !important; }
+  .col-hara { width: 10% !important; }
+  .col-meter { width: 10% !important; }
+  .col-name { width: 32% !important; }
+  .col-prev { width: 10% !important; }
+  .col-current { width: 10% !important; }
+  .col-notes { width: 8% !important; }
 }
 
 .report-header {
