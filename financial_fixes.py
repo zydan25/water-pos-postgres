@@ -420,10 +420,30 @@ def _current_village(row) -> str:
     return village or "غير محدد"
 
 
+def _report_prev_month_key(db) -> str:
+    """مفتاح (YYYY-MM) للشهر السابق نسبة لأحدث فاتورة في قاعدة البيانات."""
+    row = db.execute(
+        "SELECT i.month_label FROM invoices i "
+        "WHERE i.id IN (SELECT MAX(id) FROM invoices GROUP BY subscriber_id) "
+        "ORDER BY i.month_label DESC LIMIT 1"
+    ).fetchone()
+    month_key = (row["month_label"] or "").strip() if row else ""
+    if not month_key or len(month_key) < 7:
+        today = date.today()
+        month_key = f"{today.year:04d}-{today.month:02d}"
+    year, month = int(month_key[:4]), int(month_key[5:7])
+    if month == 1:
+        year, month = year - 1, 12
+    else:
+        month -= 1
+    return f"{year:04d}-{month:02d}"
+
+
 def _village_rows(db, only_unpaid: bool = False):
     where = "WHERE 1=1"
     if only_unpaid:
         where += " AND COALESCE(i.remaining_amount, 0) > 0"
+    prev_key = _report_prev_month_key(db)
     rows = db.execute(
         f"""
         SELECT
@@ -452,12 +472,10 @@ def _village_rows(db, only_unpaid: bool = False):
                i.credit_amount,
                i.opening_balance,
                COALESCE((
-                   SELECT i2.paid_amount
-                   FROM invoices i2
-                   WHERE i2.subscriber_id = s.id
-                     AND i2.id < i.id
-                   ORDER BY i2.id DESC
-                   LIMIT 1
+                   SELECT COALESCE(SUM(p.amount), 0)
+                   FROM payments p
+                   WHERE p.subscriber_id = s.id
+                     AND substr(p.payment_date, 1, 7) = '{prev_key}'
                ), 0) AS previous_paid_amount
         FROM subscribers s
         LEFT JOIN invoices i ON i.id = (
