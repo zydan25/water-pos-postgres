@@ -597,13 +597,16 @@ def init_db(app):
         if not default_wallet:
             db.execute("INSERT INTO wallets (id, name, balance, created_at) VALUES (1, 'صندوق ترحيل قديم', 0.0, ?)", (datetime.now().isoformat(),))
 
-        # زرع المستخدم المسؤول الافتراضي لتجنب فشل تسجيل الدخول
-        from werkzeug.security import generate_password_hash
-        if not db.execute("SELECT 1 FROM users WHERE username=?", ("zydan",)).fetchone():
-            db.execute(
-                "INSERT INTO users (username, password_hash, role, active, created_at) VALUES (?, ?, ?, ?, ?)",
-                ("zydan", generate_password_hash("774952665"), "Admin", 1, datetime.now().isoformat()),
-            )
+        # الحساب bootstrap التاريخي كان موجودًا للنسخ القديمة فقط.
+        # في بيئة الإنتاج يجب أن تأتي حسابات الإدارة من deploy/create_admin.py
+        # حتى لا يعاد إنشاء المستخدم التاريخي "zydan" عند كل إقلاع.
+        if os.environ.get("APP_ENV", "").strip().lower() not in {"production", "prod"}:
+            from werkzeug.security import generate_password_hash
+            if not db.execute("SELECT 1 FROM users WHERE username=?", ("zydan",)).fetchone():
+                db.execute(
+                    "INSERT INTO users (username, password_hash, role, active, created_at) VALUES (?, ?, ?, ?, ?)",
+                    ("zydan", generate_password_hash("774952665"), "Admin", 1, datetime.now().isoformat()),
+                )
 
         # تشغيل التحديثات التلقائية للبنية القديمة لتجنب كراش الحقول المفقودة
         migrate_db_schema(db)
@@ -711,8 +714,12 @@ def ensure_employee_profile(db, user_id, full_name=None, job_title=None, account
         )
         return row["id"]
     db.execute(
-        "INSERT INTO employee_profiles (user_id, account_node_id, full_name, job_title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (user_id, account_node_id, full_name, job_title, now, now),
+        """
+        INSERT INTO employee_profiles
+            (user_id, account_node_id, full_name, job_title, monthly_target, active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (user_id, account_node_id, full_name, job_title, 0.0, 1, now, now),
     )
     return db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
 
