@@ -2,3 +2,32 @@ myenv/
 __pycache__/
 *.pyc
 .env
+
+# Local runtime / secrets
+venv/
+__pycache__/
+*.pyc
+
+# Local SQLite databases
+instance/*.sqlite3
+instance/*.db
+instance/*.sqlite
+
+# Local secret/session key
+instance/secret.key
+
+# Local backups
+backup/
+backups/
+
+venv/
+__pycache__/
+*.pyc
+
+instance/*.sqlite3
+instance/*.db
+instance/*.sqlite
+instance/secret.key
+
+backup/
+backups/
