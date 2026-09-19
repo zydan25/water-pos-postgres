@@ -34,7 +34,7 @@ pm2 status
 pm2 logs water-pos-saif
 ```
 
-The service binds to `127.0.0.1:5026`. One Gunicorn worker is deliberate
+The service binds to `127.0.0.1:5029`. One Gunicorn worker is deliberate
 because `jobs.py` keeps job state in process memory.
 
 ## Nginx
