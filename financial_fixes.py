@@ -211,11 +211,11 @@ def void_invoice_with_reversal(db, invoice_id: int, user_id: int | None = None):
         raise ValueError("الفاتورة غير موجودة.")
 
     # إلغاء/عكس سندات الفاتورة الآلية إن وجدت، مع عكس القيد المرتبط بها.
+    # السندات الملغاة سبق عكسها عند التعديل؛ عكسها ثانية يُنشئ رصيداً دائناً وهمياً للعميل.
     invoice_vouchers = db.execute(
-        "SELECT * FROM accounting_vouchers WHERE source_type='invoice' AND source_id=? ORDER BY id DESC",
+        "SELECT * FROM accounting_vouchers WHERE source_type='invoice' AND source_id=? AND status='posted' ORDER BY id DESC",
         (invoice_id,),
     ).fetchall()
-    invoice_voucher = invoice_vouchers[0] if invoice_vouchers else None
     for voucher in invoice_vouchers:
         if voucher["journal_entry_id"]:
             _reverse_journal_entry(
@@ -231,8 +231,12 @@ def void_invoice_with_reversal(db, invoice_id: int, user_id: int | None = None):
             (datetime.now().isoformat(), voucher["id"]),
         )
 
-    # إذا كان هناك ترحيل قديم على مستوى القيد فقط فنعكسه أيضاً.
-    if invoice["journal_entry_id"] and (not invoice_voucher or int(invoice_voucher["journal_entry_id"] or 0) != int(invoice["journal_entry_id"])):
+    # ترحيل قديم على مستوى القيد فقط (بلا أي سند لهذه الفاتورة) يُعكس أيضاً.
+    any_voucher = db.execute(
+        "SELECT 1 FROM accounting_vouchers WHERE source_type='invoice' AND source_id=? LIMIT 1",
+        (invoice_id,),
+    ).fetchone()
+    if invoice["journal_entry_id"] and not any_voucher:
         _reverse_journal_entry(
             db,
             int(invoice["journal_entry_id"]),
@@ -249,7 +253,7 @@ def void_invoice_with_reversal(db, invoice_id: int, user_id: int | None = None):
     ).fetchall()
     for payment in payments:
         voucher = db.execute(
-            "SELECT * FROM accounting_vouchers WHERE source_type='payment' AND source_id=? ORDER BY id DESC LIMIT 1",
+            "SELECT * FROM accounting_vouchers WHERE source_type='payment' AND source_id=? AND status='posted' ORDER BY id DESC LIMIT 1",
             (payment["id"],),
         ).fetchone()
         if voucher and voucher["journal_entry_id"]:
