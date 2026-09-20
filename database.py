@@ -1321,8 +1321,13 @@ def financial_reset(db, *, clear_opening_snapshots=True):
 
 
 def get_opening_balance(db, subscriber_id, exclude_invoice_id=None):
+    """الرصيد المدور للعميل = صافي آخر فاتورة فقط (المتبقي ناقص الرصيد الدائن).
+
+    المتبقي في كل فاتورة يتضمن أصلاً رصيد الفواتير السابقة، فجمع كل الفواتير
+    يحتسب المتأخرات أكثر من مرة وينمو الدين أُسّياً مع كل شهر.
+    """
     sql = """
-        SELECT COALESCE(SUM(COALESCE(remaining_amount, 0) - COALESCE(credit_amount, 0)), 0) AS bal
+        SELECT COALESCE(remaining_amount, 0) - COALESCE(credit_amount, 0) AS bal
         FROM invoices
         WHERE subscriber_id = ?
     """
@@ -1330,8 +1335,9 @@ def get_opening_balance(db, subscriber_id, exclude_invoice_id=None):
     if exclude_invoice_id:
         sql += " AND id != ?"
         params.append(exclude_invoice_id)
+    sql += " ORDER BY id DESC LIMIT 1"
     row = db.execute(sql, params).fetchone()
-    return row["bal"] if row else 0
+    return float(row["bal"] or 0) if row else 0.0
 
 def get_subscriber_opening_snapshot(db, subscriber_id):
     """إرجاع آخر بيانات افتتاحية محفوظة للمشترك عند عدم وجود فاتورة سابقة."""
@@ -1750,6 +1756,8 @@ def process_invoice_payment(db, invoice_id, user_id, amount, method, notes, atta
 def post_invoice_accounting(db, invoice_id, user_id=None, amount=None, method="نقداً", notes="", attachment_path=None, wallet_id=None, cash_account_id=None, receivable_account_id=None, reverse_existing=None, **kwargs):
     """
     ترحيل الفاتورة محاسبياً على أساس سند إثبات ثم قيد يومية مرتبطين معاً.
+    - المرحَّل هو رسوم الشهر الجديدة فقط (الإجمالي ناقص الرصيد المدور)؛ فالرصيد المدور
+      مُثبت مسبقاً في حساب العميل ولا يُعاد الاعتراف به إيراداً.
     - الفاتورة الدائنة للعميل تُسجل كسند إثبات من حساب العميل التفصيلي إلى حساب إيراد المياه.
     - القيد لا يُنشأ منفصلاً عن السند.
     - عند التعديل مع reverse_existing=True يتم عكس السند والقيد السابقين ثم إعادة الترحيل.
@@ -1789,8 +1797,9 @@ def post_invoice_accounting(db, invoice_id, user_id=None, amount=None, method="�
         raise ValueError("الفاتورة غير موجودة.")
 
     total_amount = float(invoice["total_amount"] or 0)
-    if total_amount <= 0:
-        raise ValueError("لا يمكن ترحيل فاتورة بقيمة صفر أو سالبة. راجع الرصيد الافتتاحي/المدفوعات السابقة.")
+    if total_amount < 0:
+        raise ValueError("لا يمكن ترحيل فاتورة بقيمة سالبة. راجع الرصيد الافتتاحي/المدفوعات السابقة.")
+    charge_amount = round(total_amount - float(invoice["opening_balance"] or 0), 2)
 
     subscriber_id = invoice["subscriber_id"]
     from_account_id = None
@@ -1818,7 +1827,7 @@ def post_invoice_accounting(db, invoice_id, user_id=None, amount=None, method="�
         """
         SELECT *
         FROM accounting_vouchers
-        WHERE source_type = 'invoice' AND source_id = ?
+        WHERE source_type = 'invoice' AND source_id = ? AND status = 'posted'
         ORDER BY id DESC
         LIMIT 1
         """,
@@ -1885,6 +1894,14 @@ def post_invoice_accounting(db, invoice_id, user_id=None, amount=None, method="�
             )
         return existing_voucher["id"]
 
+    if charge_amount <= 0.005:
+        # فاتورة بلا رسوم جديدة (رصيد مدور فقط): لا قيد محاسبي لها.
+        db.execute(
+            "UPDATE invoices SET journal_entry_id = NULL, updated_at = ? WHERE id = ?",
+            (now, invoice_id),
+        )
+        return None
+
     voucher_no = next_voucher_no(db)
     voucher_desc = f"إثبات فاتورة رقم {invoice['invoice_no']}"
     reference = f"INV-{invoice['invoice_no']}"
@@ -1901,7 +1918,7 @@ def post_invoice_accounting(db, invoice_id, user_id=None, amount=None, method="�
             voucher_no,
             "invoice",
             invoice_date,
-            total_amount,
+            charge_amount,
             from_account_id,
             to_account_id,
             reference,
@@ -1930,14 +1947,14 @@ def post_invoice_accounting(db, invoice_id, user_id=None, amount=None, method="�
         INSERT INTO journal_lines (entry_id, account_id, debit, credit, description)
         VALUES (?, ?, ?, 0, ?)
         """,
-        (entry_id, from_account_id, total_amount, "ذمم العميل"),
+        (entry_id, from_account_id, charge_amount, "ذمم العميل"),
     )
     db.execute(
         """
         INSERT INTO journal_lines (entry_id, account_id, debit, credit, description)
         VALUES (?, ?, 0, ?, ?)
         """,
-        (entry_id, to_account_id, total_amount, "إيراد المياه"),
+        (entry_id, to_account_id, charge_amount, "إيراد المياه"),
     )
 
     db.execute(
