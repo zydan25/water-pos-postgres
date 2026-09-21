@@ -46,6 +46,24 @@
     </form>
   </div>
 
+  <div class="card p-4 mt-3 border-danger">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+      <h5 class="mb-0 text-danger">إعادة تأسيس النظام المالي</h5>
+      <span class="badge text-bg-danger">عملية حساسة</span>
+    </div>
+    <p class="mb-2">سيتم حذف الفواتير والمدفوعات والقيود والسندات والحركات والقراءات والجولات والسجلات المالية، مع الإبقاء على المشتركين وشجرة الحسابات والمستخدمين والإعدادات.</p>
+    <p class="small text-muted mb-3">سيتم أخذ نسخة احتياطية تلقائية قبل التنفيذ، ثم تصفير أرصدة الصناديق وحقول البداية للمشتركين. بعد ذلك يمكنك إدخال آخر قراءة والمستحق والمسدد يدويًا.</p>
+    <form method="post" action="{{ url_for('reset_financial_system') }}" onsubmit="return confirm('تحذير: سيتم تصفير النظام المالي وحذف جميع الفواتير والمدفوعات والقيود والسندات والحركات. المشتركين وشجرة الحسابات فقط سيبقون. هل تريد المتابعة؟\n\nاكتب RESET في الحقل للتأكيد.');" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label">تأكيد العملية</label>
+        <input class="form-control" name="confirm" value="" placeholder="اكتب RESET" autocomplete="off" required>
+      </div>
+      <div class="col-md-4">
+        <button class="btn btn-danger w-100" type="submit">تصفير النظام المالي وإعادة التشغيل</button>
+      </div>
+    </form>
+  </div>
+
   <div class="card p-4 mt-3">
     <h5>ماذا يحتاج إرسال واتساب؟</h5>
     <div class="table-responsive">
