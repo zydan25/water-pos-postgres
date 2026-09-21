@@ -3,6 +3,8 @@ import csv
 import io
 import os
 import secrets
+import subprocess
+import sys
 import threading
 import uuid
 import xml.etree.ElementTree as ET
@@ -1120,6 +1122,46 @@ def create_app():
             return redirect(url_for("settings"))
         settings_dict = {k: get_setting(k, v) for k, v in DEFAULT_SETTINGS.items()}
         return render_template("settings.html", settings=settings_dict)
+
+    @app.route("/settings/reset-financial", methods=["POST"])
+    @login_required
+    @role_required(["admin"])
+    def reset_financial_system():
+        if request.form.get("confirm") != "RESET":
+            flash("لم يتم تنفيذ التصفير: يجب تأكيد العملية.", "warning")
+            return redirect(url_for("settings"))
+
+        script_path = BASE_DIR / "tools" / "reset_financial_system.py"
+        db_path = Path(database_file_path).resolve()
+        try:
+            result = subprocess.run(
+                [sys.executable, str(script_path), "--db", str(db_path), "--apply"],
+                cwd=str(BASE_DIR),
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+        except subprocess.TimeoutExpired:
+            flash("تجاوزت عملية التصفير المهلة ولم تتم إعادة تشغيل الخدمة.", "danger")
+            return redirect(url_for("settings"))
+        except Exception as exc:
+            flash(f"تعذر تنفيذ التصفير: {exc}", "danger")
+            return redirect(url_for("settings"))
+
+        if result.returncode != 0:
+            output = (result.stderr or result.stdout or "").strip().splitlines()
+            detail = output[-1] if output else "خطأ غير معروف."
+            flash(f"فشل التصفير ولم تتم إعادة تشغيل الخدمة: {detail}", "danger")
+            return redirect(url_for("settings"))
+
+        subprocess.Popen(
+            ["bash", "-lc", "sleep 2; pm2 restart water-app --update-env"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        flash("تم تصفير النظام المالي بنجاح مع الإبقاء على المشتركين وشجرة الحسابات. ستتم إعادة تشغيل الخدمة الآن.", "success")
+        return redirect(url_for("settings"))
 
     @app.route("/subscribers")
     @login_required
