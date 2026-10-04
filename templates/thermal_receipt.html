@@ -82,7 +82,7 @@
   <hr>
 
   <div class="row"><span class="lbl">رقم الفاتورة:</span><span class="val bold">{{ invoice.invoice_no }}</span></div>
-  <div class="row"><span class="lbl">الشهر:</span><span class="val">{{ invoice.month_label }}</span></div>
+  <div class="row"><span class="lbl">الشهر:</span><span class="val">{{ invoice.month_label|month_name }}</span></div>
   <div class="row"><span class="lbl">الاستهلاك:</span><span class="val">{{ invoice.consumption }} وحدة</span></div>
   <div class="row"><span class="lbl">مبلغ الفاتورة:</span><span class="val">{{ "%.0f"|format(invoice.total_amount) }} {{ settings.currency_name }}</span></div>
   <hr>
