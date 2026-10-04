@@ -1202,6 +1202,56 @@ def create_app():
             selected_account_ids=_selected_account_ids_from_request(),
                 status=status
             )
+    @app.route("/subscribers/<int:subscriber_id>")
+    @login_required
+    def subscriber_detail(subscriber_id):
+        db = get_db()
+        subscriber = db.execute("SELECT * FROM subscribers WHERE id = ?", (subscriber_id,)).fetchone()
+        if not subscriber:
+            abort(404)
+        latest_invoice = db.execute(
+            """
+            SELECT id, invoice_no, invoice_date, month_label, previous_reading, current_reading,
+                   consumption, total_amount, paid_amount, remaining_amount, credit_amount
+            FROM invoices
+            WHERE subscriber_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (subscriber_id,),
+        ).fetchone()
+        recent_invoices = db.execute(
+            """
+            SELECT id, invoice_no, invoice_date, month_label, total_amount, paid_amount, remaining_amount
+            FROM invoices
+            WHERE subscriber_id = ?
+            ORDER BY id DESC
+            LIMIT 8
+            """,
+            (subscriber_id,),
+        ).fetchall()
+        recent_payments = db.execute(
+            """
+            SELECT p.id, p.payment_date, p.amount, p.method, i.invoice_no
+            FROM payments p
+            LEFT JOIN invoices i ON i.id = p.invoice_id
+            WHERE p.subscriber_id = ?
+            ORDER BY p.id DESC
+            LIMIT 8
+            """,
+            (subscriber_id,),
+        ).fetchall()
+        opening_balance = get_opening_balance(db, subscriber_id)
+        return render_template(
+            "subscriber_detail.html",
+            subscriber=subscriber,
+            latest_invoice=latest_invoice,
+            recent_invoices=recent_invoices,
+            recent_payments=recent_payments,
+            opening_balance=opening_balance,
+            currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]),
+        )
+
     @app.route("/subscribers/new", methods=["GET", "POST"])
     @login_required
     @role_required(["admin", "staff", "collector"])
