@@ -91,7 +91,7 @@
           </tr>
           <tr>
             <td class="bg-gray">شهر / عداد</td>
-            <td>{{ invoice.month_label }} / {{ invoice.meter_number or '—' }}</td>
+            <td>{{ invoice.month_label|month_name }} / {{ invoice.meter_number or '—' }}</td>
           </tr>
           <tr>
             <td class="bg-gray">رقم الفاتورة</td>
@@ -146,7 +146,7 @@
           </tr>
           <tr>
             <td class="bg-gray">فاتورة شهر</td>
-            <td>{{ invoice.month_label }}</td>
+            <td>{{ invoice.month_label|month_name }}</td>
           </tr>
           <tr>
             <td class="bg-gray">المنطقة / العنوان</td>
@@ -179,7 +179,7 @@
               {% if period_from and period_to %}
                 من {{ period_from }} إلى {{ period_to }}
               {% else %}
-                {{ invoice.month_label }}
+                {{ invoice.month_label|month_name }}
               {% endif %}
             </td>
           </tr>
