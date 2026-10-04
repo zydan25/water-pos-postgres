@@ -1163,6 +1163,72 @@ def create_app():
         flash("تم تصفير النظام المالي بنجاح مع الإبقاء على المشتركين وشجرة الحسابات. ستتم إعادة تشغيل الخدمة الآن.", "success")
         return redirect(url_for("settings"))
 
+    def _hard_delete_empty_subscriber(db, subscriber_id):
+        """حذف مشترك نهائياً فقط إذا لم ترتبط به أي حركة مالية أو تشغيلية."""
+        row = db.execute(
+            "SELECT id, account_node_id, name FROM subscribers WHERE id=?",
+            (subscriber_id,),
+        ).fetchone()
+        if not row:
+            return False
+
+        checks = [
+            ("invoices", "SELECT COUNT(*) c FROM invoices WHERE subscriber_id=?"),
+            ("payments", "SELECT COUNT(*) c FROM payments WHERE subscriber_id=?"),
+            ("bulk_readings", "SELECT COUNT(*) c FROM bulk_readings WHERE subscriber_id=?"),
+            ("transactions", "SELECT COUNT(*) c FROM transactions WHERE subscriber_id=?"),
+            ("trip_visits", "SELECT COUNT(*) c FROM trip_visits WHERE subscriber_id=?"),
+        ]
+        for _name, query in checks:
+            try:
+                if int(db.execute(query, (subscriber_id,)).fetchone()["c"] or 0) > 0:
+                    return False
+            except Exception:
+                # الجدول قد لا يكون موجوداً في قواعد قديمة؛ لا يمنع الحذف بسبب فحص اختياري.
+                continue
+
+        account_id = row["account_node_id"] if "account_node_id" in row.keys() else None
+        if account_id:
+            # لا نحذف حساباً محاسبياً له قيود أو سندات أو ربط بكيان آخر.
+            refs = [
+                ("journal_lines", "SELECT COUNT(*) c FROM journal_lines WHERE account_id=?"),
+                ("accounting_vouchers_from", "SELECT COUNT(*) c FROM accounting_vouchers WHERE from_account_id=?"),
+                ("accounting_vouchers_to", "SELECT COUNT(*) c FROM accounting_vouchers WHERE to_account_id=?"),
+                ("employee_profiles", "SELECT COUNT(*) c FROM employee_profiles WHERE account_node_id=?"),
+            ]
+            for _name, query in refs:
+                try:
+                    if int(db.execute(query, (account_id,)).fetchone()["c"] or 0) > 0:
+                        return False
+                except Exception:
+                    continue
+
+        db.execute("DELETE FROM subscribers WHERE id=?", (subscriber_id,))
+        if account_id:
+            try:
+                db.execute("DELETE FROM account_nodes WHERE id=?", (account_id,))
+            except Exception:
+                # المشترك حُذف، ونترك الحساب إذا كانت قاعدة قديمة تمنع حذفه بعلاقة غير ظاهرة.
+                pass
+        return True
+
+
+    def _purge_empty_archived_subscribers(db):
+        """تنظيف الأرشيف القديم: حذف السجلات المؤرشفة التي لم تستخدم مالياً أو تشغيلياً."""
+        archived = db.execute(
+            "SELECT id FROM subscribers WHERE active=0 ORDER BY id"
+        ).fetchall()
+        deleted = 0
+        for row in archived:
+            try:
+                if _hard_delete_empty_subscriber(db, row["id"]):
+                    deleted += 1
+            except Exception:
+                continue
+        if deleted:
+            db.commit()
+        return deleted
+
     @app.route("/subscribers")
     @login_required
     def subscribers():
@@ -1173,6 +1239,11 @@ def create_app():
                 sort = "added"
 
             db = get_db()
+
+            # المشترك المؤرشف لا يظهر في القائمة الرئيسية. وينظف المدير فقط
+            # السجلات المؤرشفة القديمة التي لا تملك أي حركة مرتبطة.
+            if (g.user["role"] or "").lower() == "admin":
+                _purge_empty_archived_subscribers(db)
 
             sql = """
                 SELECT s.*,
@@ -1193,7 +1264,7 @@ def create_app():
                     ORDER BY i2.id DESC
                     LIMIT 1
                 )
-                WHERE 1=1
+                WHERE s.active = 1
             """
             params = []
 
@@ -1359,9 +1430,24 @@ def create_app():
     @role_required(["admin"])
     def subscriber_delete(subscriber_id):
         db = get_db()
-        archive_subscriber_account(db, subscriber_id)
-        db.commit()
-        flash("تمت أرشفة المشترك وحسابه المحاسبي بدل الحذف الفيزيائي.", "warning")
+        row = db.execute("SELECT id, name FROM subscribers WHERE id=?", (subscriber_id,)).fetchone()
+        if not row:
+            abort(404)
+
+        invoice_count = int(
+            db.execute("SELECT COUNT(*) c FROM invoices WHERE subscriber_id=?", (subscriber_id,)).fetchone()["c"] or 0
+        )
+        payment_count = int(
+            db.execute("SELECT COUNT(*) c FROM payments WHERE subscriber_id=?", (subscriber_id,)).fetchone()["c"] or 0
+        )
+
+        if invoice_count == 0 and payment_count == 0 and _hard_delete_empty_subscriber(db, subscriber_id):
+            db.commit()
+            flash(f"تم حذف المشترك «{row['name']}» نهائياً لأنه لا يملك فواتير أو سدادات أو حركات مرتبطة.", "success")
+        else:
+            archive_subscriber_account(db, subscriber_id)
+            db.commit()
+            flash("تمت أرشفة المشترك وحسابه المحاسبي مع حفظ سجله المالي، ولن يظهر في قائمة المشتركين.", "warning")
         return redirect(url_for("subscribers"))
 
     @app.route("/api/subscribers/search")
