@@ -233,6 +233,44 @@ def num_filter(value, decimals=0):
     return f"{int(round(f)):,}"
 
 
+_AR_MONTH_NAMES = {
+    1: "يناير",
+    2: "فبراير",
+    3: "مارس",
+    4: "أبريل",
+    5: "مايو",
+    6: "يونيو",
+    7: "يوليو",
+    8: "أغسطس",
+    9: "سبتمبر",
+    10: "أكتوبر",
+    11: "نوفمبر",
+    12: "ديسمبر",
+}
+
+
+def month_name_filter(value):
+    """عرض اسم الشهر العربي مع إبقاء قيمة الشهر الأصلية دون تغيير."""
+    if value is None:
+        return ""
+    raw = str(value).strip()
+    if not raw:
+        return ""
+    parts = raw.replace("/", "-").split("-")
+    candidates = []
+    if len(parts) >= 2:
+        candidates.append(parts[1])
+    candidates.append(parts[0])
+    for candidate in candidates:
+        try:
+            month_no = int(candidate)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= month_no <= 12:
+            return _AR_MONTH_NAMES[month_no]
+    return raw
+
+
 def deadline_filter(iso_date, days=15):
     """حساب تاريخ استحقاق الدفع: تاريخ إصدار الفاتورة + عدد الأيام."""
     if not iso_date:
@@ -912,6 +950,7 @@ def create_app():
         "tafqit": tafqit_filter,
         "num": num_filter,
         "deadline": deadline_filter,
+        "month_name": month_name_filter,
     })
     app.jinja_env.globals.update({
         "make_qr_data": make_qr_data,
