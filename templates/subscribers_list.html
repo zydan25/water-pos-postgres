@@ -24,6 +24,16 @@
     display:flex;align-items:center;gap:5px;margin-top:4px;color:#8290a3;
     font-size:.72rem;line-height:1.3;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
   }
+  .subscriber-card-side-metrics{flex:0 0 116px;display:grid;grid-template-columns:1fr;gap:6px;min-width:0}
+  .subscriber-mini-metric{border-radius:10px;padding:6px 8px;text-align:right;border:1px solid}
+  .subscriber-mini-metric small{display:block;font-size:.57rem;color:#7f8b9c;line-height:1.1}
+  .subscriber-mini-metric strong{display:block;font-size:.82rem;line-height:1.2;margin-top:2px}
+  .subscriber-mini-metric.reading{background:#eff6ff;border-color:#dbeafe}
+  .subscriber-mini-metric.reading strong{color:#2563eb}
+  .subscriber-mini-metric.arrears{background:#f8fafc;border-color:#e5e7eb}
+  .subscriber-mini-metric.arrears strong{color:#64748b}
+  .subscriber-mini-metric.arrears.has-arrears{background:#fff1f2;border-color:#fecdd3}
+  .subscriber-mini-metric.arrears.has-arrears strong{color:#dc2626}
   .subscriber-card-account{
     display:inline-block;margin-top:7px;padding:3px 7px;border-radius:8px;
     background:#f6f8fb;border:1px solid #edf1f5;color:#6c798c;font-size:.66rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -49,6 +59,7 @@
     text-decoration:none;font-size:.88rem;transition:.15s;
   }
   .subscriber-action:hover{background:#f5f8fc;border-color:#cbd8e8;color:#1a56db}
+.subscriber-action.payment:hover{color:#15803d;border-color:#bbf7d0}
   .subscriber-action.invoice:hover{color:#0f766e;border-color:#bfe2dc}
   .subscriber-action.report:hover{color:#2563eb;border-color:#c9dcff}
   .subscriber-action.danger:hover{color:#dc2626;border-color:#f3caca}
@@ -65,6 +76,7 @@
     .subscriber-card-top{padding-left:14px}
     .subscriber-card-actions{padding:8px 9px}
     .subscriber-action{width:38px;height:38px}
+    .subscriber-card-side-metrics{flex-basis:100px}
     .subscriber-card-name{font-size:.98rem}
     .subscriber-card-meter{font-size:.7rem}
     .subscriber-page .search-form{width:100%}
@@ -81,12 +93,18 @@
       <div class="text-muted small">{{ subscribers|length }} مشترك{% if q %} — نتائج: "{{ q }}"{% endif %}</div>
     </div>
     <div class="d-flex gap-2 flex-wrap align-items-center w-100 w-md-auto">
-      <form class="d-flex gap-2 search-form flex-grow-1" method="get">
-        <input class="form-control" name="q" value="{{ q }}" placeholder="🔍 الاسم، رقم الحساب، الجوال، العداد" style="min-width:220px;">
-        <input type="hidden" name="status" value="{{ request.args.get('status','') }}">
-        <button class="btn btn-outline-primary">بحث</button>
-        {% if q %}<a class="btn btn-outline-secondary" href="{{ url_for('subscribers') }}">✕</a>{% endif %}
-      </form>
+      <div class="d-flex gap-2 search-form flex-grow-1 align-items-center">
+        <a class="btn btn-success" href="{{ url_for('payment_center') }}">
+          <i class="bi bi-cash-coin me-1"></i>سداد
+        </a>
+        <div class="position-relative flex-grow-1">
+          <i class="bi bi-search position-absolute top-50 translate-middle-y me-3 text-muted" style="right:auto;left:14px;pointer-events:none;"></i>
+          <input class="form-control" id="subscriber-live-search" value="{{ q }}" placeholder="ابحث فورياً: الاسم، رقم الحساب، الجوال، العداد"
+                 style="min-width:220px;padding-inline-start:38px;" autocomplete="off">
+          <button class="btn btn-sm btn-link text-secondary position-absolute top-50 translate-middle-y start-0 me-1 d-none" type="button" id="subscriber-clear-search" aria-label="مسح البحث">✕</button>
+        </div>
+        <span class="small text-muted text-nowrap" id="subscriber-result-count"></span>
+      </div>
       <a class="btn btn-primary" href="{{ url_for('subscriber_new') }}"><i class="bi bi-plus-lg me-1"></i>مشترك جديد</a>
       <div class="dropdown">
         <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-gear me-1"></i>أدوات</button>
@@ -100,17 +118,28 @@
     </div>
   </div>
 
-  <div class="d-flex gap-2 flex-wrap mb-2">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      <span class="fw-bold small text-muted">الفرز حسب:</span>
+      <select id="subscriber-sort" class="form-select form-select-sm" style="width:auto;min-width:150px;" aria-label="فرز المشتركين">
+        <option value="added" {% if sort=='added' %}selected{% endif %}>تاريخ الإضافة</option>
+        <option value="name" {% if sort=='name' %}selected{% endif %}>الاسم</option>
+        <option value="arrears" {% if sort=='arrears' %}selected{% endif %}>المتأخرات الأعلى</option>
+        <option value="reading" {% if sort=='reading' %}selected{% endif %}>قراءة العداد</option>
+      </select>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
     <a class="filter-chip {% if not request.args.get('status') %}active{% endif %}" href="?q={{ q }}">الكل ({{ subscribers|length }})</a>
     <a class="filter-chip {% if request.args.get('status')=='active' %}active{% endif %}" href="?q={{ q }}&status=active">✅ النشطون</a>
     <a class="filter-chip {% if request.args.get('status')=='inactive' %}active{% endif %}" href="?q={{ q }}&status=inactive">⏸️ المتوقفون</a>
     <a class="filter-chip" href="{{ url_for('arrears_report') }}">⚠️ المتأخرون</a>
+    </div>
   </div>
 
   {% if subscribers %}
-  <div class="subscriber-card-grid">
+  <div class="subscriber-card-grid" id="subscriber-card-grid">
     {% for s in subscribers %}
-    <article class="subscriber-card">
+    <article class="subscriber-card" data-search="{{ (s.name ~ ' ' ~ (s.account_number or '') ~ ' ' ~ (s.phone or '') ~ ' ' ~ (s.meter_number or '') ~ ' ' ~ (s.village or '') ~ ' ' ~ (s.address or ''))|lower }}">
       <a class="subscriber-card-main" href="{{ url_for('subscriber_detail', subscriber_id=s.id) }}" aria-label="فتح تفاصيل {{ s.name }}">
         <span class="subscriber-status-dot {% if s.active %}active{% else %}inactive{% endif %}"
               title="{{ 'نشط' if s.active else 'متوقف' }}"
@@ -144,6 +173,9 @@
         <a class="subscriber-action report" href="{{ url_for('reports') }}?subscriber_id={{ s.id }}" title="تقرير" aria-label="تقرير">
           <i class="bi bi-graph-up"></i>
         </a>
+        <a class="subscriber-action payment" href="{{ url_for('payment_center', q=s.account_number) }}" title="سداد" aria-label="سداد">
+          <i class="bi bi-cash-coin"></i>
+        </a>
         {% if user_role in ['Admin','admin'] %}
         <form method="post" action="{{ url_for('subscriber_delete', subscriber_id=s.id) }}" class="subscriber-action-form"
               onsubmit="return confirm('أرشفة المشترك {{ s.name }}؟')">
@@ -167,4 +199,46 @@
   {% endif %}
 
 </div>
+
+<script>
+(function(){
+  const input = document.getElementById('subscriber-live-search');
+  const clear = document.getElementById('subscriber-clear-search');
+  const count = document.getElementById('subscriber-result-count');
+  const sort = document.getElementById('subscriber-sort');
+  const grid = document.getElementById('subscriber-card-grid');
+
+  function applySearch(){
+    const q=(input?.value||'').trim().toLocaleLowerCase();
+    let visible=0;
+    grid?.querySelectorAll('.subscriber-card').forEach(card=>{
+      const hay=(card.dataset.search||'').toLocaleLowerCase();
+      const show=!q || hay.includes(q);
+      card.classList.toggle('d-none',!show);
+      if(show) visible++;
+    });
+    if(clear) clear.classList.toggle('d-none',!q);
+    if(count) count.textContent=visible+' نتيجة';
+  }
+
+  input?.addEventListener('input', applySearch);
+  clear?.addEventListener('click', ()=>{
+    input.value='';
+    applySearch();
+    input.focus();
+  });
+
+  sort?.addEventListener('change', ()=>{
+    const params=new URLSearchParams(window.location.search);
+    params.set('sort', sort.value);
+    params.delete('q');
+    window.location.href=window.location.pathname+'?'+params.toString();
+  });
+
+  grid?.querySelectorAll('.subscriber-card').forEach(card=>{
+    card.dataset.search=card.dataset.search || '';
+  });
+  applySearch();
+})();
+</script>
 {% endblock %}
