@@ -447,7 +447,6 @@ def _village_rows(db, only_unpaid: bool = False):
     where = "WHERE 1=1"
     if only_unpaid:
         where += " AND COALESCE(i.remaining_amount, 0) > 0"
-    prev_key = _report_prev_month_key(db)
     rows = db.execute(
         f"""
         SELECT
