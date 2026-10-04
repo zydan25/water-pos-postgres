@@ -476,11 +476,14 @@ def _village_rows(db, only_unpaid: bool = False):
                i.credit_amount,
                i.opening_balance,
                COALESCE((
-                   SELECT COALESCE(SUM(p.amount), 0)
-                   FROM payments p
-                   WHERE p.subscriber_id = s.id
-                     AND substr(p.payment_date, 1, 7) = '{prev_key}'
-               ), 0) AS previous_paid_amount
+                   SELECT COALESCE(i_prev.paid_amount, 0)
+                   FROM invoices i_prev
+                   WHERE i_prev.subscriber_id = s.id
+                     AND i.id IS NOT NULL
+                     AND i_prev.id < i.id
+                   ORDER BY i_prev.id DESC
+                   LIMIT 1
+               ), COALESCE(s.last_paid_amount, 0)) AS previous_paid_amount
         FROM subscribers s
         LEFT JOIN invoices i ON i.id = (
             SELECT i2.id
