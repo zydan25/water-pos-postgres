@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}تفاصيل المشترك{% endblock %}
+{% block head %}
+<style>
+  .sub-detail{max-width:1000px;margin:auto}
+  .detail-hero{background:#fff;border:1px solid #e4eaf2;border-radius:20px;padding:18px;box-shadow:0 6px 20px rgba(15,23,42,.045)}
+  .detail-avatar{width:54px;height:54px;border-radius:15px;background:#eef4ff;color:#1a56db;display:grid;place-items:center;font-size:1.35rem;flex:0 0 auto}
+  .detail-title{min-width:0}
+  .detail-title h4{margin:0;font-weight:850}
+  .detail-sub{color:#7d899b;font-size:.76rem;margin-top:4px}
+  .detail-status{width:10px;height:10px;border-radius:50%;display:inline-block;vertical-align:middle;margin-inline-start:5px}
+  .detail-status.active{background:#16a34a}.detail-status.inactive{background:#94a3b8}
+  .quick-actions{display:flex;gap:6px;flex-wrap:wrap}
+  .quick-actions .btn{border-radius:11px;font-size:.78rem}
+  .info-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .info-box{background:#fff;border:1px solid #e5ebf2;border-radius:15px;padding:13px}
+  .info-box small{display:block;color:#8995a7;font-size:.68rem;margin-bottom:3px}
+  .info-box strong{display:block;color:#263348;font-size:.88rem;overflow-wrap:anywhere}
+  .section-card{background:#fff;border:1px solid #e4eaf2;border-radius:18px;padding:15px}
+  .section-title{font-weight:800;margin-bottom:10px}
+  .mini-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .mini-stat{background:#f8fafc;border:1px solid #edf1f5;border-radius:12px;padding:10px;text-align:center}
+  .mini-stat small{display:block;color:#8793a5;font-size:.66rem}.mini-stat strong{display:block;font-size:.95rem;margin-top:3px}
+  .mini-stat.success{background:#edf9f2;border-color:#d7efdf}.mini-stat.success strong{color:#247c48}
+  .mini-stat.danger{background:#fff2f2;border-color:#f3d9d9}.mini-stat.danger strong{color:#c23d3d}
+  .data-table{font-size:.78rem}
+  @media(max-width:767.98px){
+    .sub-detail{padding:0 2px}
+    .detail-hero{border-radius:17px;padding:14px}
+    .info-grid{grid-template-columns:1fr 1fr}
+    .mini-stats{grid-template-columns:1fr 1fr}
+    .quick-actions{width:100%}.quick-actions .btn{flex:1}
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid sub-detail">
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('subscribers') }}"><i class="bi bi-arrow-right"></i></a>
+    <span class="text-muted small">المشتركون / تفاصيل المشترك</span>
+  </div>
+
+  <div class="detail-hero mb-3">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <div class="detail-avatar"><i class="bi bi-person-fill"></i></div>
+      <div class="detail-title flex-grow-1">
+        <h4>{{ subscriber.name }}</h4>
+        <div class="detail-sub">
+          رقم الحساب: {{ subscriber.account_number }}
+          <span class="detail-status {% if subscriber.active %}active{% else %}inactive{% endif %}"></span>
+          {{ 'نشط' if subscriber.active else 'متوقف' }}
+        </div>
+      </div>
+      <div class="quick-actions">
+        <a class="btn btn-outline-primary" href="{{ url_for('subscriber_edit', subscriber_id=subscriber.id) }}"><i class="bi bi-pencil me-1"></i>تعديل</a>
+        <a class="btn btn-primary" href="{{ url_for('invoice_new') }}?subscriber_id={{ subscriber.id }}"><i class="bi bi-receipt me-1"></i>فاتورة جديدة</a>
+        <a class="btn btn-outline-info" href="{{ url_for('reports') }}?subscriber_id={{ subscriber.id }}"><i class="bi bi-graph-up me-1"></i>تقرير</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-grid mb-3">
+    <div class="info-box"><small>رقم العداد</small><strong>{{ subscriber.meter_number or 'غير مسجل' }}</strong></div>
+    <div class="info-box"><small>رقم الجوال</small><strong>{{ subscriber.phone or 'غير مسجل' }}</strong></div>
+    <div class="info-box"><small>القرية / المنطقة</small><strong>{{ subscriber.village or 'غير مسجل' }}</strong></div>
+    <div class="info-box"><small>العنوان</small><strong>{{ subscriber.address or 'غير مسجل' }}</strong></div>
+    <div class="info-box"><small>سعر الوحدة</small><strong>{{ "%.0f"|format((subscriber.default_unit_price or 0)|float) }} {{ currency }}</strong></div>
+    <div class="info-box"><small>رسوم الاشتراك</small><strong>{{ "%.0f"|format((subscriber.default_subscription_fee or 0)|float) }} {{ currency }}</strong></div>
+    <div class="info-box"><small>آخر قراءة مسجلة</small><strong>{{ "%.0f"|format((subscriber.last_reading or 0)|float) }}</strong></div>
+    <div class="info-box"><small>المستحق السابق</small><strong>{{ "%.0f"|format((subscriber.last_due_amount or 0)|float) }} {{ currency }}</strong></div>
+    <div class="info-box"><small>المسدد السابق</small><strong>{{ "%.0f"|format((subscriber.last_paid_amount or 0)|float) }} {{ currency }}</strong></div>
+    <div class="info-box"><small>الرصيد الافتتاحي المحسوب</small><strong>{{ "%.0f"|format((opening_balance or 0)|float) }} {{ currency }}</strong></div>
+  </div>
+
+  {% if latest_invoice %}
+  <div class="section-card mb-3">
+    <div class="section-title"><i class="bi bi-receipt-cutoff text-primary me-1"></i>آخر فاتورة</div>
+    <div class="mini-stats">
+      <div class="mini-stat"><small>رقم الفاتورة</small><strong>{{ latest_invoice.invoice_no }}</strong></div>
+      <div class="mini-stat"><small>الإجمالي</small><strong>{{ "%.0f"|format((latest_invoice.total_amount or 0)|float) }} {{ currency }}</strong></div>
+      <div class="mini-stat success"><small>المدفوع</small><strong>{{ "%.0f"|format((latest_invoice.paid_amount or 0)|float) }} {{ currency }}</strong></div>
+      <div class="mini-stat {% if (latest_invoice.remaining_amount or 0)|float > 0 %}danger{% endif %}"><small>المتبقي</small><strong>{{ "%.0f"|format((latest_invoice.remaining_amount or 0)|float) }} {{ currency }}</strong></div>
+    </div>
+    <div class="text-muted small mt-2">
+      {{ latest_invoice.invoice_date or '—' }}
+      {% if latest_invoice.month_label %} — {{ latest_invoice.month_label }}{% endif %}
+      {% if latest_invoice.current_reading is not none %} — القراءة الحالية: {{ latest_invoice.current_reading }}{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="section-card mb-3">
+    <div class="section-title">آخر الفواتير</div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle data-table mb-0">
+        <thead><tr><th>التاريخ</th><th>الفاتورة</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th></tr></thead>
+        <tbody>
+        {% for inv in recent_invoices %}
+          <tr>
+            <td>{{ inv.invoice_date or '—' }}</td>
+            <td>{{ inv.invoice_no }}</td>
+            <td>{{ "%.0f"|format((inv.total_amount or 0)|float) }}</td>
+            <td class="text-success">{{ "%.0f"|format((inv.paid_amount or 0)|float) }}</td>
+            <td class="{% if (inv.remaining_amount or 0)|float > 0 %}text-danger{% endif %}">{{ "%.0f"|format((inv.remaining_amount or 0)|float) }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-4">لا توجد فواتير.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-title">آخر التسديدات</div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle data-table mb-0">
+        <thead><tr><th>التاريخ</th><th>الفاتورة</th><th>المبلغ</th><th>الطريقة</th></tr></thead>
+        <tbody>
+        {% for pay in recent_payments %}
+          <tr>
+            <td>{{ pay.payment_date or '—' }}</td>
+            <td>{{ pay.invoice_no or '—' }}</td>
+            <td class="{% if (pay.amount or 0)|float < 0 %}text-danger{% else %}text-success{% endif %} fw-bold">{{ "%.0f"|format((pay.amount or 0)|float) }} {{ currency }}</td>
+            <td>{{ pay.method or '—' }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="text-center text-muted py-4">لا توجد تسديدات.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
