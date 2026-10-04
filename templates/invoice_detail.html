@@ -8,7 +8,7 @@
           <div>
             <h4 class="mb-1">فاتورة رقم {{ invoice.invoice_no }}</h4>
             <div class="muted">المشترك: {{ invoice.subscriber_name }} • {{ invoice.account_number }}</div>
-            <div class="muted">الشهر: {{ invoice.month_label }} • التاريخ: {{ invoice.invoice_date }}</div>
+            <div class="muted">الشهر: {{ invoice.month_label|month_name }} • التاريخ: {{ invoice.invoice_date }}</div>
             <div class="small-muted mt-2">
               أنشئت بواسطة: {{ invoice.created_by_name or '-' }} |
               طُبعت بواسطة: {{ invoice.printed_by_name or '-' }} |
