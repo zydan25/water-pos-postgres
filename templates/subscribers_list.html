@@ -65,6 +65,20 @@
   .subscriber-action.danger:hover{color:#dc2626;border-color:#f3caca}
   .subscriber-action-form{margin:0;padding:0}
   .subscriber-card-actions .subscriber-action-more{margin-inline-start:auto}
+  .subscriber-controls-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border:1px solid #e6ebf2;border-radius:14px;padding:9px 11px}
+  .subscriber-sort-control{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+  .subscriber-sort-control .form-select{min-width:150px}
+  .subscriber-search-control{display:flex;align-items:center;gap:8px;min-width:0;flex:1;justify-content:flex-end}
+  .subscriber-search-control .position-relative{max-width:430px;width:100%}
+  .subscriber-search-control input{padding-left:36px}
+  .subscriber-search-icon{left:12px;pointer-events:none}
+  @media(max-width:767.98px){
+    .subscriber-controls-row{flex-direction:column;align-items:stretch;padding:9px}
+    .subscriber-sort-control{justify-content:space-between}
+    .subscriber-sort-control .form-select{min-width:0;width:58%}
+    .subscriber-search-control{width:100%;justify-content:stretch}
+    .subscriber-search-control .position-relative{max-width:none}
+  }
   .filter-chip{border-radius:999px;padding:5px 13px;font-size:.78rem;font-weight:650;border:1.5px solid #e2e8f0;background:#fff;text-decoration:none;color:#526176}
   .filter-chip.active,.filter-chip:hover{border-color:#1a56db;background:#eff4ff;color:#1a56db}
   .subscriber-empty{background:#fff;border:1px dashed #dce4ee;border-radius:18px;padding:42px 20px;text-align:center}
@@ -93,19 +107,10 @@
       <div class="text-muted small">{{ subscribers|length }} مشترك{% if q %} — نتائج: "{{ q }}"{% endif %}</div>
     </div>
     <div class="d-flex gap-2 flex-wrap align-items-center w-100 w-md-auto">
-      <div class="d-flex gap-2 search-form flex-grow-1 align-items-center">
-        <a class="btn btn-success" href="{{ url_for('payment_center') }}">
-          <i class="bi bi-cash-coin me-1"></i>سداد
-        </a>
-        <div class="position-relative flex-grow-1">
-          <i class="bi bi-search position-absolute top-50 translate-middle-y me-3 text-muted" style="right:auto;left:14px;pointer-events:none;"></i>
-          <input class="form-control" id="subscriber-live-search" value="{{ q }}" placeholder="ابحث فورياً: الاسم، رقم الحساب، الجوال، العداد"
-                 style="min-width:220px;padding-inline-start:38px;" autocomplete="off">
-          <button class="btn btn-sm btn-link text-secondary position-absolute top-50 translate-middle-y start-0 me-1 d-none" type="button" id="subscriber-clear-search" aria-label="مسح البحث">✕</button>
-        </div>
-        <span class="small text-muted text-nowrap" id="subscriber-result-count"></span>
-      </div>
       <a class="btn btn-primary" href="{{ url_for('subscriber_new') }}"><i class="bi bi-plus-lg me-1"></i>مشترك جديد</a>
+      <a class="btn btn-success" href="{{ url_for('payment_center') }}">
+        <i class="bi bi-cash-coin me-1"></i>سداد
+      </a>
       <div class="dropdown">
         <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-gear me-1"></i>أدوات</button>
         <ul class="dropdown-menu dropdown-menu-start">
@@ -118,21 +123,35 @@
     </div>
   </div>
 
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-    <div class="d-flex gap-2 align-items-center flex-wrap">
+  <div class="d-flex gap-2 flex-wrap mb-2 status-filter-row">
+    <a class="filter-chip {% if not request.args.get('status') %}active{% endif %}" href="{{ url_for('subscribers', q=q, sort=sort) }}">الكل ({{ subscribers|length }})</a>
+    <a class="filter-chip {% if request.args.get('status')=='active' %}active{% endif %}" href="{{ url_for('subscribers', q=q, status='active', sort=sort) }}">✅ النشطون</a>
+    <a class="filter-chip {% if request.args.get('status')=='inactive' %}active{% endif %}" href="{{ url_for('subscribers', q=q, status='inactive', sort=sort) }}">⏸️ المتوقفون</a>
+    <a class="filter-chip" href="{{ url_for('arrears_report') }}">⚠️ المتأخرون</a>
+  </div>
+
+  <div class="subscriber-controls-row mb-3">
+    <div class="subscriber-sort-control">
       <span class="fw-bold small text-muted">الفرز حسب:</span>
-      <select id="subscriber-sort" class="form-select form-select-sm" style="width:auto;min-width:150px;" aria-label="فرز المشتركين">
+      <select id="subscriber-sort" class="form-select form-select-sm" aria-label="فرز المشتركين">
         <option value="added" {% if sort=='added' %}selected{% endif %}>تاريخ الإضافة</option>
         <option value="name" {% if sort=='name' %}selected{% endif %}>الاسم</option>
         <option value="arrears" {% if sort=='arrears' %}selected{% endif %}>المتأخرات الأعلى</option>
         <option value="reading" {% if sort=='reading' %}selected{% endif %}>قراءة العداد</option>
       </select>
     </div>
-    <div class="d-flex gap-2 flex-wrap">
-    <a class="filter-chip {% if not request.args.get('status') %}active{% endif %}" href="{{ url_for('subscribers', q=q, sort=sort) }}">الكل ({{ subscribers|length }})</a>
-    <a class="filter-chip {% if request.args.get('status')=='active' %}active{% endif %}" href="{{ url_for('subscribers', q=q, status='active', sort=sort) }}">✅ النشطون</a>
-    <a class="filter-chip {% if request.args.get('status')=='inactive' %}active{% endif %}" href="{{ url_for('subscribers', q=q, status='inactive', sort=sort) }}">⏸️ المتوقفون</a>
-    <a class="filter-chip" href="{{ url_for('arrears_report') }}">⚠️ المتأخرون</a>
+
+    <div class="subscriber-search-control">
+      <label class="fw-bold small text-muted" for="subscriber-live-search">بحث</label>
+      <div class="position-relative flex-grow-1">
+        <i class="bi bi-search position-absolute top-50 translate-middle-y text-muted subscriber-search-icon"></i>
+        <input class="form-control" id="subscriber-live-search" value="{{ q }}"
+               placeholder="ابحث بالاسم أو رقم الحساب أو الجوال أو العداد"
+               autocomplete="off">
+        <button class="btn btn-sm btn-link text-secondary position-absolute top-50 translate-middle-y start-0 subscriber-clear-search d-none"
+                type="button" id="subscriber-clear-search" aria-label="مسح البحث">✕</button>
+      </div>
+      <span class="small text-muted text-nowrap" id="subscriber-result-count"></span>
     </div>
   </div>
 
