@@ -1168,30 +1168,59 @@ def create_app():
     def subscribers():
             q = request.args.get("q", "").strip()
             status = request.args.get("status", "").strip()
+            sort = request.args.get("sort", "added").strip()
+            if sort not in {"added", "name", "arrears", "reading"}:
+                sort = "added"
 
             db = get_db()
 
-            sql = "SELECT * FROM subscribers WHERE 1=1"
+            sql = """
+                SELECT s.*,
+                       i.id AS latest_invoice_id,
+                       i.current_reading AS invoice_current_reading,
+                       i.remaining_amount AS invoice_remaining_amount,
+                       COALESCE(i.current_reading, s.last_reading, 0) AS display_last_reading,
+                       CASE
+                           WHEN i.id IS NOT NULL AND COALESCE(i.remaining_amount, 0) > 0
+                               THEN COALESCE(i.remaining_amount, 0)
+                           ELSE COALESCE(s.last_due_amount, 0)
+                       END AS display_arrears
+                FROM subscribers s
+                LEFT JOIN invoices i ON i.id = (
+                    SELECT i2.id
+                    FROM invoices i2
+                    WHERE i2.subscriber_id = s.id
+                    ORDER BY i2.id DESC
+                    LIMIT 1
+                )
+                WHERE 1=1
+            """
             params = []
 
             if q:
                 sql += """
                     AND (
-                        name LIKE ?
-                        OR account_number LIKE ?
-                        OR phone LIKE ?
-                        OR meter_number LIKE ?
+                        s.name LIKE ?
+                        OR s.account_number LIKE ?
+                        OR s.phone LIKE ?
+                        OR s.meter_number LIKE ?
                     )
                 """
                 like = f"%{q}%"
                 params.extend([like, like, like, like])
 
             if status == "active":
-                sql += " AND active = 1"
+                sql += " AND s.active = 1"
             elif status == "inactive":
-                sql += " AND active = 0"
+                sql += " AND s.active = 0"
 
-            sql += " ORDER BY id DESC"
+            order_sql = {
+                "added": "s.id DESC",
+                "name": "LOWER(s.name) ASC, s.id DESC",
+                "arrears": "display_arrears DESC, LOWER(s.name) ASC, s.id DESC",
+                "reading": "display_last_reading DESC, LOWER(s.name) ASC, s.id DESC",
+            }[sort]
+            sql += f" ORDER BY {order_sql}"
 
             rows = db.execute(sql, params).fetchall()
 
@@ -1199,8 +1228,9 @@ def create_app():
                 "subscribers_list.html",
                 subscribers=rows,
                 q=q,
-            selected_account_ids=_selected_account_ids_from_request(),
-                status=status
+                selected_account_ids=_selected_account_ids_from_request(),
+                status=status,
+                sort=sort,
             )
     @app.route("/subscribers/<int:subscriber_id>")
     @login_required
