@@ -207,8 +207,8 @@
         </a>
         {% if user_role in ['Admin','admin'] %}
         <form method="post" action="{{ url_for('subscriber_delete', subscriber_id=s.id) }}" class="subscriber-action-form"
-              onsubmit="return confirm('أرشفة المشترك {{ s.name }}؟')">
-          <button class="subscriber-action danger" type="submit" title="أرشفة" aria-label="أرشفة">
+              onsubmit="return confirm('المشترك «{{ s.name }}». إذا لم تكن له فواتير أو سدادات أو حركات مرتبطة فسيُحذف نهائياً، وإلا فسيتم أرشفته وإخفاؤه من القائمة. متابعة؟')">
+          <button class="subscriber-action danger" type="submit" title="حذف / أرشفة" aria-label="حذف / أرشفة">
             <i class="bi bi-trash"></i>
           </button>
         </form>
