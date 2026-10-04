@@ -1257,6 +1257,7 @@ def create_app():
                            ELSE COALESCE(s.last_due_amount, 0)
                        END AS display_arrears
                 FROM subscribers s
+                LEFT JOIN account_nodes an ON an.id = s.account_node_id
                 LEFT JOIN invoices i ON i.id = (
                     SELECT i2.id
                     FROM invoices i2
@@ -1264,7 +1265,10 @@ def create_app():
                     ORDER BY i2.id DESC
                     LIMIT 1
                 )
-                WHERE s.active = 1
+                WHERE (
+                    s.active = 1
+                    OR (s.active = 0 AND COALESCE(an.name, '') NOT LIKE 'مؤرشف:%')
+                )
             """
             params = []
 
@@ -1283,7 +1287,7 @@ def create_app():
             if status == "active":
                 sql += " AND s.active = 1"
             elif status == "inactive":
-                sql += " AND s.active = 0"
+                sql += " AND s.active = 0 AND COALESCE(an.name, '') NOT LIKE 'مؤرشف:%'"
 
             order_sql = {
                 "added": "s.id DESC",
@@ -1473,7 +1477,14 @@ def create_app():
                        COALESCE(s.last_due_amount, 0) AS last_due_amount,
                        COALESCE(s.last_paid_amount, 0) AS last_paid_amount
                 FROM subscribers s
-                WHERE s.name LIKE ? OR s.account_number LIKE ? OR s.phone LIKE ? OR s.meter_number LIKE ?
+                LEFT JOIN account_nodes an ON an.id = s.account_node_id
+                WHERE (
+                    s.active = 1
+                    OR (s.active = 0 AND COALESCE(an.name, '') NOT LIKE 'مؤرشف:%')
+                )
+                  AND (
+                    s.name LIKE ? OR s.account_number LIKE ? OR s.phone LIKE ? OR s.meter_number LIKE ?
+                  )
                 ORDER BY s.id DESC LIMIT 20
                 """,
                 (like, like, like, like),
