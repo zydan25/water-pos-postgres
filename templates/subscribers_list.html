@@ -129,9 +129,9 @@
       </select>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-    <a class="filter-chip {% if not request.args.get('status') %}active{% endif %}" href="?q={{ q }}">الكل ({{ subscribers|length }})</a>
-    <a class="filter-chip {% if request.args.get('status')=='active' %}active{% endif %}" href="?q={{ q }}&status=active">✅ النشطون</a>
-    <a class="filter-chip {% if request.args.get('status')=='inactive' %}active{% endif %}" href="?q={{ q }}&status=inactive">⏸️ المتوقفون</a>
+    <a class="filter-chip {% if not request.args.get('status') %}active{% endif %}" href="{{ url_for('subscribers', q=q, sort=sort) }}">الكل ({{ subscribers|length }})</a>
+    <a class="filter-chip {% if request.args.get('status')=='active' %}active{% endif %}" href="{{ url_for('subscribers', q=q, status='active', sort=sort) }}">✅ النشطون</a>
+    <a class="filter-chip {% if request.args.get('status')=='inactive' %}active{% endif %}" href="{{ url_for('subscribers', q=q, status='inactive', sort=sort) }}">⏸️ المتوقفون</a>
     <a class="filter-chip" href="{{ url_for('arrears_report') }}">⚠️ المتأخرون</a>
     </div>
   </div>
@@ -154,6 +154,16 @@
               العداد: {{ s.meter_number or 'غير مسجل' }}
             </span>
             <span class="subscriber-card-account">{{ s.account_number }}</span>
+          </div>
+          <div class="subscriber-card-side-metrics">
+            <div class="subscriber-mini-metric reading">
+              <small>آخر قراءة</small>
+              <strong>{{ "%.0f"|format((s.display_last_reading or 0)|float) }}</strong>
+            </div>
+            <div class="subscriber-mini-metric arrears {% if (s.display_arrears or 0)|float > 0 %}has-arrears{% endif %}">
+              <small>المتأخرات</small>
+              <strong>{{ "%.0f"|format((s.display_arrears or 0)|float) }}</strong>
+            </div>
           </div>
         </div>
 
