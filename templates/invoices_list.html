@@ -47,7 +47,7 @@
           <tr>
             <td>{{ i.invoice_no }}</td>
             <td>{{ i.subscriber_name }}<div class="small text-muted">{{ i.account_number }}</div></td>
-            <td>{{ i.month_label }}</td>
+            <td>{{ i.month_label|month_name }}</td>
             <td>{{ i.consumption }}</td>
             <td>{{ "%.0f"|format(i.total_amount) }}</td>
             <td>{{ "%.0f"|format(i.paid_amount) }}</td>
