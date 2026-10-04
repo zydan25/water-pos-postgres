@@ -1,37 +1,95 @@
 {% extends "base.html" %}
 {% block head %}
 <style>
-.sub-status-active   { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; border-radius:20px; padding:2px 10px; font-size:.78rem; font-weight:700; }
-.sub-status-inactive { background:#f3f4f6; color:#6b7280; border:1px solid #e5e7eb; border-radius:20px; padding:2px 10px; font-size:.78rem; font-weight:700; }
-.filter-chip { border-radius:20px; padding:4px 14px; font-size:.82rem; font-weight:600; border:1.5px solid #e5e7eb; background:white; cursor:pointer; transition:.15s; }
-.filter-chip.active,.filter-chip:hover { border-color:#1a56db; background:#f0f4ff; color:#1a56db; }
+  .subscriber-page{padding-bottom:1rem}
+  .subscriber-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+  .subscriber-card{
+    position:relative;display:flex;flex-direction:column;min-width:0;
+    background:#fff;border:1px solid #e5eaf1;border-radius:18px;overflow:hidden;
+    box-shadow:0 5px 18px rgba(15,23,42,.045);transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;
+  }
+  .subscriber-card:hover{transform:translateY(-1px);box-shadow:0 9px 24px rgba(15,23,42,.08);border-color:#d5deea}
+  .subscriber-card-main{display:block;text-decoration:none;color:inherit;padding:15px 16px 12px;min-width:0}
+  .subscriber-card-top{display:flex;align-items:flex-start;gap:10px;padding-left:16px;min-width:0}
+  .subscriber-card-avatar{
+    width:42px;height:42px;border-radius:12px;background:#eef4ff;color:#1a56db;
+    display:grid;place-items:center;flex:0 0 auto;font-size:1.05rem;
+  }
+  .subscriber-card-title{min-width:0;flex:1}
+  .subscriber-card-name{
+    display:block;font-size:1rem;font-weight:850;line-height:1.35;color:#182235;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .subscriber-card-meter{
+    display:flex;align-items:center;gap:5px;margin-top:4px;color:#8290a3;
+    font-size:.72rem;line-height:1.3;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  }
+  .subscriber-card-account{
+    display:inline-block;margin-top:7px;padding:3px 7px;border-radius:8px;
+    background:#f6f8fb;border:1px solid #edf1f5;color:#6c798c;font-size:.66rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  .subscriber-status-dot{
+    position:absolute;left:14px;top:16px;width:9px;height:9px;border-radius:50%;
+    box-shadow:0 0 0 3px #fff,0 0 0 4px rgba(148,163,184,.16);
+  }
+  .subscriber-status-dot.active{background:#16a34a}
+  .subscriber-status-dot.inactive{background:#94a3b8}
+  .subscriber-card-hint{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;
+    padding-top:9px;border-top:1px dashed #e8edf3;color:#8a96a7;font-size:.66rem;
+  }
+  .subscriber-card-hint i{font-size:.8rem}
+  .subscriber-card-actions{
+    display:flex;align-items:center;gap:6px;padding:9px 11px;
+    border-top:1px solid #edf1f5;background:#fbfcfe;
+  }
+  .subscriber-action{
+    width:37px;height:37px;display:grid;place-items:center;flex:0 0 auto;
+    border:1px solid #dce4ee;background:#fff;border-radius:11px;color:#526176;
+    text-decoration:none;font-size:.88rem;transition:.15s;
+  }
+  .subscriber-action:hover{background:#f5f8fc;border-color:#cbd8e8;color:#1a56db}
+  .subscriber-action.invoice:hover{color:#0f766e;border-color:#bfe2dc}
+  .subscriber-action.report:hover{color:#2563eb;border-color:#c9dcff}
+  .subscriber-action.danger:hover{color:#dc2626;border-color:#f3caca}
+  .subscriber-action-form{margin:0;padding:0}
+  .subscriber-card-actions .subscriber-action-more{margin-inline-start:auto}
+  .filter-chip{border-radius:999px;padding:5px 13px;font-size:.78rem;font-weight:650;border:1.5px solid #e2e8f0;background:#fff;text-decoration:none;color:#526176}
+  .filter-chip.active,.filter-chip:hover{border-color:#1a56db;background:#eff4ff;color:#1a56db}
+  .subscriber-empty{background:#fff;border:1px dashed #dce4ee;border-radius:18px;padding:42px 20px;text-align:center}
+  @media(max-width:767.98px){
+    .subscriber-page{padding-inline:2px}
+    .subscriber-card-grid{grid-template-columns:1fr;gap:10px}
+    .subscriber-card{width:100%;border-radius:16px}
+    .subscriber-card-main{padding:14px 14px 10px}
+    .subscriber-card-top{padding-left:14px}
+    .subscriber-card-actions{padding:8px 9px}
+    .subscriber-action{width:38px;height:38px}
+    .subscriber-card-name{font-size:.98rem}
+    .subscriber-card-meter{font-size:.7rem}
+    .subscriber-page .search-form{width:100%}
+    .subscriber-page .search-form input{min-width:0!important;flex:1}
+  }
 </style>
 {% endblock %}
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid subscriber-page">
 
-  <!-- Header bar -->
-  <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-3">
+  <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
     <div>
       <h4 class="mb-0"><i class="bi bi-people-fill text-primary me-2"></i>المشتركون</h4>
       <div class="text-muted small">{{ subscribers|length }} مشترك{% if q %} — نتائج: "{{ q }}"{% endif %}</div>
     </div>
-    <div class="d-flex gap-2 flex-wrap align-items-center">
-      <!-- Search -->
-      <form class="d-flex gap-2" method="get">
+    <div class="d-flex gap-2 flex-wrap align-items-center w-100 w-md-auto">
+      <form class="d-flex gap-2 search-form flex-grow-1" method="get">
         <input class="form-control" name="q" value="{{ q }}" placeholder="🔍 الاسم، رقم الحساب، الجوال، العداد" style="min-width:220px;">
         <input type="hidden" name="status" value="{{ request.args.get('status','') }}">
         <button class="btn btn-outline-primary">بحث</button>
         {% if q %}<a class="btn btn-outline-secondary" href="{{ url_for('subscribers') }}">✕</a>{% endif %}
       </form>
-      <!-- Actions -->
-      <a class="btn btn-primary" href="{{ url_for('subscriber_new') }}">
-        <i class="bi bi-plus-lg me-1"></i>مشترك جديد
-      </a>
+      <a class="btn btn-primary" href="{{ url_for('subscriber_new') }}"><i class="bi bi-plus-lg me-1"></i>مشترك جديد</a>
       <div class="dropdown">
-        <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
-          <i class="bi bi-gear me-1"></i>أدوات
-        </button>
+        <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-gear me-1"></i>أدوات</button>
         <ul class="dropdown-menu dropdown-menu-start">
           <li><a class="dropdown-item" href="{{ url_for('export_subscribers') }}"><i class="bi bi-file-excel me-2 text-success"></i>تصدير Excel</a></li>
           <li><a class="dropdown-item" href="{{ url_for('import_data') }}"><i class="bi bi-upload me-2 text-primary"></i>استيراد</a></li>
@@ -42,105 +100,71 @@
     </div>
   </div>
 
-  <!-- Status filter chips -->
-  <div class="d-flex gap-2 flex-wrap mb-3">
+  <div class="d-flex gap-2 flex-wrap mb-2">
     <a class="filter-chip {% if not request.args.get('status') %}active{% endif %}" href="?q={{ q }}">الكل ({{ subscribers|length }})</a>
-    <a class="filter-chip {% if request.args.get('status')=='active' %}active{% endif %}" href="?q={{ q }}&status=active">
-      ✅ النشطون ({{ subscribers|selectattr('active')|list|length }})
-    </a>
-    <a class="filter-chip {% if request.args.get('status')=='inactive' %}active{% endif %}" href="?q={{ q }}&status=inactive">
-      ⏸️ المتوقفون ({{ subscribers|rejectattr('active')|list|length }})
-    </a>
-    <a class="filter-chip {% if request.args.get('status')=='arrears' %}active{% endif %}" href="{{ url_for('arrears_report') }}">
-      ⚠️ المتأخرون
-    </a>
+    <a class="filter-chip {% if request.args.get('status')=='active' %}active{% endif %}" href="?q={{ q }}&status=active">✅ النشطون</a>
+    <a class="filter-chip {% if request.args.get('status')=='inactive' %}active{% endif %}" href="?q={{ q }}&status=inactive">⏸️ المتوقفون</a>
+    <a class="filter-chip" href="{{ url_for('arrears_report') }}">⚠️ المتأخرون</a>
   </div>
 
-  <!-- Table -->
-  <div class="card p-0 overflow-hidden">
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0" id="sub-table">
-        <thead class="table-light">
-          <tr>
-            <th style="width:120px;">رقم الحساب</th>
-            <th>الاسم</th>
-            <th>رقم العداد</th>
-            <th>الجوال</th>
-            <th>القرية</th><th>العنوان</th>
-            <th class="text-center">سعر الوحدة</th>
-            <th class="text-center">رسوم الاشتراك</th>
-            <th class="text-center">الحالة</th>
-            <th style="width:180px;"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for s in subscribers %}
-            <td class="fw-bold font-monospace">{{ s.account_number }}</td>
-            <td>
-              <div class="fw-semibold">{{ s.name }}</div>
-            </td>
-            <td class="small text-muted">{{ s.meter_number or '—' }}</td>
-            <td>
-              {% if s.phone %}
-              <a href="tel:{{ s.phone }}" class="text-decoration-none small">{{ s.phone }}</a>
-              {% else %}—{% endif %}
-            </td>
-            <td class="small text-muted">{{ s.village or '—' }}</td>
-            <td class="small text-muted">{{ s.address or '—' }}</td>
-            <td class="text-center small">{{ "%.0f"|format((s.default_unit_price or 0)|float) }}</td>
-            <td class="text-center small">{{ "%.0f"|format((s.default_subscription_fee or 0)|float) }}</td>
-            <td class="text-center">
-              {% if s.active %}
-              <span class="sub-status-active">نشط</span>
-              {% else %}
-              <span class="sub-status-inactive">متوقف</span>
-              {% endif %}
-            </td>
-            <td class="text-nowrap">
-              <div class="d-flex gap-1">
-                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('subscriber_edit', subscriber_id=s.id) }}" title="تعديل">
-                  <i class="bi bi-pencil"></i>
-                </a>
-                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('invoice_new') }}?subscriber_id={{ s.id }}" title="فاتورة جديدة">
-                  <i class="bi bi-receipt-cutoff"></i>
-                </a>
-                <a class="btn btn-sm btn-outline-info" href="{{ url_for('reports') }}?subscriber_id={{ s.id }}" title="تقرير">
-                  <i class="bi bi-graph-up"></i>
-                </a>
-                {% if user_role in ['Admin','admin'] %}
-                <form method="post" action="{{ url_for('subscriber_delete', subscriber_id=s.id) }}"
-                      class="d-inline" onsubmit="return confirm('حذف المشترك {{ s.name }}؟ سيُحذف مع فواتيره!')">
-                  <button class="btn btn-sm btn-outline-danger" title="حذف"><i class="bi bi-trash"></i></button>
-                </form>
-                {% endif %}
-              </div>
-            </td>
-          </tr>
-          {% else %}
-          <tr>
-            <td colspan="9" class="text-center py-5 text-muted">
-              <i class="bi bi-people fs-1 opacity-25 d-block mb-2"></i>
-              {% if q %}لا توجد نتائج لـ "{{ q }}"{% else %}لا يوجد مشتركون بعد{% endif %}
-              <div class="mt-3">
-                <a class="btn btn-primary btn-sm" href="{{ url_for('subscriber_new') }}">إضافة أول مشترك</a>
-                {% if q %}<a class="btn btn-outline-secondary btn-sm ms-2" href="{{ url_for('subscribers') }}">عرض الكل</a>{% endif %}
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <!-- Footer summary -->
-    {% if subscribers %}
-    <div class="border-top px-3 py-2 d-flex justify-content-between align-items-center bg-light">
-      <div class="small text-muted">{{ subscribers|length }} مشترك — {{ subscribers|selectattr('active')|list|length }} نشط</div>
-      <a class="btn btn-sm btn-outline-success" href="{{ url_for('export_subscribers') }}">
-        <i class="bi bi-download me-1"></i>تصدير Excel
+  {% if subscribers %}
+  <div class="subscriber-card-grid">
+    {% for s in subscribers %}
+    <article class="subscriber-card">
+      <a class="subscriber-card-main" href="{{ url_for('subscriber_detail', subscriber_id=s.id) }}" aria-label="فتح تفاصيل {{ s.name }}">
+        <span class="subscriber-status-dot {% if s.active %}active{% else %}inactive{% endif %}"
+              title="{{ 'نشط' if s.active else 'متوقف' }}"
+              aria-label="{{ 'نشط' if s.active else 'متوقف' }}"></span>
+
+        <div class="subscriber-card-top">
+          <div class="subscriber-card-avatar"><i class="bi bi-person-fill"></i></div>
+          <div class="subscriber-card-title">
+            <span class="subscriber-card-name">{{ s.name }}</span>
+            <span class="subscriber-card-meter">
+              <i class="bi bi-speedometer2"></i>
+              العداد: {{ s.meter_number or 'غير مسجل' }}
+            </span>
+            <span class="subscriber-card-account">{{ s.account_number }}</span>
+          </div>
+        </div>
+
+        <div class="subscriber-card-hint">
+          <span><i class="bi bi-box-arrow-in-left me-1"></i>اضغط لفتح تفاصيل المشترك</span>
+          <i class="bi bi-chevron-left"></i>
+        </div>
       </a>
-    </div>
-    {% endif %}
+
+      <div class="subscriber-card-actions">
+        <a class="subscriber-action" href="{{ url_for('subscriber_edit', subscriber_id=s.id) }}" title="تعديل" aria-label="تعديل">
+          <i class="bi bi-pencil"></i>
+        </a>
+        <a class="subscriber-action invoice" href="{{ url_for('invoice_new') }}?subscriber_id={{ s.id }}" title="فاتورة جديدة" aria-label="فاتورة جديدة">
+          <i class="bi bi-receipt-cutoff"></i>
+        </a>
+        <a class="subscriber-action report" href="{{ url_for('reports') }}?subscriber_id={{ s.id }}" title="تقرير" aria-label="تقرير">
+          <i class="bi bi-graph-up"></i>
+        </a>
+        {% if user_role in ['Admin','admin'] %}
+        <form method="post" action="{{ url_for('subscriber_delete', subscriber_id=s.id) }}" class="subscriber-action-form"
+              onsubmit="return confirm('أرشفة المشترك {{ s.name }}؟')">
+          <button class="subscriber-action danger" type="submit" title="أرشفة" aria-label="أرشفة">
+            <i class="bi bi-trash"></i>
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
   </div>
+  {% else %}
+  <div class="subscriber-empty">
+    <i class="bi bi-people fs-1 opacity-25 d-block mb-2"></i>
+    <div class="fw-bold mb-1">{% if q %}لا توجد نتائج لـ "{{ q }}"{% else %}لا يوجد مشتركون بعد{% endif %}</div>
+    <div class="text-muted small mb-3">أضف أول مشترك ليظهر هنا كبطاقة.</div>
+    <a class="btn btn-primary btn-sm" href="{{ url_for('subscriber_new') }}">إضافة أول مشترك</a>
+    {% if q %}<a class="btn btn-outline-secondary btn-sm ms-2" href="{{ url_for('subscribers') }}">عرض الكل</a>{% endif %}
+  </div>
+  {% endif %}
 
 </div>
 {% endblock %}
