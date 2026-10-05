@@ -2665,22 +2665,12 @@ def create_app():
                 or get_setting("default_subscription_fee", "0")
                 or 0
             )
-            start_ctx = get_subscriber_opening_snapshot(db, subscriber["id"])
-            last_inv = db.execute(
-                "SELECT current_reading, current_reading_date FROM invoices WHERE subscriber_id=? ORDER BY id DESC LIMIT 1",
-                (subscriber["id"],),
-            ).fetchone()
-            if last_inv and last_inv["current_reading"] is not None:
-                previous_reading = float(last_inv["current_reading"] or 0)
-                previous_arrears = 0.0
-            else:
-                previous_reading = float(start_ctx.get("previous_reading") or subscriber["last_reading"] or 0)
-                previous_arrears = float(start_ctx.get("previous_arrears") or 0)
-            previous_reading_date = None
-            if last_inv and last_inv["current_reading_date"]:
-                previous_reading_date = last_inv["current_reading_date"]
-            else:
-                previous_reading_date = previous_reading_date_for(db, subscriber["id"], reading["reading_date"])
+            # القراءة السابقة المثبتة داخل سجل القراءة الجماعية هي المرجع،
+            # حتى لو كان هناك انقطاع عدة أشهر أو لم تُنشأ فاتورة للشهر السابق.
+            previous_reading = float(reading["previous_reading"] or 0)
+            opening_snapshot = get_subscriber_opening_snapshot(db, subscriber["id"])
+            previous_arrears = float(opening_snapshot.get("previous_arrears") or 0)
+            previous_reading_date = previous_reading_date_for(db, subscriber["id"], reading["reading_date"])
             current_reading_date = reading["reading_date"]
             opening_balance = float(get_opening_balance(db, subscriber["id"]) or 0) + previous_arrears
             consumption = max(0.0, float(reading["current_reading"]) - float(previous_reading or 0))
