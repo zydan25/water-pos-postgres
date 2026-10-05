@@ -57,6 +57,7 @@ from database import (
     backup_database_bytes, replace_database_from_file, database_file_path
 )
 from models import init_accounting, SessionLocal, engine, account_tree, find_account, record_journal_entry, AccountNode, EmployeeProfile, Invoice as SAInvoice, Payment as SAPayment, Subscriber as SASubscriber, Wallet as SAWallet, User as SAUser
+from modules.meter_management.services import location_children_map, flatten_locations
 from financial_fixes import (
     manual_collection_bp,
     ensure_unique_invoice_month,
