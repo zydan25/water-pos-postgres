@@ -372,6 +372,15 @@ def print_losses():
     )
 
 
+@bp.route("/print/meter/<int:meter_id>")
+@role_required(["admin", "manager", "technician", "staff", "collector"])
+def print_meter(meter_id):
+    payload = meter_detail(meter_id)
+    if not payload:
+        abort(404)
+    return render_template("meter_management/print_meter.html", **payload)
+
+
 @bp.route("/print/network")
 @role_required(["admin", "manager", "technician", "staff", "collector"])
 def print_network():
