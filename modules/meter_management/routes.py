@@ -377,13 +377,33 @@ def reading_new():
 @bp.route("/losses")
 @role_required(["admin", "manager", "technician", "staff", "collector"])
 def losses():
-    month_label = normalize_meter_month(request.args.get("month_label"))
+    month_param = (request.args.get("month_label") or "").strip().lower()
     meter_id = request.args.get("meter_id", type=int)
+    months = available_loss_months()
+
+    if month_param == "all":
+        summaries = [monthly_loss_summary(m) for m in months]
+        return render_template(
+            "meter_management/losses.html",
+            all_months=True,
+            month_summaries=summaries,
+            months=months,
+            month_label="all",
+            meter_id=None,
+            rows=[],
+            main_total=0, main_read=0, main_unread=0,
+            child_total=0, child_read=0, child_unread=0,
+            total_in=0, total_dist=0, total_loss=0, total_pct=0,
+            complete_count=0, incomplete_count=0,
+        )
+
+    month_label = normalize_meter_month(request.args.get("month_label"))
     monthly = monthly_loss_summary(month_label)
     rows = [r for r in monthly["rows"] if not meter_id or r["id"] == meter_id]
-    months = available_loss_months()
     return render_template(
         "meter_management/losses.html",
+        all_months=False,
+        month_summaries=[],
         rows=rows,
         month_label=month_label,
         months=months,
@@ -401,6 +421,7 @@ def losses():
         complete_count=monthly["complete_count"],
         incomplete_count=monthly["incomplete_count"],
     )
+
 
 @bp.route("/print/losses")
 @role_required(["admin", "manager", "technician", "staff", "collector"])
