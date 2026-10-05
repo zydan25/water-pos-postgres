@@ -135,14 +135,59 @@ def record_reading(data, user_id):
     value = to_float(data.get("reading_value"), -1)
     if not meter_id or value < 0:
         raise ValueError("اختر العداد وأدخل قراءة صحيحة.")
-    last = db.execute("SELECT reading_value FROM network_meter_readings WHERE meter_id=? ORDER BY reading_date DESC,id DESC LIMIT 1", (meter_id,)).fetchone()
-    meter = db.execute("SELECT initial_reading FROM network_meters WHERE id=?", (meter_id,)).fetchone()
-    previous = to_float(last["reading_value"], meter["initial_reading"] if meter else 0) if last else to_float(meter["initial_reading"], 0) if meter else 0
-    if value < previous:
+
+    try:
+        month_key = datetime.strptime(reading_date[:10], "%Y-%m-%d").strftime("%Y-%m")
+    except ValueError:
+        raise ValueError("تاريخ القراءة غير صحيح.")
+
+    meter = db.execute(
+        "SELECT id,initial_reading FROM network_meters WHERE id=? AND status='active'",
+        (meter_id,),
+    ).fetchone()
+    if not meter:
+        raise ValueError("العداد غير موجود أو غير نشط.")
+
+    # القراءة السابقة تُؤخذ من آخر قراءة قبل الشهر الحالي، حتى تبقى القراءة
+    # الشهرية مستقلة ولا تتأثر بقراءة أخرى داخل نفس الشهر عند التعديل.
+    previous = meter_previous_before_month(
+        db, meter_id, month_key, meter["initial_reading"]
+    )
+    existing = meter_month_reading(db, meter_id, month_key)
+
+    if existing and value < previous:
         raise ValueError(f"القراءة الحالية أقل من السابقة ({previous:g}).")
+    if not existing and value < previous:
+        raise ValueError(f"القراءة الحالية أقل من السابقة ({previous:g}).")
+
     consumption = value - previous
-    note = (data.get("note") or "").strip()
-    db.execute("INSERT INTO network_meter_readings(meter_id,reading_date,reading_value,previous_reading,consumption,note,created_by,created_at) VALUES (?,?,?,?,?,?,?,?)", (meter_id,reading_date,value,previous,consumption,note,user_id,now_sql()))
+    now = now_sql()
+
+    if existing:
+        db.execute(
+            """
+            UPDATE network_meter_readings
+            SET reading_date=?, reading_value=?, previous_reading=?,
+                consumption=?, note=?, created_by=?, created_at=?
+            WHERE id=?
+            """,
+            (
+                reading_date, value, previous, consumption,
+                (data.get("note") or "").strip(), user_id, now, existing["id"]
+            ),
+        )
+    else:
+        db.execute(
+            """
+            INSERT INTO network_meter_readings
+                (meter_id,reading_date,reading_value,previous_reading,consumption,note,created_by,created_at)
+            VALUES (?,?,?,?,?,?,?,?)
+            """,
+            (
+                meter_id, reading_date, value, previous, consumption,
+                (data.get("note") or "").strip(), user_id, now
+            ),
+        )
     db.commit()
 
 
@@ -462,6 +507,61 @@ def meter_detail(meter_id):
                 subscriber_consumption=db.execute(f"SELECT COALESCE(SUM(i.consumption),0) s FROM invoices i JOIN subscribers s ON s.id=i.subscriber_id WHERE s.active=1 AND s.location_id IN ({marks2})",target).fetchone()["s"] or 0
     last_read=float(readings[0]["reading_value"] if readings else meter["initial_reading"] or 0)
     return {"meter":meter,"children":children,"readings":readings,"subscriber_count":int(subscriber_count),"subscriber_consumption":float(subscriber_consumption),"last_reading":last_read}
+
+
+def monthly_loss_summary(month_label=None):
+    """ملخص المفقودات لكل شهر، مبني على قراءات ذلك الشهر فقط."""
+    month = normalize_meter_month(month_label)
+    rows = main_meter_month_rows(month)
+    complete = [x for x in rows if x["status"] == "complete"]
+    total_in = sum(float(x["incoming"] or 0) for x in complete)
+    total_distributed = sum(float(x["distributed"] or 0) for x in complete)
+    total_loss = total_in - total_distributed
+    read_main = sum(1 for x in rows if x["reading"] is not None)
+    read_children = sum(x["child_read_count"] for x in rows)
+    total_children = sum(x["child_count"] for x in rows)
+    return {
+        "month_label": month,
+        "rows": rows,
+        "main_total": len(rows),
+        "main_read": read_main,
+        "main_unread": len(rows) - read_main,
+        "child_total": total_children,
+        "child_read": read_children,
+        "child_unread": total_children - read_children,
+        "complete_count": len(complete),
+        "incomplete_count": len(rows) - len(complete),
+        "total_in": total_in,
+        "total_dist": total_distributed,
+        "total_loss": total_loss,
+        "total_pct": (total_loss / total_in * 100) if total_in else 0.0,
+    }
+
+
+def available_loss_months():
+    """الأشهر التي توجد لها حركة قراءة أو فواتير، مع إبقاء الشهر الحالي متاحاً."""
+    ensure_schema()
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT month_key FROM (
+            SELECT substr(reading_date,1,7) AS month_key
+            FROM network_meter_readings
+            WHERE reading_date IS NOT NULL AND TRIM(reading_date) <> ''
+            UNION
+            SELECT substr(COALESCE(month_label,invoice_date),1,7) AS month_key
+            FROM invoices
+            WHERE COALESCE(month_label,invoice_date) IS NOT NULL
+        )
+        WHERE month_key IS NOT NULL AND month_key <> ''
+        ORDER BY month_key DESC
+        """
+    ).fetchall()
+    months = [str(r["month_key"]) for r in rows]
+    current = date.today().strftime("%Y-%m")
+    if current not in months:
+        months.insert(0, current)
+    return months
 
 
 def loss_rows(start=None,end=None):
