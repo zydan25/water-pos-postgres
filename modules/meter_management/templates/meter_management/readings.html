@@ -21,7 +21,7 @@
       <div class="col-12 col-md-4">
         <div class="mm-month-caption">الشهر</div>
         <select name="month_label" class="form-select" style="height:44px;border-radius:12px">
-          <option value="">كل الأشهر</option>
+          <option value="all" {% if not month_label %}selected{% endif %}>كل الأشهر</option>
           {% for m in months %}<option value="{{ m }}" {% if month_label==m %}selected{% endif %}>{{ m }}</option>{% endfor %}
         </select>
       </div>
