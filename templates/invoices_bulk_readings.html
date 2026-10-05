@@ -3,11 +3,39 @@
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/bulk_readings.css') }}">
 <link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/subscriber_location.css') }}">
+<style>
+  .bulk-view-switch{display:inline-flex;gap:4px;padding:4px;background:#f2f5f9;border:1px solid #e4e9f0;border-radius:12px}
+  .bulk-view-switch button{border:0;background:transparent;border-radius:9px;padding:7px 10px;font-size:.72rem;font-weight:800;color:#6c788a}
+  .bulk-view-switch button.active{background:#fff;color:#1f5fd1;box-shadow:0 2px 7px rgba(15,23,42,.08)}
+  .bulk-meter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}
+  .bulk-meter-card{background:#fff;border:1px solid #e3e9f1;border-radius:18px;padding:15px;box-shadow:0 5px 18px rgba(15,23,42,.045)}
+  .bulk-meter-top{display:flex;justify-content:space-between;gap:10px}
+  .bulk-meter-name{font-weight:900;color:#182235;font-size:.98rem}
+  .bulk-meter-code{font-size:.68rem;color:#8793a4;margin-top:3px}
+  .bulk-meter-location{font-size:.7rem;color:#6e7b8f;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bulk-meter-current{margin-top:12px;padding:12px;border-radius:14px;background:#f3f7ff;border:1px solid #dfe9ff}
+  .bulk-meter-current small{display:block;color:#70809a;font-size:.64rem}
+  .bulk-meter-current strong{display:block;color:#1d5fd1;font-size:1.4rem;line-height:1.2;margin-top:2px}
+  .bulk-meter-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:9px}
+  .bulk-meter-stat{padding:8px;border-radius:10px;background:#f8fafc;border:1px solid #edf1f5}
+  .bulk-meter-stat small{display:block;font-size:.58rem;color:#8793a3}
+  .bulk-meter-stat strong{display:block;font-size:.8rem;color:#2d3b51;margin-top:2px}
+  .bulk-child-status{margin-top:10px;padding:9px 10px;border-radius:11px;background:#f8fafc;border:1px solid #e9eef4;font-size:.68rem;color:#66758a}
+  .bulk-child-status.good{background:#f0fbf5;border-color:#d8f0e3;color:#18864b}
+  .bulk-child-status.warn{background:#fff8ed;border-color:#f2dfbd;color:#a56700}
+  .bulk-meter-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px}
+  .bulk-meter-actions .btn{flex:1;min-width:90px}
+  .bulk-child-list{margin-top:9px;display:grid;gap:5px}
+  .bulk-child-row{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:.64rem;color:#657388}
+  .bulk-child-row strong{font-size:.65rem;color:#324157}
+  @media(max-width:1100px){.bulk-meter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:760px){.bulk-meter-grid{grid-template-columns:1fr}.bulk-view-switch{width:100%}.bulk-view-switch button{flex:1}}
+</style>
 {% endblock %}
 
 {% macro format_reading(value) -%}
   {%- if value is not none -%}
-    {{ '%.2f'|format(value)|replace('.00','') }}
+    {{ ('%.2f'|format(value)).rstrip('0').rstrip('.') }}
   {%- endif -%}
 {%- endmacro %}
 
@@ -18,11 +46,17 @@
       <div>
         <div class="bulk-reading-eyebrow">الفوترة الشهرية · إدخال القراءات</div>
         <div class="bulk-reading-title"><i class="bi bi-speedometer2 me-1"></i>إدخال القراءات الجماعية</div>
-        <div class="bulk-reading-subtitle">اختر الشهر والموقع، وستظهر المنطقة وفروعها مع استعادة أي قراءة محفوظة مسبقًا.</div>
+        <div class="bulk-reading-subtitle">الشهر المحدد هو أساس القراءة والحفظ والمقارنة. كل قراءة تُحفظ للمشترك والشهر بشكل مستقل.</div>
       </div>
-      <a href="{{ url_for('invoices_bulk_create') }}" class="btn btn-success">
-        <i class="bi bi-file-earmark-plus me-1"></i>إنشاء الفواتير
-      </a>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('invoices_bulk_create') }}" class="btn btn-success">
+          <i class="bi bi-file-earmark-plus me-1"></i>إنشاء الفواتير
+        </a>
+        <a href="{{ url_for('invoices_bulk_readings_report',month_label=month_label,location_id=location_id) }}"
+           class="btn btn-outline-primary" target="_blank">
+          <i class="bi bi-file-text me-1"></i>تقرير قراءات
+        </a>
+      </div>
     </div>
 
     <form id="bulkFilterForm" method="get">
@@ -32,7 +66,6 @@
           <input id="bulkMonth" type="month" name="month_label" class="form-control bulk-month-input"
                  value="{{ month_label }}" required>
         </div>
-
         <div class="bulk-location-wrap">
           <div class="bulk-control-label">القرية / المنطقة</div>
           <button type="button" id="bulkLocationTrigger" class="bulk-location-trigger">
@@ -43,7 +76,6 @@
             <i class="bi bi-chevron-down"></i>
           </button>
           <input type="hidden" name="location_id" id="bulkLocationId" value="{{ location_id or '' }}">
-
           <div id="bulkLocationMenu" class="bulk-location-menu" hidden>
             <input id="bulkLocationSearch" class="form-control bulk-location-search" placeholder="ابحث عن القرية أو المنطقة...">
             <button type="button" class="bulk-location-all" data-location-id="">
@@ -58,447 +90,418 @@
 
     <div class="bulk-summary">
       <div class="bulk-summary-item primary">
-        <small>المشتركون</small>
-        <strong id="bulkTotal">{{ subscribers|length }}</strong>
+        <small>المشتركون</small><strong id="bulkTotal">{{ subscribers|length }}</strong>
       </div>
       <div class="bulk-summary-item success">
-        <small>تم إدخالها</small>
-        <strong id="bulkEntered">0</strong>
+        <small>تم إدخالها</small><strong id="bulkEntered">0</strong>
       </div>
       <div class="bulk-summary-item warning">
-        <small>المتبقي</small>
-        <strong id="bulkRemaining">{{ subscribers|length }}</strong>
+        <small>المتبقي</small><strong id="bulkRemaining">{{ subscribers|length }}</strong>
       </div>
       <div class="bulk-summary-item">
-        <small>محفوظة تلقائيًا</small>
-        <strong id="bulkSaved">0</strong>
+        <small>محفوظة تلقائيًا</small><strong id="bulkSaved">0</strong>
       </div>
     </div>
   </div>
 
   <div class="bulk-reading-toolbar">
-    <div class="bulk-search-wrap">
-      <i class="bi bi-search"></i>
-      <input id="bulkSubscriberSearch" type="search" class="bulk-search"
-             placeholder="بحث فوري بالاسم، رقم الحساب، العداد أو الموقع...">
-      <button type="button" id="bulkSearchClear" class="bulk-search-clear" hidden aria-label="مسح البحث">
-        <i class="bi bi-x-lg"></i>
-      </button>
+    <div class="bulk-view-switch">
+      <button type="button" class="active" id="viewSubscribersBtn"><i class="bi bi-people me-1"></i>المشتركون</button>
+      <button type="button" id="viewMetersBtn"><i class="bi bi-speedometer2 me-1"></i>العدادات الرئيسية</button>
+    </div>
+    <div id="subscriberTools" class="d-flex gap-2 flex-wrap flex-grow-1 align-items-center">
+      <div class="bulk-search-wrap">
+        <i class="bi bi-search"></i>
+        <input id="bulkSubscriberSearch" type="search" class="bulk-search"
+               placeholder="بحث فوري بالاسم، الحساب، العداد أو الموقع...">
+        <button type="button" id="bulkSearchClear" class="bulk-search-clear" hidden aria-label="مسح البحث">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <select id="bulkSort" class="form-select form-select-sm" style="height:44px;border-radius:12px;min-width:145px">
+          <option value="account">فرز حسب: الحساب</option>
+          <option value="name">فرز حسب: الاسم</option>
+          <option value="location">فرز حسب: الموقع</option>
+          <option value="reading">فرز حسب: القراءة الحالية</option>
+          <option value="consumption">فرز حسب: الاستهلاك</option>
+          <option value="status">فرز حسب: حالة الإدخال</option>
+        </select>
+        <label class="d-flex align-items-center gap-2 px-2" style="font-size:.72rem;font-weight:800;color:#66758a;white-space:nowrap">
+          <input id="onlyMissing" type="checkbox" class="form-check-input m-0">
+          القراءات غير المدخلة فقط
+        </label>
+      </div>
     </div>
     <div class="bulk-results-count" id="bulkResultsCount">{{ subscribers|length }} مشترك</div>
   </div>
 
-  <form id="bulkReadingForm" method="post">
-    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="month_label" value="{{ month_label }}">
-    <input type="hidden" name="location_id" value="{{ location_id or '' }}">
+  <div id="subscriberView">
+    <form id="bulkReadingForm" method="post">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="month_label" value="{{ month_label }}">
+      <input type="hidden" name="location_id" value="{{ location_id or '' }}">
 
-    <div id="bulkReadingGrid" class="bulk-reading-grid">
-      {% for sub in subscribers %}
-      {% set st = reading_state.get(sub.id, {}) %}
-      <article class="bulk-reading-card"
-               data-search="{{ (sub.name ~ ' ' ~ (sub.account_number or '') ~ ' ' ~ (sub.meter_number or '') ~ ' ' ~ (sub.address or '') ~ ' ' ~ (sub.location_name or ''))|lower }}">
-        <div class="bulk-reading-card-head">
-          <div class="d-flex align-items-start gap-2">
-            <div class="flex-grow-1 min-w-0">
-              <div class="bulk-reading-name" title="{{ sub.name }}">{{ sub.name }}</div>
-              <div class="bulk-reading-account">حساب {{ sub.account_number or '—' }}</div>
-            </div>
-            {% if st.invoiced %}
-              <span class="badge text-bg-secondary">فاتورة موجودة</span>
-            {% elif st.saved %}
-              <span class="badge text-bg-success">محفوظ</span>
-            {% else %}
-              <span class="badge text-bg-light text-secondary">جديد</span>
-            {% endif %}
-          </div>
-          <div class="bulk-reading-location" title="{{ sub.location_name or sub.address or 'غير مصنف' }}">
-            <i class="bi bi-geo-alt"></i>{{ sub.location_name or sub.address or 'غير مصنف' }}
-          </div>
-        </div>
-
-        <div class="bulk-reading-body">
-          <div class="bulk-reading-metrics">
-            <div class="bulk-reading-metric">
-              <small>القراءة السابقة</small>
-              <strong class="bulk-prev">{{ format_reading(st.previous or 0) }}</strong>
-            </div>
-            <div class="bulk-reading-metric consumption">
-              <small>الاستهلاك</small>
-              <strong class="bulk-consumption">{{ format_reading(st.consumption) if st.consumption is not none else '—' }}</strong>
-            </div>
-          </div>
-
-          <div class="bulk-reading-input-label">القراءة الحالية</div>
-          <input type="number"
-                 name="current_reading_{{ sub.id }}"
-                 class="form-control bulk-reading-input"
-                 min="{{ st.previous or 0 }}"
-                 step="0.01"
-                 inputmode="decimal"
-                 autocomplete="off"
-                 value="{{ format_reading(st.current) }}"
-                 data-prev="{{ st.previous or 0 }}"
-                 data-subid="{{ sub.id }}"
-                 data-last-saved="{{ format_reading(st.current) }}"
-                 {% if st.invoiced %}disabled{% endif %}
-                 placeholder="أدخل القراءة">
-
-          {% if st.invoiced %}
-            <div class="bulk-reading-status invoice">
-              <span><i class="bi bi-lock-fill me-1"></i>القراءة مرتبطة بالفاتورة</span>
-              {% if st.invoice_id %}
-                <a href="{{ url_for('invoice_detail', invoice_id=st.invoice_id) }}">فتح الفاتورة #{{ st.invoice_no }}</a>
+      <div id="bulkReadingGrid" class="bulk-reading-grid">
+        {% for sub in subscribers %}
+        {% set st = reading_state.get(sub.id, {}) %}
+        <article class="bulk-reading-card"
+          data-search="{{ (sub.name ~ ' ' ~ (sub.account_number or '') ~ ' ' ~ (sub.meter_number or '') ~ ' ' ~ (sub.address or '') ~ ' ' ~ (sub.location_name or ''))|lower }}"
+          data-account="{{ (sub.account_number or '')|lower }}"
+          data-name="{{ (sub.name or '')|lower }}"
+          data-location="{{ (sub.location_name or sub.address or '')|lower }}"
+          data-reading="{{ st.current if st.current is not none else -1 }}"
+          data-consumption="{{ st.consumption if st.consumption is not none else -1 }}"
+          data-status="{{ '1' if st.current is not none else '0' }}">
+          <div class="bulk-reading-card-head">
+            <div class="d-flex align-items-start gap-2">
+              <div class="flex-grow-1 min-w-0">
+                <div class="bulk-reading-name" title="{{ sub.name }}">{{ sub.name }}</div>
+                <div class="bulk-reading-account">حساب {{ sub.account_number or '—' }}</div>
+              </div>
+              {% if st.invoiced %}
+                <span class="badge text-bg-secondary">فاتورة موجودة</span>
+              {% elif st.saved %}
+                <span class="badge text-bg-success">محفوظ</span>
+              {% else %}
+                <span class="badge text-bg-light text-secondary">غير مدخل</span>
               {% endif %}
             </div>
-          {% elif st.saved %}
-            <div class="bulk-reading-status saved">
-              <span class="save-message"><i class="bi bi-check2-circle me-1"></i>محفوظة تلقائيًا</span>
-              <span class="save-time">جاهزة للتعديل</span>
+            <div class="bulk-reading-location" title="{{ sub.location_name or sub.address or 'غير مصنف' }}">
+              <i class="bi bi-geo-alt"></i>{{ sub.location_name or sub.address or 'غير مصنف' }}
             </div>
+          </div>
+          <div class="bulk-reading-body">
+            <div class="bulk-reading-metrics">
+              <div class="bulk-reading-metric">
+                <small>القراءة السابقة</small><strong class="bulk-prev">{{ format_reading(st.previous or 0) }}</strong>
+              </div>
+              <div class="bulk-reading-metric consumption">
+                <small>الاستهلاك</small><strong class="bulk-consumption">{{ format_reading(st.consumption) if st.consumption is not none else '—' }}</strong>
+              </div>
+            </div>
+            <div class="bulk-reading-input-label">القراءة الحالية</div>
+            <input type="number" name="current_reading_{{ sub.id }}" class="form-control bulk-reading-input"
+              min="{{ st.previous or 0 }}" step="0.01" inputmode="decimal" autocomplete="off"
+              value="{{ format_reading(st.current) }}" data-prev="{{ st.previous or 0 }}"
+              data-subid="{{ sub.id }}" data-last-saved="{{ format_reading(st.current) }}"
+              {% if st.invoiced %}disabled{% endif %} placeholder="أدخل القراءة">
+            {% if st.invoiced %}
+              <div class="bulk-reading-status invoice">
+                <span><i class="bi bi-lock-fill me-1"></i>القراءة مرتبطة بالفاتورة</span>
+                {% if st.invoice_id %}<a href="{{ url_for('invoice_detail', invoice_id=st.invoice_id) }}">فتح #{{ st.invoice_no }}</a>{% endif %}
+              </div>
+            {% elif st.saved %}
+              <div class="bulk-reading-status saved"><span class="save-message"><i class="bi bi-check2-circle me-1"></i>محفوظة تلقائيًا</span><span class="save-time">جاهزة للتعديل</span></div>
+            {% else %}
+              <div class="bulk-reading-status"><span class="save-message">سيتم الحفظ تلقائيًا أثناء الإدخال</span><span class="save-time"></span></div>
+            {% endif %}
+          </div>
+        </article>
+        {% else %}
+        <div class="bulk-reading-empty">
+          <div class="fs-2 mb-2"><i class="bi bi-people"></i></div>
+          <div class="fw-bold mb-1">لا يوجد مشتركون لهذا الاختيار</div>
+          <div class="small">اختر موقعًا آخر أو راجع الشهر المحدد.</div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="bulk-reading-actions">
+        <div class="hint"><i class="bi bi-cloud-check me-1"></i>الحفظ التلقائي يعمل مع كل قراءة، ويمكنك حفظ الكل أيضًا.</div>
+        <div class="buttons">
+          <button type="submit" id="bulkSaveAll" class="btn btn-primary"><i class="bi bi-save me-1"></i>حفظ جميع القراءات</button>
+          <a href="{{ url_for('invoices') }}" class="btn btn-outline-secondary">الفواتير</a>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div id="meterView" hidden>
+    <div class="bulk-meter-grid">
+      {% for m in main_meters %}
+      <article class="bulk-meter-card">
+        <div class="bulk-meter-top">
+          <div class="min-w-0">
+            <div class="bulk-meter-name" title="{{ m.name }}">{{ m.name }}</div>
+            <div class="bulk-meter-code">{{ m.meter_number }}</div>
+          </div>
+          {% if m.status == 'complete' %}
+            <span class="badge text-bg-success">مكتمل</span>
+          {% elif m.status == 'missing_main' %}
+            <span class="badge text-bg-danger">العداد بلا قراءة</span>
+          {% elif m.status == 'missing_children' %}
+            <span class="badge text-bg-warning">قراءات فروع ناقصة</span>
           {% else %}
-            <div class="bulk-reading-status">
-              <span class="save-message">سيتم الحفظ تلقائيًا أثناء الإدخال</span>
-              <span class="save-time"></span>
-            </div>
+            <span class="badge text-bg-secondary">بيانات ناقصة</span>
           {% endif %}
+        </div>
+        <div class="bulk-meter-location"><i class="bi bi-geo-alt me-1"></i>{{ m.location_name or 'بدون موقع' }}</div>
+
+        <div class="bulk-meter-current">
+          <small>قراءة العداد الرئيسية · {{ month_label }}</small>
+          <strong>{{ format_reading(m.reading) if m.reading is not none else 'لم تدخل' }}</strong>
+        </div>
+
+        <div class="bulk-meter-stats">
+          <div class="bulk-meter-stat"><small>السابقة</small><strong>{{ format_reading(m.previous) }}</strong></div>
+          <div class="bulk-meter-stat"><small>استهلاك الشهر</small><strong>{{ format_reading(m.incoming) if m.incoming is not none else '—' }}</strong></div>
+          <div class="bulk-meter-stat"><small>المفقودات</small><strong>{% if m.loss is not none %}{{ format_reading(m.loss) }}{% else %}—{% endif %}</strong></div>
+        </div>
+
+        <div class="bulk-child-status {% if m.child_unread_count==0 %}good{% else %}warn{% endif %}">
+          <i class="bi bi-diagram-3 me-1"></i>
+          العدادات الفرعية: <strong>{{ m.child_read_count }}</strong> مقروءة من <strong>{{ m.child_count }}</strong>
+          {% if m.child_unread_count %} · متبقي <strong>{{ m.child_unread_count }}</strong>{% endif %}
+        </div>
+
+        {% if m.children %}
+        <div class="bulk-child-list">
+          {% for c in m.children[:4] %}
+          <div class="bulk-child-row">
+            <span>{{ c.name }} · {{ c.meter_number }}</span>
+            <strong>{% if c.read %}{{ format_reading(c.reading) }}{% else %}<span class="text-danger">غير مقروء</span>{% endif %}</strong>
+          </div>
+          {% endfor %}
+          {% if m.children|length > 4 %}<div class="small text-muted">+ {{ m.children|length - 4 }} عدادات فرعية أخرى</div>{% endif %}
+        </div>
+        {% endif %}
+
+        <div class="bulk-meter-actions">
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('meter_management.reading_new',meter_id=m.id) }}"><i class="bi bi-pencil-square"></i> قراءة</a>
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('meter_management.readings',meter_id=m.id,month_label=month_label) }}"><i class="bi bi-file-text"></i> تقرير</a>
+          <a class="btn btn-sm btn-outline-danger" href="{{ url_for('meter_management.losses',month_label=month_label,meter_id=m.id) }}"><i class="bi bi-droplet-half"></i> مفقودات</a>
+          <a class="btn btn-sm btn-outline-dark" href="{{ url_for('meter_management.meter_detail',meter_id=m.id) }}"><i class="bi bi-box-arrow-up-right"></i> التفاصيل</a>
         </div>
       </article>
       {% else %}
       <div class="bulk-reading-empty">
-        <div class="fs-2 mb-2"><i class="bi bi-people"></i></div>
-        <div class="fw-bold mb-1">لا يوجد مشتركون لهذا الاختيار</div>
-        <div class="small">اختر موقعًا آخر أو راجع الشهر المحدد.</div>
+        <div class="fs-2 mb-2"><i class="bi bi-speedometer"></i></div>
+        <div class="fw-bold mb-1">لا توجد عدادات رئيسية في هذا الموقع</div>
+        <div class="small">اختر موقعًا آخر أو أضف عدادًا رئيسيًا واربطه بالموقع.</div>
       </div>
       {% endfor %}
     </div>
-
-    <div class="bulk-reading-actions">
-      <div class="hint"><i class="bi bi-cloud-check me-1"></i>القراءة تُحفظ تلقائيًا دون الحاجة إلى الضغط على «حفظ الكل».</div>
-      <div class="buttons">
-        <button type="submit" id="bulkSaveAll" class="btn btn-primary">
-          <i class="bi bi-save me-1"></i>حفظ جميع القراءات
-        </button>
-        <a href="{{ url_for('invoices') }}" class="btn btn-outline-secondary">الفواتير</a>
-      </div>
-    </div>
-  </form>
+  </div>
 </div>
 
 <script>
 (function(){
-  const monthInput = document.getElementById('bulkMonth');
-  const filterForm = document.getElementById('bulkFilterForm');
-  const mainForm = document.getElementById('bulkReadingForm');
-  const locationTrigger = document.getElementById('bulkLocationTrigger');
-  const locationMenu = document.getElementById('bulkLocationMenu');
-  const locationIdInput = document.getElementById('bulkLocationId');
-  const locationValue = document.getElementById('bulkLocationValue');
-  const locationSearch = document.getElementById('bulkLocationSearch');
-  const locationTree = document.getElementById('bulkLocationTree');
-  const searchInput = document.getElementById('bulkSubscriberSearch');
-  const searchClear = document.getElementById('bulkSearchClear');
-  const csrf = mainForm?.querySelector('input[name="_csrf_token"]')?.value || '';
-  const autosaveUrl = {{ url_for('invoices_bulk_readings_autosave')|tojson }};
-  const treeData = {{ tree|tojson }};
+  const monthInput=document.getElementById('bulkMonth');
+  const filterForm=document.getElementById('bulkFilterForm');
+  const mainForm=document.getElementById('bulkReadingForm');
+  const locationTrigger=document.getElementById('bulkLocationTrigger');
+  const locationMenu=document.getElementById('bulkLocationMenu');
+  const locationIdInput=document.getElementById('bulkLocationId');
+  const locationValue=document.getElementById('bulkLocationValue');
+  const locationSearch=document.getElementById('bulkLocationSearch');
+  const locationTree=document.getElementById('bulkLocationTree');
+  const searchInput=document.getElementById('bulkSubscriberSearch');
+  const searchClear=document.getElementById('bulkSearchClear');
+  const sortSelect=document.getElementById('bulkSort');
+  const onlyMissing=document.getElementById('onlyMissing');
+  const csrf=mainForm?.querySelector('input[name="_csrf_token"]')?.value || '';
+  const autosaveUrl={{ url_for('invoices_bulk_readings_autosave')|tojson }};
+  const treeData={{ tree|tojson }};
 
-  function closeLocationMenu(){ if(locationMenu) locationMenu.hidden = true; }
-  locationTrigger?.addEventListener('click', function(){
-    locationMenu.hidden = !locationMenu.hidden;
-    if(!locationMenu.hidden){
-      locationSearch?.focus();
-    }
+  function closeLocationMenu(){if(locationMenu)locationMenu.hidden=true}
+  locationTrigger?.addEventListener('click',function(){
+    locationMenu.hidden=!locationMenu.hidden;
+    if(!locationMenu.hidden)locationSearch?.focus();
   });
-  document.addEventListener('click', function(e){
-    if(!e.target.closest('.bulk-location-wrap')) closeLocationMenu();
-  });
+  document.addEventListener('click',function(e){if(!e.target.closest('.bulk-location-wrap'))closeLocationMenu()});
 
-  function nodeMatches(node, term, path){
-    if(!term) return true;
-    const hay = (path + ' ' + (node.name||'') + ' ' + (node.code||'') + ' ' + (node.location_type||'')).toLowerCase();
-    return hay.includes(term);
+  function escapeHtml(value){return String(value).replace(/[&<>"']/g,function(ch){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[ch]})}
+  function nodeMatches(node,term,path){
+    const hay=(path+' '+(node.name||'')+' '+(node.code||'')+' '+(node.location_type||'')).toLowerCase();
+    return !term || hay.includes(term);
   }
-
-  function subtreeMatches(node, term, path){
-    if(nodeMatches(node, term, path)) return true;
-    return (node.children || []).some(child => subtreeMatches(child, term, path + ' / ' + (child.name||'')));
+  function subtreeMatches(node,term,path){
+    return nodeMatches(node,term,path)||(node.children||[]).some(child=>subtreeMatches(child,term,path+' / '+(child.name||'')));
   }
-
-  function buildLocationNode(node, parent, path){
-    const fullPath = path ? path + ' / ' + node.name : node.name;
-    const wrap = document.createElement('div');
-    wrap.className = 'bulk-location-node';
-    wrap.dataset.path = fullPath.toLowerCase();
-
-    const row = document.createElement('div');
-    row.className = 'bulk-location-row';
-    row.style.paddingRight = Math.min(6 + ((node.depth || 0) * 6), 42) + 'px';
-
-    const children = node.children || [];
-    const toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'bulk-location-toggle';
-    toggle.innerHTML = children.length ? '<i class="bi bi-chevron-left"></i>' : '<span></span>';
-    toggle.setAttribute('aria-label', 'فتح الفروع');
+  function buildLocationNode(node,parent,path){
+    const fullPath=path?path+' / '+node.name:node.name;
+    const wrap=document.createElement('div');
+    wrap.className='bulk-location-node';
+    const row=document.createElement('div');
+    row.className='bulk-location-row';
+    row.style.paddingRight=Math.min(6+((node.depth||0)*6),42)+'px';
+    const children=node.children||[];
+    const toggle=document.createElement('button');
+    toggle.type='button';toggle.className='bulk-location-toggle';
+    toggle.innerHTML=children.length?'<i class="bi bi-chevron-left"></i>':'<span></span>';
     row.appendChild(toggle);
-
-    const choose = document.createElement('button');
-    choose.type = 'button';
-    choose.className = 'bulk-location-select';
-    choose.innerHTML =
-      '<i class="bi bi-geo-alt me-1"></i>' +
-      '<span>' + escapeHtml(node.name || '') + '</span>';
-    choose.title = fullPath;
-    row.appendChild(choose);
-
-    const type = document.createElement('span');
-    type.className = 'bulk-location-type';
-    type.textContent = node.location_type || 'موقع';
-    row.appendChild(type);
-
-    const count = document.createElement('span');
-    count.className = 'bulk-location-count';
-    count.textContent = String(node.subscriber_count || 0);
-    row.appendChild(count);
-
+    const choose=document.createElement('button');
+    choose.type='button';choose.className='bulk-location-select';
+    choose.innerHTML='<i class="bi bi-geo-alt me-1"></i><span>'+escapeHtml(node.name||'')+'</span>';
+    choose.title=fullPath;row.appendChild(choose);
+    const type=document.createElement('span');type.className='bulk-location-type';type.textContent=node.location_type||'موقع';row.appendChild(type);
+    const count=document.createElement('span');count.className='bulk-location-count';count.textContent=String(node.subscriber_count||0);row.appendChild(count);
     wrap.appendChild(row);
-
-    let childrenWrap = null;
     if(children.length){
-      childrenWrap = document.createElement('div');
-      childrenWrap.className = 'bulk-location-children';
-      childrenWrap.hidden = true;
-      children.forEach(child => buildLocationNode(child, childrenWrap, fullPath));
-      wrap.appendChild(childrenWrap);
-      toggle.addEventListener('click', function(e){
-        e.preventDefault();
-        e.stopPropagation();
-        const closed = childrenWrap.hidden;
-        childrenWrap.hidden = !closed;
-        toggle.innerHTML = closed
-          ? '<i class="bi bi-chevron-down"></i>'
-          : '<i class="bi bi-chevron-left"></i>';
+      const childrenWrap=document.createElement('div');
+      childrenWrap.className='bulk-location-children';childrenWrap.hidden=true;
+      children.forEach(child=>buildLocationNode(child,childrenWrap,fullPath));wrap.appendChild(childrenWrap);
+      toggle.addEventListener('click',function(e){
+        e.preventDefault();e.stopPropagation();
+        const closed=childrenWrap.hidden;childrenWrap.hidden=!closed;
+        toggle.innerHTML=closed?'<i class="bi bi-chevron-down"></i>':'<i class="bi bi-chevron-left"></i>';
       });
-    } else {
-      toggle.disabled = true;
-    }
-
-    choose.addEventListener('click', function(){
-      locationIdInput.value = node.id;
-      locationValue.textContent = fullPath;
-      closeLocationMenu();
-      filterForm.submit();
+    }else{toggle.disabled=true}
+    choose.addEventListener('click',function(){
+      locationIdInput.value=node.id;locationValue.textContent=fullPath;closeLocationMenu();filterForm.submit();
     });
-
     parent.appendChild(wrap);
   }
-
-  function escapeHtml(value){
-    return String(value).replace(/[&<>"']/g, function(ch){
-      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[ch];
-    });
-  }
-
   function renderLocationTree(term){
-    locationTree.innerHTML = '';
-    const normalized = (term || '').trim().toLowerCase();
-    treeData.forEach(function(node){
-      if(subtreeMatches(node, normalized, node.name || '')){
-        buildLocationNode(node, locationTree, '');
-      }
-    });
+    locationTree.innerHTML='';const normalized=(term||'').trim().toLowerCase();
+    treeData.forEach(node=>{if(subtreeMatches(node,normalized,node.name||''))buildLocationNode(node,locationTree,'')});
     if(normalized){
-      locationTree.querySelectorAll('.bulk-location-children').forEach(function(el){ el.hidden = false; });
-      locationTree.querySelectorAll('.bulk-location-toggle').forEach(function(btn){
-        if(!btn.disabled) btn.innerHTML = '<i class="bi bi-chevron-down"></i>';
-      });
+      locationTree.querySelectorAll('.bulk-location-children').forEach(el=>el.hidden=false);
+      locationTree.querySelectorAll('.bulk-location-toggle').forEach(btn=>{if(!btn.disabled)btn.innerHTML='<i class="bi bi-chevron-down"></i>'});
     }
     if(!locationTree.children.length){
-      const empty=document.createElement('div');
-      empty.className='small text-muted text-center py-3';
-      empty.textContent='لا توجد نتائج.';
-      locationTree.appendChild(empty);
+      const empty=document.createElement('div');empty.className='small text-muted text-center py-3';empty.textContent='لا توجد نتائج.';locationTree.appendChild(empty);
     }
   }
   renderLocationTree('');
-  locationSearch?.addEventListener('input', function(){ renderLocationTree(this.value); });
-
-  document.querySelector('.bulk-location-all')?.addEventListener('click', function(){
-    locationIdInput.value = '';
-    locationValue.textContent = 'كل المواقع';
-    closeLocationMenu();
-    filterForm.submit();
+  locationSearch?.addEventListener('input',function(){renderLocationTree(this.value)});
+  document.querySelector('.bulk-location-all')?.addEventListener('click',function(){
+    locationIdInput.value='';locationValue.textContent='كل المواقع';closeLocationMenu();filterForm.submit();
   });
-
-  monthInput?.addEventListener('change', async function(){
-    const ok=await persistDirtyInputs();
-    if(ok){
-      filterForm.submit();
-    }else{
-      alert('توجد قراءة لم تُحفظ. صحح الخطأ أو أعد المحاولة قبل تغيير الشهر.');
-    }
-  });
-
-  const cards = Array.from(document.querySelectorAll('.bulk-reading-card'));
-  const inputs = Array.from(document.querySelectorAll('.bulk-reading-input'));
-
-  function updateCard(input){
-    const card = input.closest('.bulk-reading-card');
-    if(!card) return;
-    const prev = parseFloat(input.dataset.prev || '0') || 0;
-    const value = input.value.trim() === '' ? null : parseFloat(input.value);
-    const consumption = card.querySelector('.bulk-consumption');
-    if(consumption){
-      if(value === null || Number.isNaN(value)){
-        consumption.textContent = '—';
-        consumption.style.color = '';
-      } else if(value < prev){
-        consumption.textContent = 'أقل من السابقة';
-        consumption.style.color = '#c0392b';
-      } else {
-        consumption.textContent = (value - prev).toFixed(2).replace(/\.00$/,'');
-        consumption.style.color = '';
-      }
-    }
-    updateSummary();
-  }
-
-  function setStatus(input, type, message){
-    const card=input.closest('.bulk-reading-card');
-    const box=card?.querySelector('.bulk-reading-status');
-    const msg=card?.querySelector('.save-message');
-    if(!box || !msg) return;
-    box.classList.remove('saved','error','invoice');
-    if(type) box.classList.add(type);
-    msg.textContent=message;
-  }
-
-  async function persistInput(input){
-    if(!input || input.disabled) return true;
-    const value=input.value.trim();
-    const lastSaved=input.dataset.lastSaved ?? '';
-    if(value === lastSaved && input.dataset.dirty !== '1') return true;
-
-    const card=input.closest('.bulk-reading-card');
-    if(!card) return true;
-    setStatus(input,'','جاري الحفظ...');
-    input.classList.remove('is-invalid');
-
-    const body=new URLSearchParams();
-    body.set('_csrf_token',csrf);
-    body.set('subscriber_id',input.dataset.subid);
-    body.set('month_label',monthInput.value);
-    body.set('location_id', locationIdInput.value || '');
-    body.set('current_reading', value);
-
-    try{
-      const response=await fetch(autosaveUrl,{
-        method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},
-        body:body.toString(),
-        credentials:'same-origin'
-      });
-      let payload={};
-      try{ payload=await response.json(); }catch(_e){}
-      if(!response.ok || !payload.ok){
-        throw new Error(payload.error || 'تعذر حفظ القراءة.');
-      }
-
-      if(payload.state === 'cleared'){
-        input.dataset.lastSaved='';
-        input.dataset.dirty='0';
-        setStatus(input,'','تم مسح القراءة المحفوظة.');
-      }else{
-        input.dataset.prev=payload.previous_reading;
-        input.dataset.lastSaved=value;
-        input.dataset.dirty='0';
-        input.classList.remove('is-invalid');
-        updateCard(input);
-        setStatus(input,'saved','محفوظة تلقائيًا');
-      }
-      updateSummary();
-      return true;
-    }catch(error){
-      input.dataset.dirty='1';
-      input.classList.add('is-invalid');
-      setStatus(input,'error',error.message || 'تعذر حفظ القراءة.');
-      updateSummary();
-      return false;
-    }
-  }
-
-  function schedulePersist(input){
-    if(input.disabled) return;
-    input.dataset.dirty='1';
-    clearTimeout(input._bulkSaveTimer);
-    input._bulkSaveTimer=setTimeout(function(){ persistInput(input); },450);
-  }
 
   async function persistDirtyInputs(){
-    const dirty=inputs.filter(inp=>!inp.disabled && inp.dataset.dirty==='1');
-    if(!dirty.length) return true;
-    const results=await Promise.all(dirty.map(persistInput));
-    return results.every(Boolean);
+    const dirty=inputs.filter(inp=>!inp.disabled&&inp.dataset.dirty==='1');
+    if(!dirty.length)return true;
+    const results=await Promise.all(dirty.map(persistInput));return results.every(Boolean);
+  }
+  monthInput?.addEventListener('change',async function(){
+    const ok=await persistDirtyInputs();
+    if(ok)filterForm.submit();else alert('توجد قراءة لم تُحفظ. صحح الخطأ أو أعد المحاولة قبل تغيير الشهر.');
+  });
+
+  const cards=Array.from(document.querySelectorAll('.bulk-reading-card'));
+  const inputs=Array.from(document.querySelectorAll('.bulk-reading-input'));
+
+  function updateCard(input){
+    const card=input.closest('.bulk-reading-card');if(!card)return;
+    const prev=parseFloat(input.dataset.prev||'0')||0;
+    const value=input.value.trim()===''?null:parseFloat(input.value);
+    const consumption=card.querySelector('.bulk-consumption');
+    if(consumption){
+      if(value===null||Number.isNaN(value)){consumption.textContent='—'}
+      else if(value<prev){consumption.textContent='أقل من السابقة';consumption.style.color='#c0392b'}
+      else {consumption.textContent=(value-prev).toFixed(2).replace(/\.00$/,'');consumption.style.color=''}
+    }
+    card.dataset.reading=value===null?'-1':String(value);
+    card.dataset.consumption=value===null?'-1':String(Math.max(0,value-prev));
+    card.dataset.status=value===null?'0':'1';
+    updateSummary();
+  }
+  function setStatus(input,type,message){
+    const card=input.closest('.bulk-reading-card');const box=card?.querySelector('.bulk-reading-status');const msg=card?.querySelector('.save-message');
+    if(!box||!msg)return;
+    box.classList.remove('saved','error','invoice');if(type)box.classList.add(type);msg.textContent=message;
+  }
+  async function persistInput(input){
+    if(!input||input.disabled)return true;
+    const value=input.value.trim();const lastSaved=input.dataset.lastSaved??'';
+    if(value===lastSaved&&input.dataset.dirty!=='1')return true;
+    setStatus(input,'','جاري الحفظ...');input.classList.remove('is-invalid');
+    const body=new URLSearchParams();
+    body.set('_csrf_token',csrf);body.set('subscriber_id',input.dataset.subid);body.set('month_label',monthInput.value);
+    body.set('location_id',locationIdInput.value||'');body.set('current_reading',value);
+    try{
+      const response=await fetch(autosaveUrl,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:body.toString(),credentials:'same-origin'});
+      let payload={};try{payload=await response.json()}catch(_e){}
+      if(!response.ok||!payload.ok)throw new Error(payload.error||'تعذر حفظ القراءة.');
+      if(payload.state==='cleared'){
+        input.dataset.lastSaved='';input.dataset.dirty='0';setStatus(input,'','تم مسح القراءة المحفوظة.');
+      }else{
+        input.dataset.prev=payload.previous_reading;input.dataset.lastSaved=value;input.dataset.dirty='0';input.classList.remove('is-invalid');
+        updateCard(input);setStatus(input,'saved','محفوظة تلقائيًا');
+      }
+      updateSummary();return true;
+    }catch(error){
+      input.dataset.dirty='1';input.classList.add('is-invalid');setStatus(input,'error',error.message||'تعذر حفظ القراءة.');updateSummary();return false;
+    }
+  }
+  function schedulePersist(input){
+    if(input.disabled)return;input.dataset.dirty='1';clearTimeout(input._bulkSaveTimer);input._bulkSaveTimer=setTimeout(()=>persistInput(input),450);
   }
 
   function updateSummary(){
     const all=inputs.length;
     const entered=inputs.filter(i=>i.value.trim()!=='').length;
-    const saved=inputs.filter(i=>!i.disabled && i.dataset.lastSaved!==undefined && i.value.trim()===i.dataset.lastSaved && i.value.trim()!=='').length
-      + inputs.filter(i=>i.disabled).length;
-    const visible=cards.filter(c=>!c.classList.contains('hidden-by-search')).length;
+    const saved=inputs.filter(i=>i.value.trim()!==''&&i.dataset.lastSaved===i.value.trim()).length;
+    const visible=cards.filter(c=>c.style.display!=='none').length;
     document.getElementById('bulkTotal').textContent=all;
     document.getElementById('bulkEntered').textContent=entered;
     document.getElementById('bulkRemaining').textContent=Math.max(0,all-entered);
     document.getElementById('bulkSaved').textContent=saved;
-    document.getElementById('bulkResultsCount').textContent=visible + (visible===1?' مشترك':' مشتركين');
+    document.getElementById('bulkResultsCount').textContent=visible+(visible===1?' مشترك':' مشتركين');
+  }
+
+  function applySubscriberFilters(){
+    const term=(searchInput.value||'').trim().toLowerCase();
+    const missing=onlyMissing.checked;
+    cards.forEach(card=>{
+      const matchesSearch=!term||(card.dataset.search||'').includes(term);
+      const isMissing=(card.dataset.status||'0')!=='1';
+      card.style.display=(matchesSearch&&(!missing||isMissing))?'':'none';
+    });
+    searchClear.hidden=!term;updateSummary();
+  }
+  function sortCards(){
+    const key=sortSelect.value;
+    const numeric=['reading','consumption','status'];
+    cards.sort((a,b)=>{
+      if(numeric.includes(key)){
+        const av=parseFloat(a.dataset[key]||'-1'),bv=parseFloat(b.dataset[key]||'-1');
+        return key==='status'?bv-av:bv-av;
+      }
+      return (a.dataset[key]||'').localeCompare((b.dataset[key]||''),'ar');
+    });
+    const grid=document.getElementById('bulkReadingGrid');
+    cards.forEach(card=>grid.appendChild(card));
+    applySubscriberFilters();
   }
 
   inputs.forEach(function(input){
     updateCard(input);
-    input.addEventListener('input',function(){
-      updateCard(this);
-      schedulePersist(this);
-    });
-    input.addEventListener('blur',function(){
-      clearTimeout(this._bulkSaveTimer);
-      if(this.dataset.dirty==='1') persistInput(this);
-    });
+    input.addEventListener('input',function(){updateCard(this);schedulePersist(this)});
+    input.addEventListener('blur',function(){clearTimeout(this._bulkSaveTimer);if(this.dataset.dirty==='1')persistInput(this)});
   });
+  searchInput?.addEventListener('input',applySubscriberFilters);
+  searchClear?.addEventListener('click',function(){searchInput.value='';applySubscriberFilters();searchInput.focus()});
+  sortSelect?.addEventListener('change',sortCards);
+  onlyMissing?.addEventListener('change',applySubscriberFilters);
 
-  function filterSubscribers(){
-    const term=(searchInput.value||'').trim().toLowerCase();
-    cards.forEach(function(card){
-      const match=!term || (card.dataset.search||'').includes(term);
-      card.classList.toggle('hidden-by-search',!match);
-    });
-    searchClear.hidden=!term;
-    updateSummary();
+  const viewSubscribersBtn=document.getElementById('viewSubscribersBtn');
+  const viewMetersBtn=document.getElementById('viewMetersBtn');
+  const subscriberView=document.getElementById('subscriberView');
+  const meterView=document.getElementById('meterView');
+  function setView(view){
+    const subscriber=view==='subscribers';
+    subscriberView.hidden=!subscriber;meterView.hidden=subscriber;
+    viewSubscribersBtn.classList.toggle('active',subscriber);viewMetersBtn.classList.toggle('active',!subscriber);
+    document.getElementById('subscriberTools').style.visibility=subscriber?'visible':'hidden';
+    if(!subscriber)document.getElementById('bulkResultsCount').textContent='{{ main_meters|length }} عداد رئيسي';
+    else updateSummary();
   }
-  searchInput?.addEventListener('input',filterSubscribers);
-  searchClear?.addEventListener('click',function(){
-    searchInput.value='';
-    filterSubscribers();
-    searchInput.focus();
-  });
+  viewSubscribersBtn?.addEventListener('click',()=>setView('subscribers'));
+  viewMetersBtn?.addEventListener('click',()=>setView('meters'));
 
   mainForm?.addEventListener('submit',async function(e){
     const button=document.getElementById('bulkSaveAll');
-    const dirty=inputs.filter(inp=>!inp.disabled && inp.dataset.dirty==='1');
-    if(!dirty.length) return;
-    e.preventDefault();
-    button.disabled=true;
-    button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>جارٍ حفظ التعديلات...';
+    const dirty=inputs.filter(inp=>!inp.disabled&&inp.dataset.dirty==='1');
+    if(!dirty.length)return;
+    e.preventDefault();button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>جارٍ حفظ التعديلات...';
     const ok=await persistDirtyInputs();
-    if(ok){
-      HTMLFormElement.prototype.submit.call(mainForm);
-    }else{
-      button.disabled=false;
-      button.innerHTML='<i class="bi bi-save me-1"></i>حفظ جميع القراءات';
-    }
+    if(ok)HTMLFormElement.prototype.submit.call(mainForm);
+    else{button.disabled=false;button.innerHTML='<i class="bi bi-save me-1"></i>حفظ جميع القراءات'}
   });
-
-  updateSummary();
+  updateSummary();sortCards();
 })();
 </script>
 {% endblock %}
