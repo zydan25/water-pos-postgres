@@ -1,1 +1,18 @@
-<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>شبكة العدادات</title><style>body{font-family:Tahoma,Arial,sans-serif;margin:24px;color:#1f2937}.print{position:fixed;top:15px;left:15px;background:#1a56db;color:#fff;border:0;border:0;border-radius:8px;padding:8px 14px}@media print{.print{display:none}}h1{margin-bottom:4px}.sub{color:#64748b;margin-bottom:20px}.meter{border:1px solid #dbe4f0;border-radius:10px;padding:12px;margin:8px 0}.meter strong{display:block}.small{font-size:12px;color:#64748b}</style></head><body><button class="print" onclick="window.print()">طباعة</button><h1>خريطة شبكة العدادات</h1><div class="sub">تقرير البنية الحالية للشبكة</div><h2>الوحدات</h2>{% for u in units %}<div class="meter"><strong>{{ u.name }}</strong><div class="small">{{ u.code }} · {{ u.location_count }} موقع · {{ u.meter_count }} عداد</div></div>{% endfor %}<h2>العدادات</h2>{% for m in meters %}<div class="meter"><strong>{{ m.name }} — {{ m.meter_number }}</strong><div class="small">النوع: {{ 'رئيسي' if m.meter_type=='main' else 'فرعي' }} · الموقع: {{ m.location_name or '—' }} · الأب: {{ m.parent_name or '—' }}</div></div>{% endfor %}</body></html>
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>شبكة العدادات</title><style>body{font-family:Tahoma,Arial,sans-serif;margin:24px;color:#1f2937}.print{position:fixed;top:15px;left:15px;background:#1a56db;color:#fff;border:0;border:0;border-radius:8px;padding:8px 14px}@media print{.print{display:none}}h1{margin-bottom:4px}.sub{color:#64748b;margin-bottom:20px}.meter{border:1px solid #dbe4f0;border-radius:10px;padding:12px;margin:8px 0}.meter strong{display:block}.small{font-size:12px;color:#64748b}.print-nav-back{position:fixed;top:15px;right:15px;z-index:20;background:#fff;color:#334155;border:1px solid #dbe4f0;border-radius:10px;padding:8px 13px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(15,23,42,.07)}.print-nav-back:hover{background:#f5f8fc;color:#1769e0}@media print{.print-nav-back{display:none}}</style></head><body><button class="print-nav-back" type="button" onclick="returnToApp()">← رجوع</button><button class="print" onclick="window.print()">طباعة</button><h1>خريطة شبكة العدادات</h1><div class="sub">تقرير البنية الحالية للشبكة</div><h2>الوحدات</h2>{% for u in units %}<div class="meter"><strong>{{ u.name }}</strong><div class="small">{{ u.code }} · {{ u.location_count }} موقع · {{ u.meter_count }} عداد</div></div>{% endfor %}<h2>العدادات</h2>{% for m in meters %}<div class="meter"><strong>{{ m.name }} — {{ m.meter_number }}</strong><div class="small">النوع: {{ 'رئيسي' if m.meter_type=='main' else 'فرعي' }} · الموقع: {{ m.location_name or '—' }} · الأب: {{ m.parent_name or '—' }}</div></div>{% endfor %}<script>
+function returnToApp(){
+  var ref=document.referrer||'';
+  if(ref){window.location.href=ref;return;}
+  if(window.history.length>1){window.history.back();return;}
+  window.location.href='/';
+}
+(function(){
+  try{
+    history.pushState({__waterPrintGuard:true},'',location.href);
+    window.addEventListener('popstate',function(){
+      var ref=document.referrer||'';
+      if(ref){window.location.href=ref;}
+      else{window.location.href='/';}
+    });
+  }catch(e){}
+})();
+</script></body></html>
