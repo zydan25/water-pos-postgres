@@ -2,30 +2,57 @@
 
 {% macro render_location(nodes, depth=0) %}
   {% for n in nodes %}
-    <div class="mm-tree-node">
+    <div class="mm-tree-node" data-location-node="{{ n.id }}">
       <div class="mm-tree-row">
         {% if n.children %}
-          <span class="mm-tree-spacer"><i class="bi bi-chevron-left"></i></span>
+          <button type="button" class="mm-tree-toggle location-tree-toggle" aria-expanded="false" title="فتح/إغلاق">
+            <i class="bi bi-chevron-left"></i>
+          </button>
         {% else %}
           <span class="mm-tree-spacer"></span>
         {% endif %}
+
         <div class="mm-tree-content" style="padding-right: {{ depth * 22 }}px;">
-          <div class="mm-tree-name">{{ n.name }}</div>
+          <div class="mm-tree-name d-flex align-items-center gap-2 flex-wrap">
+            <span>{{ n.name }}</span>
+            <span class="badge text-bg-light">{{ n.location_type or 'موقع' }}</span>
+          </div>
           <div class="mm-tree-meta">
-            {{ n.location_type or 'موقع' }}
-            · {{ n.subscriber_count or 0 }} مشترك
-            · {{ n.meter_count or 0 }} عداد
+            {{ n.subscriber_count or 0 }} مشترك في هذا الموقع وفروعه
+            · {{ n.meter_count or 0 }} عداد في هذا الموقع وفروعه
+            {% if n.direct_subscriber_count %}
+              · {{ n.direct_subscriber_count }} مصنف مباشرة هنا
+            {% endif %}
           </div>
         </div>
-        <div class="mm-tree-actions">
+
+        <div class="mm-tree-actions mm-location-actions">
           <a class="btn btn-sm btn-outline-secondary"
-             href="{{ url_for('meter_management.location_edit', location_id=n.id) }}">تعديل</a>
+             href="{{ url_for('meter_management.location_edit', location_id=n.id) }}"
+             title="تعديل الموقع">
+            <i class="bi bi-pencil"></i><span>تعديل</span>
+          </a>
+
           <a class="btn btn-sm btn-outline-primary"
-             href="{{ url_for('meter_management.location_new') }}?parent_id={{ n.id }}">إضافة فرع</a>
+             href="{{ url_for('subscribers') }}?location_id={{ n.id }}"
+             title="عرض المشتركين المصنفين في هذا الموقع وفروعه">
+            <i class="bi bi-people"></i><span>المشتركون</span>
+          </a>
+
+          <form method="post"
+                action="{{ url_for('meter_management.location_delete', location_id=n.id) }}"
+                class="d-inline"
+                onsubmit="return confirm('حذف الموقع «{{ n.name }}»؟ لا يمكن حذف موقع له أبناء أو مشتركين مرتبطين به.');">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger" type="submit" title="حذف الموقع">
+              <i class="bi bi-trash"></i><span>حذف</span>
+            </button>
+          </form>
         </div>
       </div>
+
       {% if n.children %}
-        <div class="mm-tree-children">
+        <div class="mm-tree-children location-tree-children" hidden>
           {{ render_location(n.children, depth + 1) }}
         </div>
       {% endif %}
@@ -43,14 +70,14 @@
     <div>
       <div class="mm-eyebrow">الشبكة الجغرافية</div>
       <h3>المناطق والقرى</h3>
-      <div class="text-muted">جميع المناطق والقرى والمواقع في شجرة واحدة، وتستخدم لربط المشتركين والعدادات.</div>
+      <div class="text-muted">إدارة شجرة المناطق والقرى والمواقع وربطها بالمشتركين والعدادات.</div>
     </div>
     <div class="mm-actions">
       <a class="btn btn-primary" href="{{ url_for('meter_management.location_new') }}">
         <i class="bi bi-plus-circle"></i> إضافة موقع
       </a>
       <a class="btn btn-outline-primary" href="{{ url_for('meter_management.unit_new') }}">
-        وحدة تشغيلية
+        <i class="bi bi-diagram-3"></i> وحدة تشغيلية
       </a>
       <a class="btn btn-outline-dark" href="{{ url_for('meter_management.print_network') }}" target="_blank">
         <i class="bi bi-printer"></i> طباعة
@@ -62,7 +89,7 @@
     <div class="mm-card-head">
       <div>
         <h5>شجرة المناطق والقرى</h5>
-        <span>كل المواقع الموجودة في النظام تظهر هنا مباشرة.</span>
+        <span>الفروع مغلقة افتراضيًا. اضغط السهم لفتح أو إغلاق أي منطقة أو قرية.</span>
       </div>
       <span class="mm-pill">{{ locations|length }} موقع</span>
     </div>
@@ -72,10 +99,28 @@
         {{ render_location(tree) }}
       </div>
     {% else %}
-      <div class="mm-empty">
-        لا توجد مناطق أو قرى أو مواقع مسجلة في قاعدة البيانات.
-      </div>
+      <div class="mm-empty">لا توجد مناطق أو قرى أو مواقع مسجلة في قاعدة البيانات.</div>
     {% endif %}
   </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('.location-tree-toggle').forEach(function(button){
+    button.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      const node = button.closest('.mm-tree-node');
+      const children = node?.querySelector(':scope > .location-tree-children');
+      if(!children) return;
+      const closed = children.hidden;
+      children.hidden = !closed;
+      button.setAttribute('aria-expanded', closed ? 'true' : 'false');
+      button.innerHTML = closed
+        ? '<i class="bi bi-chevron-down"></i>'
+        : '<i class="bi bi-chevron-left"></i>';
+    });
+  });
+});
+</script>
 {% endblock %}
