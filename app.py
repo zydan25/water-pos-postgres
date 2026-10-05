@@ -57,7 +57,7 @@ from database import (
     backup_database_bytes, replace_database_from_file, database_file_path
 )
 from models import init_accounting, SessionLocal, engine, account_tree, find_account, record_journal_entry, AccountNode, EmployeeProfile, Invoice as SAInvoice, Payment as SAPayment, Subscriber as SASubscriber, Wallet as SAWallet, User as SAUser
-from modules.meter_management.services import location_children_map, flatten_locations
+from modules.meter_management.services import location_children_map, flatten_locations, main_meter_month_rows
 from financial_fixes import (
     manual_collection_bp,
     ensure_unique_invoice_month,
@@ -2435,6 +2435,14 @@ def create_app():
             for row in invoice_rows:
                 invoice_map.setdefault(int(row["subscriber_id"]), row)
 
+        main_meters = main_meter_month_rows(month_label)
+        if location_id:
+            selected_location_ids = set(_bulk_location_ids(db, location_id))
+            main_meters = [
+                meter for meter in main_meters
+                if meter.get("location_id") in selected_location_ids
+            ]
+
         reading_state = {}
         for sub in subscribers_rows:
             sid = int(sub["id"])
@@ -2490,6 +2498,113 @@ def create_app():
             selected_location_path=selected_location["path"] if selected_location else "",
             month_label=month_label,
             today=date.today().isoformat(),
+            main_meters=main_meters,
+        )
+
+
+    @app.route("/invoices/bulk-readings/report")
+    @login_required
+    @role_required(["admin", "staff"])
+    def invoices_bulk_readings_report():
+        db = get_db()
+        month_label = _normalize_bulk_month(request.args.get("month_label"))
+        location_id = request.args.get("location_id", type=int) or None
+        tree = location_children_map()
+        location_rows = flatten_locations(tree)
+        selected_location = next((x for x in location_rows if x["id"] == location_id), None) if location_id else None
+        if location_id and not selected_location:
+            location_id = None
+
+        if location_id:
+            ids = _bulk_location_ids(db, location_id)
+            marks = ",".join("?" for _ in ids)
+            subs = db.execute(
+                f"""
+                SELECT s.*, wl.name location_name
+                FROM subscribers s
+                LEFT JOIN water_locations wl ON wl.id=s.location_id
+                WHERE s.active=1 AND s.location_id IN ({marks})
+                ORDER BY COALESCE(wl.name,''),s.account_number,s.id
+                """,
+                ids,
+            ).fetchall()
+        else:
+            subs = db.execute(
+                """
+                SELECT s.*, wl.name location_name
+                FROM subscribers s
+                LEFT JOIN water_locations wl ON wl.id=s.location_id
+                WHERE s.active=1
+                ORDER BY COALESCE(wl.name,''),s.account_number,s.id
+                """
+            ).fetchall()
+
+        subscriber_ids = [int(x["id"]) for x in subs]
+        previous_map = _bulk_previous_reading_map(db, subscriber_ids, month_label)
+        pending_map = {}
+        invoice_map = {}
+        if subscriber_ids:
+            marks = ",".join("?" for _ in subscriber_ids)
+            for row in db.execute(
+                f"""
+                SELECT * FROM bulk_readings
+                WHERE subscriber_id IN ({marks})
+                  AND substr(COALESCE(month_label,reading_date),1,7)=?
+                ORDER BY id DESC
+                """,
+                subscriber_ids + [month_label],
+            ).fetchall():
+                pending_map.setdefault(int(row["subscriber_id"]), row)
+            for row in db.execute(
+                f"""
+                SELECT id,subscriber_id,invoice_no,current_reading
+                FROM invoices
+                WHERE subscriber_id IN ({marks})
+                  AND substr(COALESCE(month_label,invoice_date),1,7)=?
+                ORDER BY id DESC
+                """,
+                subscriber_ids + [month_label],
+            ).fetchall():
+                invoice_map.setdefault(int(row["subscriber_id"]), row)
+
+        report_rows = []
+        for sub in subs:
+            sid = int(sub["id"])
+            pending = pending_map.get(sid)
+            invoice = invoice_map.get(sid)
+            previous = float(
+                pending["previous_reading"] if pending else
+                previous_map.get(sid, float(sub["last_reading"] or 0))
+            )
+            current = None
+            source = "غير مدخلة"
+            if invoice:
+                current = float(invoice["current_reading"] or 0)
+                source = f"فاتورة #{invoice['invoice_no']}"
+            elif pending:
+                current = float(pending["current_reading"] or 0)
+                source = "قراءة محفوظة"
+            report_rows.append({
+                "account_number": sub["account_number"],
+                "name": sub["name"],
+                "meter_number": sub["meter_number"],
+                "location_name": sub["location_name"] or sub["address"] or "—",
+                "previous": previous,
+                "current": current,
+                "consumption": max(0.0, current - previous) if current is not None else None,
+                "source": source,
+                "complete": current is not None,
+            })
+
+        entered = sum(1 for x in report_rows if x["complete"])
+        return render_template(
+            "invoices_bulk_readings_report.html",
+            rows=report_rows,
+            month_label=month_label,
+            location_path=selected_location["path"] if selected_location else "كل المواقع",
+            total=len(report_rows),
+            entered=entered,
+            missing=len(report_rows)-entered,
         )
 
 
