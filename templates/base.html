@@ -205,6 +205,12 @@
 
               </ul>
           </li>
+
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint and request.endpoint.startswith('meter_management.') %}active{% endif %}" href="{{ url_for('meter_management.dashboard') }}">
+              <i class="bi bi-speedometer2"></i> شبكة المياه
+            </a>
+          </li>
          
 
           <!--<li class="nav-item"><a class="nav-link {% if request.endpoint=='accounts_tree' %}active{% endif %}" href="{{ url_for('accounts_tree') }}"><i class="bi bi-diagram-3"></i> الحسابات</a></li>
