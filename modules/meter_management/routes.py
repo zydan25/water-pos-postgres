@@ -10,7 +10,7 @@ from database import get_db
 from . import bp
 from .models import ensure_schema
 from .services import (
-    delete_location, flatten_locations, location_children_map, location_path, loss_rows, meter_detail,
+    delete_location, flatten_locations, location_children_map, location_path, loss_rows, meter_detail as get_meter_detail,
     meter_rows, record_reading, save_location, save_meter, save_unit, unit_rows,
 )
 
@@ -245,6 +245,7 @@ def meter_new():
         units=unit_rows(),
         locations=flatten_locations(),
         parents=meter_rows(),
+        current_location_path="",
     )
 
 
@@ -271,13 +272,14 @@ def meter_edit(meter_id):
         units=unit_rows(),
         locations=flatten_locations(),
         parents=parents,
+        current_location_path=location_path(meter["location_id"]) if meter["location_id"] else "",
     )
 
 
 @bp.route("/meters/<int:meter_id>")
 @role_required(["admin", "manager", "technician", "staff", "collector"])
 def meter_detail(meter_id):
-    payload = meter_detail(meter_id)
+    payload = get_meter_detail(meter_id)
     if not payload:
         abort(404)
     return render_template("meter_management/meter_detail.html", **payload)
@@ -402,7 +404,28 @@ def api_locations_tree():
     return jsonify({"tree": location_children_map()})
 
 
-@bp.route("/api/subscribers/<int:subscriber_id>/location")
+@bp.route("/api/meters/<int:meter_id>/location")
+@role_required(["admin", "manager", "technician", "staff", "collector"])
+def api_meter_location(meter_id):
+    db = get_db()
+    row = db.execute(
+        """SELECT m.location_id, l.name location_name
+           FROM network_meters m
+           LEFT JOIN water_locations l ON l.id=m.location_id
+           WHERE m.id=?""",
+        (meter_id,),
+    ).fetchone()
+    if not row:
+        abort(404)
+    lid = row["location_id"]
+    return jsonify({
+        "location_id": lid,
+        "name": row["location_name"] or "",
+        "path": location_path(lid) if lid else "",
+    })
+
+
+@bp.route("/api/subscribers/<int<subscriber_id>/location")
 @role_required(["admin", "manager", "technician", "staff", "collector"])
 def api_subscriber_location(subscriber_id):
     db = get_db()
