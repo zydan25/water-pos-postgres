@@ -565,26 +565,44 @@ def fetch_previous_invoice_summary(db, subscriber_id, current_invoice_id=None):
 
 
 def previous_reading_date_for(db, subscriber_id, before_date):
-    """تاريخ آخر قراءة سابقة معروفة للمشترك قبل تاريخ محدد (من الفواتير أو القراءات الجماعية)."""
+    """تاريخ القراءة السابقة وفق نفس أولوية القراءة في شاشة القراءة الجماعية:
+    آخر فاتورة سابقة أولاً، ثم آخر قراءة جماعية عند عدم وجود فاتورة.
+    """
     if not subscriber_id or not before_date:
         return None
-    row = db.execute(
+
+    invoice = db.execute(
         """
-        SELECT dr.date AS d FROM (
-            SELECT current_reading_date AS date, id AS ord
-            FROM invoices
-            WHERE subscriber_id=? AND current_reading_date IS NOT NULL AND current_reading_date < ?
-            UNION ALL
-            SELECT reading_date AS date, id AS ord
-            FROM bulk_readings
-            WHERE subscriber_id=? AND reading_date < ? AND current_reading IS NOT NULL
-        ) dr
-        ORDER BY dr.date DESC, dr.ord DESC
+        SELECT current_reading_date AS d
+        FROM invoices
+        WHERE subscriber_id=?
+          AND current_reading_date IS NOT NULL
+          AND TRIM(current_reading_date) <> ''
+          AND substr(TRIM(current_reading_date),1,10) < ?
+        ORDER BY substr(TRIM(current_reading_date),1,10) DESC, id DESC
         LIMIT 1
         """,
-        (subscriber_id, before_date, subscriber_id, before_date),
+        (subscriber_id, str(before_date)[:10]),
     ).fetchone()
-    return row["d"] if row else None
+    if invoice:
+        return invoice["d"]
+
+    bulk = db.execute(
+        """
+        SELECT reading_date AS d
+        FROM bulk_readings
+        WHERE subscriber_id=?
+          AND current_reading IS NOT NULL
+          AND reading_date IS NOT NULL
+          AND TRIM(reading_date) <> ''
+          AND substr(TRIM(reading_date),1,10) < ?
+        ORDER BY substr(TRIM(reading_date),1,10) DESC, id DESC
+        LIMIT 1
+        """,
+        (subscriber_id, str(before_date)[:10]),
+    ).fetchone()
+    return bulk["d"] if bulk else None
+
 
 def whatsapp_settings():
     return {
@@ -2162,42 +2180,95 @@ def create_app():
     
     
     def _bulk_previous_reading_map(db, subscriber_ids, month_label):
+        """إرجاع القراءة السابقة وفق ترتيب المصدر الصحيح:
+        1) آخر فاتورة سابقة للمشترك.
+        2) آخر قراءة جماعية محفوظة فقط إذا لم توجد فاتورة سابقة.
+        وتُستخدم بيانات المشترك كاحتياط أخير في المتصلين بهذه الدالة.
+        """
         if not subscriber_ids:
             return {}
-        month_label = _normalize_bulk_month(month_label)
+        month_label, month_start, _month_end, _reading_date = _bulk_month_dates(month_label)
         marks = ",".join("?" for _ in subscriber_ids)
-        params = list(subscriber_ids) + [month_label] + list(subscriber_ids) + [month_label]
-        rows = db.execute(
+
+        # الفاتورة هي المصدر الأساسي للقراءة السابقة؛ لأن القراءة تصبح فاتورة
+        # بعد اعتماد/طباعة الفاتورة، ولا ينبغي أن تتغلب قراءة جماعية أقدم أو أحدث عليها.
+        invoice_rows = db.execute(
             f"""
-            SELECT subscriber_id, current_reading AS reading_value,
-                   substr(COALESCE(month_label, invoice_date), 1, 7) AS month_key,
-                   0 AS source_rank, id
+            SELECT subscriber_id, current_reading, invoice_date, month_label, id
             FROM invoices
             WHERE subscriber_id IN ({marks})
-              AND substr(COALESCE(month_label, invoice_date), 1, 7) < ?
-    
-            UNION ALL
-    
-            SELECT subscriber_id, current_reading AS reading_value,
-                   substr(COALESCE(month_label, reading_date), 1, 7) AS month_key,
-                   1 AS source_rank, id
-            FROM bulk_readings
-            WHERE subscriber_id IN ({marks})
-              AND substr(COALESCE(month_label, reading_date), 1, 7) < ?
-    
-            ORDER BY subscriber_id, month_key DESC, source_rank ASC, id DESC
+              AND current_reading IS NOT NULL
+              AND (
+                    (
+                        TRIM(COALESCE(invoice_date,'')) <> ''
+                        AND substr(TRIM(invoice_date),1,10) < ?
+                    )
+                    OR
+                    (
+                        TRIM(COALESCE(invoice_date,'')) = ''
+                        AND substr(TRIM(COALESCE(month_label,'')),1,7) < ?
+                    )
+              )
+            ORDER BY
+                subscriber_id,
+                CASE
+                    WHEN TRIM(COALESCE(invoice_date,'')) <> ''
+                        THEN substr(TRIM(invoice_date),1,10)
+                    ELSE substr(TRIM(COALESCE(month_label,'')),1,7)
+                END DESC,
+                id DESC
             """,
-            params,
+            list(subscriber_ids) + [month_start, month_label],
         ).fetchall()
-    
+
         result = {}
-        for row in rows:
+        for row in invoice_rows:
             sid = int(row["subscriber_id"])
             if sid not in result:
-                result[sid] = float(row["reading_value"] or 0)
+                result[sid] = float(row["current_reading"] or 0)
+
+        # لا ننتقل إلى القراءات الجماعية إلا للمشتركين الذين لا توجد لهم فاتورة سابقة.
+        missing_ids = [sid for sid in subscriber_ids if int(sid) not in result]
+        if not missing_ids:
+            return result
+
+        missing_marks = ",".join("?" for _ in missing_ids)
+        bulk_rows = db.execute(
+            f"""
+            SELECT subscriber_id, current_reading, reading_date, month_label, id
+            FROM bulk_readings
+            WHERE subscriber_id IN ({missing_marks})
+              AND current_reading IS NOT NULL
+              AND (
+                    (
+                        TRIM(COALESCE(reading_date,'')) <> ''
+                        AND substr(TRIM(reading_date),1,10) < ?
+                    )
+                    OR
+                    (
+                        TRIM(COALESCE(reading_date,'')) = ''
+                        AND substr(TRIM(COALESCE(month_label,'')),1,7) < ?
+                    )
+              )
+            ORDER BY
+                subscriber_id,
+                CASE
+                    WHEN TRIM(COALESCE(reading_date,'')) <> ''
+                        THEN substr(TRIM(reading_date),1,10)
+                    ELSE substr(TRIM(COALESCE(month_label,'')),1,7)
+                END DESC,
+                id DESC
+            """,
+            missing_ids + [month_start, month_label],
+        ).fetchall()
+
+        for row in bulk_rows:
+            sid = int(row["subscriber_id"])
+            if sid not in result:
+                result[sid] = float(row["current_reading"] or 0)
+
         return result
-    
-    
+
     def _save_bulk_reading_value(db, subscriber_id, month_label, current_value, user_id, location_id=None):
         month_label, month_start, _month_end, reading_date = _bulk_month_dates(month_label)
     
