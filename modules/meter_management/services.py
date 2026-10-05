@@ -441,6 +441,7 @@ def main_meter_month_rows(month_label=None):
 
         out.append({
             "id": meter["id"],
+            "location_id": meter["location_id"],
             "name": meter["name"],
             "meter_number": meter["meter_number"],
             "unit_name": meter["unit_name"],
