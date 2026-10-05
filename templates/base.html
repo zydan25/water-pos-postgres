@@ -206,10 +206,19 @@
               </ul>
           </li>
 
-          <li class="nav-item">
-            <a class="nav-link {% if request.endpoint and request.endpoint.startswith('meter_management.') %}active{% endif %}" href="{{ url_for('meter_management.dashboard') }}">
-              <i class="bi bi-speedometer2"></i> شبكة المياه
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle {% if request.endpoint and request.endpoint.startswith('meter_management.') %}active{% endif %}"
+               href="#" data-bs-toggle="dropdown">
+              <i class="bi bi-droplet-half"></i> شبكة المياه
             </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{{ url_for('meter_management.dashboard') }}"><i class="bi bi-speedometer2 me-2"></i>لوحة الشبكة</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('meter_management.locations') }}"><i class="bi bi-geo-alt me-2"></i>إدارة المناطق والقرى</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('meter_management.units') }}"><i class="bi bi-diagram-3 me-2"></i>الوحدات التشغيلية</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('meter_management.meters') }}"><i class="bi bi-speedometer me-2"></i>عدادات الشبكة</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('meter_management.readings') }}"><i class="bi bi-clipboard-data me-2"></i>قراءات العدادات</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('meter_management.losses') }}"><i class="bi bi-graph-down-arrow me-2"></i>مفقودات المياه</a></li>
+            </ul>
           </li>
          
 
