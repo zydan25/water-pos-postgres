@@ -170,12 +170,16 @@ def location_new():
         except Exception as exc:
             get_db().rollback()
             flash(str(exc), "danger")
+    units = unit_rows()
     return render_template(
         "meter_management/location_form.html",
         mode="new",
         location={},
-        units=unit_rows(),
+        units=units,
         parents=flatten_locations(),
+        current_parent_path="",
+        blocked_location_id=None,
+        default_unit_id=(units[0]["id"] if units else None),
     )
 
 
@@ -201,12 +205,16 @@ def location_edit(location_id):
         if p["id"] != location_id
         and not p["path"].startswith(own_path + " / ")
     ]
+    units = unit_rows()
     return render_template(
         "meter_management/location_form.html",
         mode="edit",
         location=location,
-        units=unit_rows(),
+        units=units,
         parents=parents,
+        current_parent_path=location_path(location["parent_id"]) if location["parent_id"] else "",
+        blocked_location_id=location_id,
+        default_unit_id=(location["unit_id"] or (units[0]["id"] if units else None)),
     )
 
 
