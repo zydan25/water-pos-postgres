@@ -1,3 +1,83 @@
 {% extends "base.html" %}
-{% block head %}<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/meter_management.css') }}">{% endblock %}
-{% block content %}<div class="container mm-form-page"><div class="mm-page-title"><div><div class="mm-eyebrow">القراءات</div><h3>تسجيل قراءة عداد شبكة</h3></div><a class="btn btn-outline-secondary" href="{{ url_for('meter_management.readings') }}">رجوع</a></div><div class="mm-card mm-form-card"><form method="post"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><div class="row g-3"><div class="col-12"><label class="form-label fw-bold">العداد *</label><select class="form-select" name="meter_id" required>{% for m in meters %}<option value="{{ m.id }}" {% if prefill_meter==m.id %}selected{% endif %}>{{ m.name }} — {{ m.meter_number }}{% if m.location_name %} — {{ m.location_name }}{% endif %}</option>{% endfor %}</select></div><div class="col-md-6"><label class="form-label fw-bold">تاريخ القراءة *</label><input class="form-control" type="date" name="reading_date" value="{{ today }}" required></div><div class="col-md-6"><label class="form-label fw-bold">القراءة الحالية *</label><input class="form-control form-control-lg" type="number" step="0.01" min="0" name="reading_value" required autofocus></div><div class="col-12"><label class="form-label fw-bold">ملاحظات</label><textarea class="form-control" name="note" rows="3" placeholder="مثال: قراءة فعلية، صورة ميدانية، استبدال..."></textarea></div></div><div class="mm-form-actions"><button class="btn btn-primary btn-lg">حفظ القراءة</button><a class="btn btn-outline-secondary btn-lg" href="{{ url_for('meter_management.readings') }}">إلغاء</a></div></form></div></div>{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/meter_management.css') }}">
+{% endblock %}
+{% block content %}
+<div class="container mm-form-page">
+  <div class="mm-page-title">
+    <div>
+      <div class="mm-eyebrow">القراءات الشهرية</div>
+      <h3>{% if existing_reading %}تعديل قراءة العداد{% else %}تسجيل قراءة عداد الشبكة{% endif %}</h3>
+      <div class="text-muted">القراءة محفوظة ضمن شهر {{ month_label }}، وأي إعادة إدخال في نفس الشهر تُحدّث القراءة بدل إنشاء سجل مكرر.</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('meter_management.readings',meter_id=prefill_meter,month_label=month_label) if prefill_meter else url_for('meter_management.readings',month_label=month_label) }}">رجوع</a>
+  </div>
+
+  <div class="mm-card mm-form-card">
+    <form method="post">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="month_label" value="{{ month_label }}">
+
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label fw-bold">العداد *</label>
+          <select class="form-select" name="meter_id" required>
+            {% for m in meters %}
+              <option value="{{ m.id }}" {% if prefill_meter==m.id %}selected{% endif %}>
+                {{ m.name }} — {{ m.meter_number }}{% if m.location_name %} — {{ m.location_name }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label fw-bold">الشهر *</label>
+          <input class="form-control" type="month" value="{{ month_label }}" disabled>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label fw-bold">تاريخ القراءة *</label>
+          <input class="form-control" type="date" name="reading_date" value="{{ today }}" required>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label fw-bold">القراءة الحالية *</label>
+          <input class="form-control form-control-lg" type="number" step="0.01" min="0"
+                 name="reading_value"
+                 value="{{ '%.2f'|format(existing_reading.reading_value) if existing_reading else '' }}"
+                 required autofocus>
+          {% if existing_reading %}
+            <div class="small text-success mt-2">
+              <i class="bi bi-check-circle me-1"></i>
+              توجد قراءة محفوظة مسبقًا لهذا الشهر وسيتم تحديثها إذا عدلتها.
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="col-md-6">
+          <div class="mm-stat-card" style="min-height:100px">
+            <div class="mm-stat-label">القراءة السابقة للشهر</div>
+            <div class="mm-stat-value">
+              {% if existing_reading %}
+                {{ '%.2f'|format(existing_reading.previous_reading) }}
+              {% else %}
+                يحددها النظام من آخر قراءة محفوظة
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label fw-bold">ملاحظات</label>
+          <textarea class="form-control" name="note" rows="3" placeholder="مثال: قراءة فعلية، صورة ميدانية، استبدال...">{% if existing_reading %}{{ existing_reading.note or '' }}{% endif %}</textarea>
+        </div>
+      </div>
+
+      <div class="mm-form-actions">
+        <button class="btn btn-primary btn-lg"><i class="bi bi-save me-1"></i>{% if existing_reading %}تحديث القراءة{% else %}حفظ القراءة{% endif %}</button>
+        <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('meter_management.readings',meter_id=prefill_meter,month_label=month_label) if prefill_meter else url_for('meter_management.readings',month_label=month_label) }}">إلغاء</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
