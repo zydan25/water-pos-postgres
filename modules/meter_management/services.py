@@ -159,7 +159,7 @@ def location_children_map():
     by_parent = {}
     for r in rows:
         by_parent.setdefault(r["parent_id"], []).append(r)
-    counts = {r["id"]: int(r["c"] or 0) for r in db.execute("SELECT location_id,COUNT(*) c FROM subscribers WHERE location_id IS NOT NULL GROUP BY location_id").fetchall()}
+    counts = {r["location_id"]: int(r["c"] or 0) for r in db.execute("SELECT location_id,COUNT(*) c FROM subscribers WHERE location_id IS NOT NULL GROUP BY location_id").fetchall()}
     meters = {r["location_id"]: int(r["c"] or 0) for r in db.execute("SELECT location_id,COUNT(*) c FROM network_meters WHERE location_id IS NOT NULL GROUP BY location_id").fetchall()}
     def node(r, depth=0):
         return {"id":r["id"],"unit_id":r["unit_id"],"parent_id":r["parent_id"],"code":r["code"],"name":r["name"],"location_type":r["location_type"],"active":bool(r["active"]),"sort_order":r["sort_order"],"subscriber_count":counts.get(r["id"],0),"meter_count":meters.get(r["id"],0),"children":[node(c,depth+1) for c in by_parent.get(r["id"],[])]}
