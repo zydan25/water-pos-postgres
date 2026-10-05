@@ -1,4 +1,5 @@
-(function(){
+document.addEventListener('DOMContentLoaded', function(){
+
   const rootNodes=window.MM_LOCATIONS||[];
   const byId=new Map();
   function index(nodes){(nodes||[]).forEach(n=>{byId.set(String(n.id),n);index(n.children);});}
@@ -26,4 +27,5 @@
     nodes.forEach(n=>el.appendChild(row(n)));
     if(!nodes.length)el.innerHTML='<div class="mm-empty">لا توجد مواقع في هذا القسم.</div>';
   });
-})();
+}
+});
