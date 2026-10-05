@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/meter_management.css') }}">
+<script>window.MM_LOCATIONS={{ tree|tojson }};</script>
+<script src="{{ url_for('meter_management.static',filename='js/tree.js') }}"></script>
 {% endblock %}
 {% block content %}
 <div class="container-fluid mm-page">
@@ -34,6 +36,17 @@
         {% for u in units %}<div class="mm-list-row"><div><strong>{{ u.name }}</strong><div class="small text-muted">{{ u.code }}</div></div><span class="mm-pill">{{ u.location_count }} موقع · {{ u.meter_count }} عداد</span></div>{% else %}<div class="mm-empty">أضف أول وحدة تشغيلية.</div>{% endfor %}
       </div>
     </div>
+  </div>
+
+  <div class="mm-card mt-3">
+    <div class="mm-card-head">
+      <div>
+        <h5><i class="bi bi-geo-alt me-1"></i>المناطق والقرى</h5>
+        <span>شجرة المواقع المستخدمة مع المشتركين والعدادات</span>
+      </div>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('meter_management.locations') }}">إدارة المناطق والقرى</a>
+    </div>
+    <div class="mm-tree" data-unit-id="__all__"></div>
   </div>
 
   <div class="mm-card mt-3">
