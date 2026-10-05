@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/meter_management.css') }}">
+{% endblock %}
+{% block content %}
+<div class="container-fluid mm-page">
+  <div class="mm-hero">
+    <div><div class="mm-eyebrow">إدارة الشبكة</div><h2>العدادات والوحدات</h2><div class="text-muted">مركز تشغيل الشبكة ومتابعة القراءات والمفقودات</div></div>
+    <div class="mm-actions">
+      <a class="btn btn-primary" href="{{ url_for('meter_management.meter_new') }}"><i class="bi bi-plus-circle"></i> عداد رئيسي</a>
+      <a class="btn btn-outline-primary" href="{{ url_for('meter_management.location_new') }}"><i class="bi bi-plus"></i> موقع</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('meter_management.reading_new') }}"><i class="bi bi-speedometer2"></i> قراءة</a>
+    </div>
+  </div>
+
+  <div class="row g-2 mm-stats">
+    {% for value,label,icon in [(stats.units,'الوحدات','bi-diagram-3'),(stats.locations,'المواقع','bi-geo-alt'),(stats.main_meters,'العدادات الرئيسية','bi-speedometer'),(stats.meters,'كل عدادات الشبكة','bi-bezier2'),(stats.linked_subscribers,'مشتركون مرتبطون','bi-people'),(stats.unlinked_subscribers,'مشتركون بلا موقع','bi-exclamation-triangle')] %}
+    <div class="col-6 col-md-4 col-xl-2"><div class="mm-stat-card"><i class="bi {{ icon }}"></i><div class="mm-stat-value">{{ value }}</div><div class="mm-stat-label">{{ label }}</div></div></div>
+    {% endfor %}
+  </div>
+
+  <div class="row g-3 mt-1">
+    <div class="col-xl-7">
+      <div class="mm-card h-100">
+        <div class="mm-card-head"><div><h5>العدادات الرئيسية</h5><span>البنية الأساسية للشبكة</span></div><a href="{{ url_for('meter_management.meters') }}">عرض الكل</a></div>
+        <div class="mm-grid-cards">
+          {% for m in meters %}<div class="mm-mini-card"><div class="d-flex justify-content-between"><strong>{{ m.name }}</strong><span class="badge text-bg-light">{{ 'رئيسي' if m.meter_type=='main' else 'فرعي' }}</span></div><div class="small text-muted">{{ m.meter_number }}{% if m.location_name %} · {{ m.location_name }}{% endif %}</div><div class="mm-mini-value">{{ '%.0f'|format(m.last_reading or m.initial_reading or 0) }}</div><div class="small text-muted">آخر قراءة</div><a class="btn btn-sm btn-outline-primary mt-2" href="{{ url_for('meter_management.meter_detail',meter_id=m.id) }}">التفاصيل</a></div>{% else %}<div class="mm-empty">لا توجد عدادات شبكة بعد.</div>{% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-5">
+      <div class="mm-card h-100">
+        <div class="mm-card-head"><div><h5>الوحدات</h5><span>الكيانات التشغيلية</span></div><a href="{{ url_for('meter_management.units') }}">إدارة</a></div>
+        {% for u in units %}<div class="mm-list-row"><div><strong>{{ u.name }}</strong><div class="small text-muted">{{ u.code }}</div></div><span class="mm-pill">{{ u.location_count }} موقع · {{ u.meter_count }} عداد</span></div>{% else %}<div class="mm-empty">أضف أول وحدة تشغيلية.</div>{% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="mm-card mt-3">
+    <div class="mm-card-head"><div><h5>المفقودات</h5><span>مقارنة تدفق الشبكة بالاستهلاك الموزع</span></div><a href="{{ url_for('meter_management.losses') }}">تقرير كامل</a></div>
+    <div class="table-responsive"><table class="table mm-table align-middle"><thead><tr><th>العداد</th><th>الوارد</th><th>الموزع</th><th>الفقد</th><th>النسبة</th></tr></thead><tbody>{% for r in loss_rows %}<tr><td><strong>{{ r.name }}</strong><div class="small text-muted">{{ r.meter_number }}</div></td><td>{{ '%.1f'|format(r.incoming) }}</td><td>{{ '%.1f'|format(r.distributed) }}</td><td class="{% if r.loss>0 %}text-danger{% else %}text-success{% endif %} fw-bold">{{ '%.1f'|format(r.loss) }}</td><td><span class="badge {% if r.loss_pct>10 %}text-bg-danger{% elif r.loss_pct>5 %}text-bg-warning{% else %}text-bg-success{% endif %}">{{ '%.1f'|format(r.loss_pct) }}%</span></td></tr>{% else %}<tr><td colspan="5" class="text-center text-muted py-4">لا توجد بيانات كافية.</td></tr>{% endfor %}</tbody></table></div>
+    <div class="d-flex flex-wrap gap-2 mt-2"><a class="btn btn-outline-secondary" href="{{ url_for('meter_management.print_losses') }}" target="_blank"><i class="bi bi-printer"></i> طباعة التقرير</a><a class="btn btn-outline-dark" href="{{ url_for('meter_management.print_network') }}" target="_blank"><i class="bi bi-diagram-3"></i> طباعة شبكة العدادات</a></div>
+  </div>
+</div>
+{% endblock %}
