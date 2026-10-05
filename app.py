@@ -2116,119 +2116,403 @@ def create_app():
         return send_from_directory(UPLOAD_DIR, filename, as_attachment=False)
 
     
+def _normalize_bulk_month(value):
+    value = (value or "").strip()
+    try:
+        parsed = datetime.strptime(value + "-01", "%Y-%m-%d").date()
+        return parsed.strftime("%Y-%m")
+    except ValueError:
+        return date.today().strftime("%Y-%m")
+
+
+def _bulk_month_dates(month_label):
+    month_label = _normalize_bulk_month(month_label)
+    first = datetime.strptime(month_label + "-01", "%Y-%m-%d").date()
+    next_month = (first.replace(day=28) + timedelta(days=4)).replace(day=1)
+    last = next_month - timedelta(days=1)
+    today_month = date.today().strftime("%Y-%m")
+    reading_date = date.today().isoformat() if month_label == today_month else last.isoformat()
+    return month_label, first.isoformat(), last.isoformat(), reading_date
+
+
+def _bulk_location_ids(db, location_id):
+    if not location_id:
+        return []
+    row = db.execute(
+        "SELECT id FROM water_locations WHERE id=? AND active=1",
+        (location_id,),
+    ).fetchone()
+    if not row:
+        raise ValueError("الموقع المحدد غير موجود أو غير نشط.")
+    rows = db.execute(
+        """
+        WITH RECURSIVE locs(id) AS (
+            SELECT ?
+            UNION ALL
+            SELECT wl.id
+            FROM water_locations wl
+            JOIN locs ON wl.parent_id = locs.id
+        )
+        SELECT id FROM locs
+        """,
+        (location_id,),
+    ).fetchall()
+    return [int(r["id"]) for r in rows]
+
+
+def _bulk_previous_reading_map(db, subscriber_ids, month_label):
+    if not subscriber_ids:
+        return {}
+    month_label = _normalize_bulk_month(month_label)
+    marks = ",".join("?" for _ in subscriber_ids)
+    params = list(subscriber_ids) + [month_label] + list(subscriber_ids) + [month_label]
+    rows = db.execute(
+        f"""
+        SELECT subscriber_id, current_reading AS reading_value,
+               substr(COALESCE(month_label, invoice_date), 1, 7) AS month_key,
+               0 AS source_rank, id
+        FROM invoices
+        WHERE subscriber_id IN ({marks})
+          AND substr(COALESCE(month_label, invoice_date), 1, 7) < ?
+
+        UNION ALL
+
+        SELECT subscriber_id, current_reading AS reading_value,
+               substr(COALESCE(month_label, reading_date), 1, 7) AS month_key,
+               1 AS source_rank, id
+        FROM bulk_readings
+        WHERE subscriber_id IN ({marks})
+          AND substr(COALESCE(month_label, reading_date), 1, 7) < ?
+
+        ORDER BY subscriber_id, month_key DESC, source_rank ASC, id DESC
+        """,
+        params,
+    ).fetchall()
+
+    result = {}
+    for row in rows:
+        sid = int(row["subscriber_id"])
+        if sid not in result:
+            result[sid] = float(row["reading_value"] or 0)
+    return result
+
+
+def _save_bulk_reading_value(db, subscriber_id, month_label, current_value, user_id, location_id=None):
+    month_label, month_start, _month_end, reading_date = _bulk_month_dates(month_label)
+
+    try:
+        subscriber_id = int(subscriber_id)
+    except (TypeError, ValueError):
+        raise ValueError("رقم المشترك غير صالح.")
+
+    subscriber = db.execute(
+        "SELECT id,last_reading,active FROM subscribers WHERE id=?",
+        (subscriber_id,),
+    ).fetchone()
+    if not subscriber or not subscriber["active"]:
+        raise ValueError("المشترك غير موجود أو غير نشط.")
+
+    if location_id:
+        location_ids = _bulk_location_ids(db, int(location_id))
+        if subscriber["location_id"] not in set(location_ids):
+            raise ValueError("هذا المشترك ليس ضمن الموقع المحدد أو فروعه.")
+
+    invoice = db.execute(
+        """
+        SELECT id,invoice_no,current_reading
+        FROM invoices
+        WHERE subscriber_id=?
+          AND substr(COALESCE(month_label, invoice_date), 1, 7)=?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (subscriber_id, month_label),
+    ).fetchone()
+    if invoice:
+        raise ValueError(f"تم إصدار الفاتورة رقم {invoice['invoice_no']} لهذا المشترك في شهر {month_label}.")
+
+    existing = db.execute(
+        """
+        SELECT *
+        FROM bulk_readings
+        WHERE subscriber_id=?
+          AND substr(COALESCE(month_label, reading_date), 1, 7)=?
+          AND COALESCE(invoiced,0)=0
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (subscriber_id, month_label),
+    ).fetchone()
+
+    raw = "" if current_value is None else str(current_value).strip()
+    if raw == "":
+        if existing:
+            db.execute("DELETE FROM bulk_readings WHERE id=?", (existing["id"],))
+        return {
+            "state": "cleared",
+            "month_label": month_label,
+            "previous_reading": float(existing["previous_reading"] or 0) if existing else None,
+            "current_reading": None,
+            "consumption": None,
+            "reading_id": existing["id"] if existing else None,
+        }
+
+    try:
+        current = float(raw)
+    except (TypeError, ValueError):
+        raise ValueError("أدخل قراءة رقمية صحيحة.")
+
+    if existing:
+        previous = float(existing["previous_reading"] or 0)
+    else:
+        previous_map = _bulk_previous_reading_map(db, [subscriber_id], month_label)
+        previous = previous_map.get(subscriber_id, float(subscriber["last_reading"] or 0))
+
+    if current < previous:
+        raise ValueError(f"القراءة الحالية لا يمكن أن تكون أقل من السابقة ({previous:g}).")
+
+    consumption = current - previous
+    now = now_iso()
+    if existing:
+        db.execute(
+            """
+            UPDATE bulk_readings
+            SET previous_reading=?, current_reading=?, reading_date=?,
+                month_label=?, created_by=COALESCE(created_by,?),
+                updated_at=?
+            WHERE id=?
+            """,
+            (previous, current, existing["reading_date"] or reading_date, month_label,
+             user_id, now, existing["id"]),
+        )
+        reading_id = existing["id"]
+    else:
+        db.execute(
+            """
+            INSERT INTO bulk_readings
+                (subscriber_id, previous_reading, current_reading, reading_date,
+                 month_label, invoiced, created_by, created_at, updated_at)
+            VALUES (?,?,?,?,?,0,?,?,?)
+            """,
+            (subscriber_id, previous, current, reading_date, month_label,
+             user_id, now, now),
+        )
+        reading_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+
+    return {
+        "state": "saved",
+        "month_label": month_label,
+        "previous_reading": previous,
+        "current_reading": current,
+        "consumption": consumption,
+        "reading_id": int(reading_id),
+    }
+
+
     @app.route("/invoices/bulk-readings", methods=["GET", "POST"])
     @login_required
     @role_required(["admin", "staff"])
     def invoices_bulk_readings():
-        """إدخال القراءات دفعة واحدة وحفظها كقراءات جماعية مؤقتة."""
+        """واجهة إدخال قراءات المشتركين شهرياً مع الحفظ الفردي التلقائي."""
         db = get_db()
-        zone = request.args.get("zone", "").strip() or request.form.get("zone", "").strip()
 
-        zones = [
-            r["address"].split("-")[0].strip()
-            for r in db.execute(
-                "SELECT DISTINCT address FROM subscribers WHERE active=1 AND address IS NOT NULL AND address != '' ORDER BY address"
-            ).fetchall()
-            if r["address"]
-        ]
-        zones = sorted(set(z for z in zones if z))
+        month_label = _normalize_bulk_month(
+            request.args.get("month_label", "").strip()
+            or request.form.get("month_label", "").strip()
+            or date.today().strftime("%Y-%m")
+        )
+        location_id = request.args.get("location_id", type=int)
+        if location_id is None:
+            location_id = request.form.get("location_id", type=int) or None
 
         if request.method == "POST":
             saved = 0
             skipped = 0
-            invoice_date = request.form.get("invoice_date") or date.today().isoformat()
-            month_label = request.form.get("month_label", "").strip() or invoice_date[:7]
-
+            errors = []
             subscriber_ids = request.form.getlist("subscriber_id")
             for sid in subscriber_ids:
-                curr_str = request.form.get(f"current_reading_{sid}", "").strip()
-                if not curr_str:
-                    skipped += 1
+                raw_value = request.form.get(f"current_reading_{sid}", "").strip()
+                if not raw_value:
                     continue
-
                 try:
-                    curr_val = float(curr_str)
-                except ValueError:
-                    skipped += 1
-                    continue
-
-                subscriber = db.execute("SELECT * FROM subscribers WHERE id=?", (sid,)).fetchone()
-                if not subscriber:
-                    skipped += 1
-                    continue
-
-                last_inv = db.execute(
-                    "SELECT current_reading FROM invoices WHERE subscriber_id=? ORDER BY id DESC LIMIT 1",
-                    (sid,),
-                ).fetchone()
-                if last_inv and last_inv["current_reading"] is not None:
-                    prev_reading = float(last_inv["current_reading"] or 0)
-                else:
-                    prev_reading = float(subscriber["last_reading"] or 0)
-
-                if curr_val < prev_reading:
-                    skipped += 1
-                    continue
-
-                existing = db.execute(
-                    "SELECT id FROM bulk_readings WHERE subscriber_id=? AND invoiced=0 ORDER BY id DESC LIMIT 1",
-                    (sid,),
-                ).fetchone()
-
-                if existing:
-                    db.execute(
-                        """
-                        UPDATE bulk_readings
-                        SET previous_reading=?, current_reading=?, reading_date=?, month_label=?, created_by=?, updated_at=?
-                        WHERE id=?
-                        """,
-                        (prev_reading, curr_val, invoice_date, month_label, session.get("user_id"), now_iso(), existing["id"]),
+                    _save_bulk_reading_value(
+                        db, sid, month_label, raw_value,
+                        session.get("user_id"), location_id=location_id
                     )
-                else:
-                    db.execute(
-                        """
-                        INSERT INTO bulk_readings
-                            (subscriber_id, previous_reading, current_reading, reading_date, month_label, created_by, created_at)
-                        VALUES (?,?,?,?,?,?,?)
-                        """,
-                        (sid, prev_reading, curr_val, invoice_date, month_label, session.get("user_id"), now_iso()),
-                    )
-                saved += 1
-
+                    saved += 1
+                except Exception as exc:
+                    skipped += 1
+                    errors.append(f"{sid}: {exc}")
             db.commit()
-            flash(f"تم حفظ {saved} قراءة. تم تخطي {skipped}.", "success" if saved else "warning")
-            return redirect(url_for("invoices_bulk_readings", zone=zone))
+            if errors:
+                for msg in errors[:6]:
+                    flash(f"تعذر حفظ قراءة المشترك: {msg}", "warning")
+                if len(errors) > 6:
+                    flash(f"تم إخفاء {len(errors) - 6} رسائل إضافية.", "warning")
+            flash(
+                f"تم حفظ {saved} قراءة"
+                + (f"، وتعذر حفظ {skipped}." if skipped else "."),
+                "success" if saved else "warning",
+            )
+            return redirect(
+                url_for(
+                    "invoices_bulk_readings",
+                    month_label=month_label,
+                    location_id=location_id,
+                )
+            )
 
-        if zone:
+        tree = location_children_map()
+        location_rows = flatten_locations(tree)
+        selected_location = None
+        if location_id:
+            selected_location = next((x for x in location_rows if x["id"] == location_id), None)
+            if not selected_location:
+                location_id = None
+
+        if location_id:
+            ids = _bulk_location_ids(db, location_id)
+            marks = ",".join("?" for _ in ids)
             subscribers_rows = db.execute(
-                "SELECT * FROM subscribers WHERE active=1 AND address LIKE ? ORDER BY account_number",
-                (f"%{zone}%",),
+                f"""
+                SELECT s.*, wl.name AS location_name
+                FROM subscribers s
+                LEFT JOIN water_locations wl ON wl.id=s.location_id
+                WHERE s.active=1
+                  AND s.location_id IN ({marks})
+                ORDER BY
+                    COALESCE(wl.name,'') ASC,
+                    s.account_number ASC,
+                    s.id ASC
+                """,
+                ids,
             ).fetchall()
         else:
             subscribers_rows = db.execute(
-                "SELECT * FROM subscribers WHERE active=1 ORDER BY account_number"
+                """
+                SELECT s.*, wl.name AS location_name
+                FROM subscribers s
+                LEFT JOIN water_locations wl ON wl.id=s.location_id
+                WHERE s.active=1
+                ORDER BY COALESCE(wl.name,'') ASC, s.account_number ASC, s.id ASC
+                """
             ).fetchall()
 
-        last_readings = {}
+        subscriber_ids = [int(s["id"]) for s in subscribers_rows]
+        previous_map = _bulk_previous_reading_map(db, subscriber_ids, month_label)
+
+        pending_map = {}
+        if subscriber_ids:
+            marks = ",".join("?" for _ in subscriber_ids)
+            pending_rows = db.execute(
+                f"""
+                SELECT *
+                FROM bulk_readings
+                WHERE subscriber_id IN ({marks})
+                  AND substr(COALESCE(month_label, reading_date),1,7)=?
+                  AND COALESCE(invoiced,0)=0
+                ORDER BY id DESC
+                """,
+                subscriber_ids + [month_label],
+            ).fetchall()
+            for row in pending_rows:
+                pending_map.setdefault(int(row["subscriber_id"]), row)
+
+        invoice_map = {}
+        if subscriber_ids:
+            marks = ",".join("?" for _ in subscriber_ids)
+            invoice_rows = db.execute(
+                f"""
+                SELECT id,subscriber_id,invoice_no,current_reading
+                FROM invoices
+                WHERE subscriber_id IN ({marks})
+                  AND substr(COALESCE(month_label, invoice_date),1,7)=?
+                ORDER BY id DESC
+                """,
+                subscriber_ids + [month_label],
+            ).fetchall()
+            for row in invoice_rows:
+                invoice_map.setdefault(int(row["subscriber_id"]), row)
+
+        reading_state = {}
         for sub in subscribers_rows:
-            lr = db.execute(
-                "SELECT current_reading FROM invoices WHERE subscriber_id=? ORDER BY id DESC LIMIT 1",
-                (sub["id"],),
-            ).fetchone()
-            if lr and lr["current_reading"] is not None:
-                last_readings[sub["id"]] = float(lr["current_reading"] or 0)
+            sid = int(sub["id"])
+            invoice = invoice_map.get(sid)
+            pending = pending_map.get(sid)
+            previous = (
+                float(pending["previous_reading"] or 0) if pending else
+                previous_map.get(sid, float(sub["last_reading"] or 0))
+            )
+            if invoice:
+                current = float(invoice["current_reading"] or 0)
+                reading_state[sid] = {
+                    "previous": previous,
+                    "current": current,
+                    "consumption": max(0.0, current - previous),
+                    "saved": True,
+                    "invoiced": True,
+                    "invoice_id": int(invoice["id"]),
+                    "invoice_no": invoice["invoice_no"],
+                    "reading_id": None,
+                }
+            elif pending:
+                current = float(pending["current_reading"] or 0)
+                reading_state[sid] = {
+                    "previous": previous,
+                    "current": current,
+                    "consumption": max(0.0, current - previous),
+                    "saved": True,
+                    "invoiced": False,
+                    "invoice_id": None,
+                    "invoice_no": None,
+                    "reading_id": int(pending["id"]),
+                }
             else:
-                last_readings[sub["id"]] = float(sub["last_reading"] or 0)
+                reading_state[sid] = {
+                    "previous": previous,
+                    "current": None,
+                    "consumption": None,
+                    "saved": False,
+                    "invoiced": False,
+                    "invoice_id": None,
+                    "invoice_no": None,
+                    "reading_id": None,
+                }
 
         return render_template(
             "invoices_bulk_readings.html",
             subscribers=subscribers_rows,
-            last_readings=last_readings,
-            zones=zones,
-            zone=zone,
+            reading_state=reading_state,
+            tree=tree,
+            location_rows=location_rows,
+            location_id=location_id,
+            selected_location_path=selected_location["path"] if selected_location else "",
+            month_label=month_label,
             today=date.today().isoformat(),
-            month_label=date.today().isoformat()[:7],
         )
+
+
+    @app.route("/invoices/bulk-readings/autosave", methods=["POST"])
+    @login_required
+    @role_required(["admin", "staff"])
+    def invoices_bulk_readings_autosave():
+        db = get_db()
+        try:
+            month_label = _normalize_bulk_month(request.form.get("month_label"))
+            location_id = request.form.get("location_id", type=int) or None
+            result = _save_bulk_reading_value(
+                db,
+                request.form.get("subscriber_id"),
+                month_label,
+                request.form.get("current_reading"),
+                session.get("user_id"),
+                location_id=location_id,
+            )
+            db.commit()
+            return jsonify({"ok": True, **result})
+        except Exception as exc:
+            db.rollback()
+            return jsonify({"ok": False, "error": str(exc)}), 422
 
 
     def _create_invoice_from_reading(db, rid, user_id):
