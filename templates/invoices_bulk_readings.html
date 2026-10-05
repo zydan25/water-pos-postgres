@@ -331,8 +331,12 @@
   });
 
   monthInput?.addEventListener('change', async function(){
-    await persistDirtyInputs();
-    filterForm.submit();
+    const ok=await persistDirtyInputs();
+    if(ok){
+      filterForm.submit();
+    }else{
+      alert('توجد قراءة لم تُحفظ. صحح الخطأ أو أعد المحاولة قبل تغيير الشهر.');
+    }
   });
 
   const cards = Array.from(document.querySelectorAll('.bulk-reading-card'));
