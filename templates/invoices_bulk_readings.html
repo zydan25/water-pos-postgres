@@ -1,107 +1,500 @@
 {% extends "base.html" %}
 {% block title %}إدخال القراءات الجماعية{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/bulk_readings.css') }}">
+<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/subscriber_location.css') }}">
+{% endblock %}
+
+{% macro format_reading(value) -%}
+  {%- if value is not none -%}
+    {{ '%.2f'|format(value)|replace('.00','') }}
+  {%- endif -%}
+{%- endmacro %}
+
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="fw-bold"><i class="bi bi-speedometer2 me-2"></i>إدخال القراءات الجماعية</h4>
-    <a href="{{ url_for('invoices_bulk_create') }}" class="btn btn-success">
-      <i class="bi bi-file-earmark-plus me-1"></i>إنشاء الفواتير
-    </a>
+<div class="container-fluid bulk-reading-page">
+  <div class="bulk-reading-hero">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+      <div>
+        <div class="bulk-reading-eyebrow">الفوترة الشهرية · إدخال القراءات</div>
+        <div class="bulk-reading-title"><i class="bi bi-speedometer2 me-1"></i>إدخال القراءات الجماعية</div>
+        <div class="bulk-reading-subtitle">اختر الشهر والموقع، وستظهر المنطقة وفروعها مع استعادة أي قراءة محفوظة مسبقًا.</div>
+      </div>
+      <a href="{{ url_for('invoices_bulk_create') }}" class="btn btn-success">
+        <i class="bi bi-file-earmark-plus me-1"></i>إنشاء الفواتير
+      </a>
+    </div>
+
+    <form id="bulkFilterForm" method="get">
+      <div class="bulk-reading-controls">
+        <div>
+          <div class="bulk-control-label">الشهر</div>
+          <input id="bulkMonth" type="month" name="month_label" class="form-control bulk-month-input"
+                 value="{{ month_label }}" required>
+        </div>
+
+        <div class="bulk-location-wrap">
+          <div class="bulk-control-label">القرية / المنطقة</div>
+          <button type="button" id="bulkLocationTrigger" class="bulk-location-trigger">
+            <span class="bulk-location-value">
+              <i class="bi bi-geo-alt me-1"></i>
+              <span id="bulkLocationValue">{{ selected_location_path or 'كل المواقع' }}</span>
+            </span>
+            <i class="bi bi-chevron-down"></i>
+          </button>
+          <input type="hidden" name="location_id" id="bulkLocationId" value="{{ location_id or '' }}">
+
+          <div id="bulkLocationMenu" class="bulk-location-menu" hidden>
+            <input id="bulkLocationSearch" class="form-control bulk-location-search" placeholder="ابحث عن القرية أو المنطقة...">
+            <button type="button" class="bulk-location-all" data-location-id="">
+              <span><i class="bi bi-grid-3x3-gap me-1"></i>كل المواقع</span>
+              <span class="bulk-location-count">الكل</span>
+            </button>
+            <div id="bulkLocationTree"></div>
+          </div>
+        </div>
+      </div>
+    </form>
+
+    <div class="bulk-summary">
+      <div class="bulk-summary-item primary">
+        <small>المشتركون</small>
+        <strong id="bulkTotal">{{ subscribers|length }}</strong>
+      </div>
+      <div class="bulk-summary-item success">
+        <small>تم إدخالها</small>
+        <strong id="bulkEntered">0</strong>
+      </div>
+      <div class="bulk-summary-item warning">
+        <small>المتبقي</small>
+        <strong id="bulkRemaining">{{ subscribers|length }}</strong>
+      </div>
+      <div class="bulk-summary-item">
+        <small>محفوظة تلقائيًا</small>
+        <strong id="bulkSaved">0</strong>
+      </div>
+    </div>
   </div>
 
-  <form method="get" class="row g-2 mb-4">
-    <div class="col-md-4">
-      <select name="zone" class="form-select" onchange="this.form.submit()">
-        <option value="">— جميع المناطق —</option>
-        {% for z in zones %}
-          <option value="{{ z }}" {% if z == zone %}selected{% endif %}>{{ z }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-auto">
-      <button class="btn btn-outline-primary">فلتر</button>
-    </div>
-  </form>
-
-  <form method="post">
-    <input type="hidden" name="zone" value="{{ zone }}">
-    <div class="row g-2 mb-3">
-      <div class="col-md-3">
-        <label class="form-label fw-bold">تاريخ القراءة</label>
-        <input type="date" name="invoice_date" class="form-control" value="{{ today }}" required>
-      </div>
-      <div class="col-md-3">
-        <label class="form-label fw-bold">شهر الفاتورة</label>
-        <input type="month" name="month_label" class="form-control" value="{{ month_label }}" required>
-      </div>
-    </div>
-
-    {% if subscribers %}
-    <div class="card shadow-sm">
-      <div class="card-header bg-primary text-white fw-bold">
-        المشتركون ({{ subscribers|length }})
-      </div>
-      <div class="table-responsive">
-        <table class="table table-hover table-sm align-middle mb-0">
-          <thead class="table-light">
-            <tr>
-              <th>رقم الحساب</th>
-              <th>الاسم</th>
-              <th>العنوان</th>
-              <th>القراءة السابقة</th>
-              <th class="text-danger">القراءة الحالية *</th>
-              <th>الاستهلاك المتوقع</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for sub in subscribers %}
-            <tr>
-              <td><code>{{ sub.account_number }}</code></td>
-              <td>{{ sub.name }}</td>
-              <td class="text-muted small">{{ sub.address or '—' }}</td>
-              <td class="text-center">{{ last_readings.get(sub.id, 0) | int }}</td>
-              <td style="min-width:130px">
-                <input type="hidden" name="subscriber_id" value="{{ sub.id }}">
-                <input type="number" name="current_reading_{{ sub.id }}"
-                       class="form-control form-control-sm reading-input"
-                       min="{{ last_readings.get(sub.id, 0) }}"
-                       step="0.01"
-                       data-prev="{{ last_readings.get(sub.id, 0) }}"
-                       data-subid="{{ sub.id }}"
-                       placeholder="أدخل القراءة">
-              </td>
-              <td class="consumption-cell-{{ sub.id }} text-muted">—</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="mt-3 d-flex gap-2">
-      <button type="submit" class="btn btn-primary btn-lg">
-        <i class="bi bi-save me-1"></i>حفظ جميع القراءات
+  <div class="bulk-reading-toolbar">
+    <div class="bulk-search-wrap">
+      <i class="bi bi-search"></i>
+      <input id="bulkSubscriberSearch" type="search" class="bulk-search"
+             placeholder="بحث فوري بالاسم، رقم الحساب، العداد أو الموقع...">
+      <button type="button" id="bulkSearchClear" class="bulk-search-clear" hidden aria-label="مسح البحث">
+        <i class="bi bi-x-lg"></i>
       </button>
-      <a href="{{ url_for('invoices') }}" class="btn btn-outline-secondary btn-lg">إلغاء</a>
     </div>
-    {% else %}
-    <div class="alert alert-warning">لا يوجد مشتركون نشطون في هذه المنطقة.</div>
-    {% endif %}
+    <div class="bulk-results-count" id="bulkResultsCount">{{ subscribers|length }} مشترك</div>
+  </div>
+
+  <form id="bulkReadingForm" method="post">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="month_label" value="{{ month_label }}">
+    <input type="hidden" name="location_id" value="{{ location_id or '' }}">
+
+    <div id="bulkReadingGrid" class="bulk-reading-grid">
+      {% for sub in subscribers %}
+      {% set st = reading_state.get(sub.id, {}) %}
+      <article class="bulk-reading-card"
+               data-search="{{ (sub.name ~ ' ' ~ (sub.account_number or '') ~ ' ' ~ (sub.meter_number or '') ~ ' ' ~ (sub.address or '') ~ ' ' ~ (sub.location_name or ''))|lower }}">
+        <div class="bulk-reading-card-head">
+          <div class="d-flex align-items-start gap-2">
+            <div class="flex-grow-1 min-w-0">
+              <div class="bulk-reading-name" title="{{ sub.name }}">{{ sub.name }}</div>
+              <div class="bulk-reading-account">حساب {{ sub.account_number or '—' }}</div>
+            </div>
+            {% if st.invoiced %}
+              <span class="badge text-bg-secondary">فاتورة موجودة</span>
+            {% elif st.saved %}
+              <span class="badge text-bg-success">محفوظ</span>
+            {% else %}
+              <span class="badge text-bg-light text-secondary">جديد</span>
+            {% endif %}
+          </div>
+          <div class="bulk-reading-location" title="{{ sub.location_name or sub.address or 'غير مصنف' }}">
+            <i class="bi bi-geo-alt"></i>{{ sub.location_name or sub.address or 'غير مصنف' }}
+          </div>
+        </div>
+
+        <div class="bulk-reading-body">
+          <div class="bulk-reading-metrics">
+            <div class="bulk-reading-metric">
+              <small>القراءة السابقة</small>
+              <strong class="bulk-prev">{{ format_reading(st.previous or 0) }}</strong>
+            </div>
+            <div class="bulk-reading-metric consumption">
+              <small>الاستهلاك</small>
+              <strong class="bulk-consumption">{{ format_reading(st.consumption) if st.consumption is not none else '—' }}</strong>
+            </div>
+          </div>
+
+          <div class="bulk-reading-input-label">القراءة الحالية</div>
+          <input type="number"
+                 name="current_reading_{{ sub.id }}"
+                 class="form-control bulk-reading-input"
+                 min="{{ st.previous or 0 }}"
+                 step="0.01"
+                 inputmode="decimal"
+                 autocomplete="off"
+                 value="{{ format_reading(st.current) }}"
+                 data-prev="{{ st.previous or 0 }}"
+                 data-subid="{{ sub.id }}"
+                 data-last-saved="{{ format_reading(st.current) }}"
+                 {% if st.invoiced %}disabled{% endif %}
+                 placeholder="أدخل القراءة">
+
+          {% if st.invoiced %}
+            <div class="bulk-reading-status invoice">
+              <span><i class="bi bi-lock-fill me-1"></i>القراءة مرتبطة بالفاتورة</span>
+              {% if st.invoice_id %}
+                <a href="{{ url_for('invoice_detail', invoice_id=st.invoice_id) }}">فتح الفاتورة #{{ st.invoice_no }}</a>
+              {% endif %}
+            </div>
+          {% elif st.saved %}
+            <div class="bulk-reading-status saved">
+              <span class="save-message"><i class="bi bi-check2-circle me-1"></i>محفوظة تلقائيًا</span>
+              <span class="save-time">جاهزة للتعديل</span>
+            </div>
+          {% else %}
+            <div class="bulk-reading-status">
+              <span class="save-message">سيتم الحفظ تلقائيًا أثناء الإدخال</span>
+              <span class="save-time"></span>
+            </div>
+          {% endif %}
+        </div>
+      </article>
+      {% else %}
+      <div class="bulk-reading-empty">
+        <div class="fs-2 mb-2"><i class="bi bi-people"></i></div>
+        <div class="fw-bold mb-1">لا يوجد مشتركون لهذا الاختيار</div>
+        <div class="small">اختر موقعًا آخر أو راجع الشهر المحدد.</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="bulk-reading-actions">
+      <div class="hint"><i class="bi bi-cloud-check me-1"></i>القراءة تُحفظ تلقائيًا دون الحاجة إلى الضغط على «حفظ الكل».</div>
+      <div class="buttons">
+        <button type="submit" id="bulkSaveAll" class="btn btn-primary">
+          <i class="bi bi-save me-1"></i>حفظ جميع القراءات
+        </button>
+        <a href="{{ url_for('invoices') }}" class="btn btn-outline-secondary">الفواتير</a>
+      </div>
+    </div>
   </form>
 </div>
 
 <script>
-document.querySelectorAll('.reading-input').forEach(function(inp) {
-  inp.addEventListener('input', function() {
-    var prev = parseFloat(this.dataset.prev) || 0;
-    var curr = parseFloat(this.value) || 0;
-    var cell = document.querySelector('.consumption-cell-' + this.dataset.subid);
-    if (cell) {
-      var diff = curr - prev;
-      cell.textContent = diff >= 0 ? diff.toFixed(1) : '⚠️ أقل من السابق';
-      cell.className = (diff >= 0 ? 'text-success' : 'text-danger') + ' consumption-cell-' + this.dataset.subid;
+(function(){
+  const monthInput = document.getElementById('bulkMonth');
+  const filterForm = document.getElementById('bulkFilterForm');
+  const mainForm = document.getElementById('bulkReadingForm');
+  const locationTrigger = document.getElementById('bulkLocationTrigger');
+  const locationMenu = document.getElementById('bulkLocationMenu');
+  const locationIdInput = document.getElementById('bulkLocationId');
+  const locationValue = document.getElementById('bulkLocationValue');
+  const locationSearch = document.getElementById('bulkLocationSearch');
+  const locationTree = document.getElementById('bulkLocationTree');
+  const searchInput = document.getElementById('bulkSubscriberSearch');
+  const searchClear = document.getElementById('bulkSearchClear');
+  const csrf = mainForm?.querySelector('input[name="_csrf_token"]')?.value || '';
+  const autosaveUrl = {{ url_for('invoices_bulk_readings_autosave')|tojson }};
+  const treeData = {{ tree|tojson }};
+
+  function closeLocationMenu(){ if(locationMenu) locationMenu.hidden = true; }
+  locationTrigger?.addEventListener('click', function(){
+    locationMenu.hidden = !locationMenu.hidden;
+    if(!locationMenu.hidden){
+      locationSearch?.focus();
     }
   });
-});
+  document.addEventListener('click', function(e){
+    if(!e.target.closest('.bulk-location-wrap')) closeLocationMenu();
+  });
+
+  function nodeMatches(node, term, path){
+    if(!term) return true;
+    const hay = (path + ' ' + (node.name||'') + ' ' + (node.code||'') + ' ' + (node.location_type||'')).toLowerCase();
+    return hay.includes(term);
+  }
+
+  function subtreeMatches(node, term, path){
+    if(nodeMatches(node, term, path)) return true;
+    return (node.children || []).some(child => subtreeMatches(child, term, path + ' / ' + (child.name||'')));
+  }
+
+  function buildLocationNode(node, parent, path){
+    const fullPath = path ? path + ' / ' + node.name : node.name;
+    const wrap = document.createElement('div');
+    wrap.className = 'bulk-location-node';
+    wrap.dataset.path = fullPath.toLowerCase();
+
+    const row = document.createElement('div');
+    row.className = 'bulk-location-row';
+    row.style.paddingRight = Math.min(6 + ((node.depth || 0) * 6), 42) + 'px';
+
+    const children = node.children || [];
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'bulk-location-toggle';
+    toggle.innerHTML = children.length ? '<i class="bi bi-chevron-left"></i>' : '<span></span>';
+    toggle.setAttribute('aria-label', 'فتح الفروع');
+    row.appendChild(toggle);
+
+    const choose = document.createElement('button');
+    choose.type = 'button';
+    choose.className = 'bulk-location-select';
+    choose.innerHTML =
+      '<i class="bi bi-geo-alt me-1"></i>' +
+      '<span>' + escapeHtml(node.name || '') + '</span>';
+    choose.title = fullPath;
+    row.appendChild(choose);
+
+    const type = document.createElement('span');
+    type.className = 'bulk-location-type';
+    type.textContent = node.location_type || 'موقع';
+    row.appendChild(type);
+
+    const count = document.createElement('span');
+    count.className = 'bulk-location-count';
+    count.textContent = String(node.subscriber_count || 0);
+    row.appendChild(count);
+
+    wrap.appendChild(row);
+
+    let childrenWrap = null;
+    if(children.length){
+      childrenWrap = document.createElement('div');
+      childrenWrap.className = 'bulk-location-children';
+      childrenWrap.hidden = true;
+      children.forEach(child => buildLocationNode(child, childrenWrap, fullPath));
+      wrap.appendChild(childrenWrap);
+      toggle.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        const closed = childrenWrap.hidden;
+        childrenWrap.hidden = !closed;
+        toggle.innerHTML = closed
+          ? '<i class="bi bi-chevron-down"></i>'
+          : '<i class="bi bi-chevron-left"></i>';
+      });
+    } else {
+      toggle.disabled = true;
+    }
+
+    choose.addEventListener('click', function(){
+      locationIdInput.value = node.id;
+      locationValue.textContent = fullPath;
+      closeLocationMenu();
+      filterForm.submit();
+    });
+
+    parent.appendChild(wrap);
+  }
+
+  function escapeHtml(value){
+    return String(value).replace(/[&<>"']/g, function(ch){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[ch];
+    });
+  }
+
+  function renderLocationTree(term){
+    locationTree.innerHTML = '';
+    const normalized = (term || '').trim().toLowerCase();
+    treeData.forEach(function(node){
+      if(subtreeMatches(node, normalized, node.name || '')){
+        buildLocationNode(node, locationTree, '');
+      }
+    });
+    if(normalized){
+      locationTree.querySelectorAll('.bulk-location-children').forEach(function(el){ el.hidden = false; });
+      locationTree.querySelectorAll('.bulk-location-toggle').forEach(function(btn){
+        if(!btn.disabled) btn.innerHTML = '<i class="bi bi-chevron-down"></i>';
+      });
+    }
+    if(!locationTree.children.length){
+      const empty=document.createElement('div');
+      empty.className='small text-muted text-center py-3';
+      empty.textContent='لا توجد نتائج.';
+      locationTree.appendChild(empty);
+    }
+  }
+  renderLocationTree('');
+  locationSearch?.addEventListener('input', function(){ renderLocationTree(this.value); });
+
+  document.querySelector('.bulk-location-all')?.addEventListener('click', function(){
+    locationIdInput.value = '';
+    locationValue.textContent = 'كل المواقع';
+    closeLocationMenu();
+    filterForm.submit();
+  });
+
+  monthInput?.addEventListener('change', async function(){
+    await persistDirtyInputs();
+    filterForm.submit();
+  });
+
+  const cards = Array.from(document.querySelectorAll('.bulk-reading-card'));
+  const inputs = Array.from(document.querySelectorAll('.bulk-reading-input'));
+
+  function updateCard(input){
+    const card = input.closest('.bulk-reading-card');
+    if(!card) return;
+    const prev = parseFloat(input.dataset.prev || '0') || 0;
+    const value = input.value.trim() === '' ? null : parseFloat(input.value);
+    const consumption = card.querySelector('.bulk-consumption');
+    if(consumption){
+      if(value === null || Number.isNaN(value)){
+        consumption.textContent = '—';
+        consumption.style.color = '';
+      } else if(value < prev){
+        consumption.textContent = 'أقل من السابقة';
+        consumption.style.color = '#c0392b';
+      } else {
+        consumption.textContent = (value - prev).toFixed(2).replace(/\.00$/,'');
+        consumption.style.color = '';
+      }
+    }
+    updateSummary();
+  }
+
+  function setStatus(input, type, message){
+    const card=input.closest('.bulk-reading-card');
+    const box=card?.querySelector('.bulk-reading-status');
+    const msg=card?.querySelector('.save-message');
+    if(!box || !msg) return;
+    box.classList.remove('saved','error','invoice');
+    if(type) box.classList.add(type);
+    msg.textContent=message;
+  }
+
+  async function persistInput(input){
+    if(!input || input.disabled) return true;
+    const value=input.value.trim();
+    const lastSaved=input.dataset.lastSaved ?? '';
+    if(value === lastSaved && input.dataset.dirty !== '1') return true;
+
+    const card=input.closest('.bulk-reading-card');
+    if(!card) return true;
+    setStatus(input,'','جاري الحفظ...');
+    input.classList.remove('is-invalid');
+
+    const body=new URLSearchParams();
+    body.set('_csrf_token',csrf);
+    body.set('subscriber_id',input.dataset.subid);
+    body.set('month_label',monthInput.value);
+    body.set('location_id', locationIdInput.value || '');
+    body.set('current_reading', value);
+
+    try{
+      const response=await fetch(autosaveUrl,{
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},
+        body:body.toString(),
+        credentials:'same-origin'
+      });
+      let payload={};
+      try{ payload=await response.json(); }catch(_e){}
+      if(!response.ok || !payload.ok){
+        throw new Error(payload.error || 'تعذر حفظ القراءة.');
+      }
+
+      if(payload.state === 'cleared'){
+        input.dataset.lastSaved='';
+        input.dataset.dirty='0';
+        setStatus(input,'','تم مسح القراءة المحفوظة.');
+      }else{
+        input.dataset.prev=payload.previous_reading;
+        input.dataset.lastSaved=value;
+        input.dataset.dirty='0';
+        input.classList.remove('is-invalid');
+        updateCard(input);
+        setStatus(input,'saved','محفوظة تلقائيًا');
+      }
+      updateSummary();
+      return true;
+    }catch(error){
+      input.dataset.dirty='1';
+      input.classList.add('is-invalid');
+      setStatus(input,'error',error.message || 'تعذر حفظ القراءة.');
+      updateSummary();
+      return false;
+    }
+  }
+
+  function schedulePersist(input){
+    if(input.disabled) return;
+    input.dataset.dirty='1';
+    clearTimeout(input._bulkSaveTimer);
+    input._bulkSaveTimer=setTimeout(function(){ persistInput(input); },450);
+  }
+
+  async function persistDirtyInputs(){
+    const dirty=inputs.filter(inp=>!inp.disabled && inp.dataset.dirty==='1');
+    if(!dirty.length) return true;
+    const results=await Promise.all(dirty.map(persistInput));
+    return results.every(Boolean);
+  }
+
+  function updateSummary(){
+    const all=inputs.length;
+    const entered=inputs.filter(i=>i.value.trim()!=='').length;
+    const saved=inputs.filter(i=>!i.disabled && i.dataset.lastSaved!==undefined && i.value.trim()===i.dataset.lastSaved && i.value.trim()!=='').length
+      + inputs.filter(i=>i.disabled).length;
+    const visible=cards.filter(c=>!c.classList.contains('hidden-by-search')).length;
+    document.getElementById('bulkTotal').textContent=all;
+    document.getElementById('bulkEntered').textContent=entered;
+    document.getElementById('bulkRemaining').textContent=Math.max(0,all-entered);
+    document.getElementById('bulkSaved').textContent=saved;
+    document.getElementById('bulkResultsCount').textContent=visible + (visible===1?' مشترك':' مشتركين');
+  }
+
+  inputs.forEach(function(input){
+    updateCard(input);
+    input.addEventListener('input',function(){
+      updateCard(this);
+      schedulePersist(this);
+    });
+    input.addEventListener('blur',function(){
+      clearTimeout(this._bulkSaveTimer);
+      if(this.dataset.dirty==='1') persistInput(this);
+    });
+  });
+
+  function filterSubscribers(){
+    const term=(searchInput.value||'').trim().toLowerCase();
+    cards.forEach(function(card){
+      const match=!term || (card.dataset.search||'').includes(term);
+      card.classList.toggle('hidden-by-search',!match);
+    });
+    searchClear.hidden=!term;
+    updateSummary();
+  }
+  searchInput?.addEventListener('input',filterSubscribers);
+  searchClear?.addEventListener('click',function(){
+    searchInput.value='';
+    filterSubscribers();
+    searchInput.focus();
+  });
+
+  mainForm?.addEventListener('submit',async function(e){
+    const button=document.getElementById('bulkSaveAll');
+    const dirty=inputs.filter(inp=>!inp.disabled && inp.dataset.dirty==='1');
+    if(!dirty.length) return;
+    e.preventDefault();
+    button.disabled=true;
+    button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>جارٍ حفظ التعديلات...';
+    const ok=await persistDirtyInputs();
+    if(ok){
+      HTMLFormElement.prototype.submit.call(mainForm);
+    }else{
+      button.disabled=false;
+      button.innerHTML='<i class="bi bi-save me-1"></i>حفظ جميع القراءات';
+    }
+  });
+
+  updateSummary();
+})();
 </script>
 {% endblock %}
