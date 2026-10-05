@@ -81,6 +81,24 @@ def ensure_schema():
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_network_meters_parent_meter_id ON network_meters(parent_meter_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_network_meter_readings_meter_date ON network_meter_readings(meter_id, reading_date)"))
 
+        # وحدة افتراضية للنظام الحالي، حتى لا يطلب النظام إنشاء وحدة قبل استخدام المواقع والعدادات.
+        default_unit = conn.execute(text("SELECT id FROM water_units WHERE name = 'وحدة' ORDER BY id LIMIT 1")).first()
+        if not default_unit:
+            code = "UNIT-DEFAULT"
+            suffix = 1
+            while conn.execute(text("SELECT 1 FROM water_units WHERE code = :code LIMIT 1"), {"code": code}).first():
+                suffix += 1
+                code = f"UNIT-DEFAULT-{suffix}"
+            conn.execute(
+                text("INSERT INTO water_units (code,name,active,sort_order,created_at) VALUES (:code,'وحدة',1,-100,CURRENT_TIMESTAMP)"),
+                {"code": code},
+            )
+            default_unit = conn.execute(text("SELECT id FROM water_units WHERE name = 'وحدة' ORDER BY id LIMIT 1")).first()
+        default_unit_id = default_unit[0]
+        # المواقع والعدادات الحالية كانت تعمل كوحدة واحدة، لذلك نربط السجلات غير المصنفة بالوحدة الافتراضية دون المساس بالمواقع المصنفة مسبقًا.
+        conn.execute(text("UPDATE water_locations SET unit_id = :unit_id WHERE unit_id IS NULL"), {"unit_id": default_unit_id})
+        conn.execute(text("UPDATE network_meters SET unit_id = :unit_id WHERE unit_id IS NULL"), {"unit_id": default_unit_id})
+
         # ترحيل آمن للمواقع النصية القديمة: ننشئ موقعًا بسيطًا لكل قيمة village غير فارغة،
         # ثم نربط المشتركين به دون حذف أو تعديل القيمة القديمة.
         if "water_locations" in tables and "subscribers" in tables:
