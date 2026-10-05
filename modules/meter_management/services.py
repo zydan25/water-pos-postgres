@@ -233,37 +233,88 @@ def meter_detail(meter_id):
 
 
 def loss_rows(start=None,end=None):
-    ensure_schema(); db=get_db()
-    start=start or date(date.today().year,date.today().month,1).isoformat(); end=end or date.today().isoformat()
-    meters=db.execute("SELECT m.*,u.name unit_name,l.name location_name FROM network_meters m LEFT JOIN water_units u ON u.id=m.unit_id LEFT JOIN water_locations l ON l.id=m.location_id WHERE m.status='active' ORDER BY CASE m.meter_type WHEN 'main' THEN 0 ELSE 1 END,m.name").fetchall()
+    ensure_schema()
+    db=get_db()
+    start=start or date(date.today().year,date.today().month,1).isoformat()
+    end=end or date.today().isoformat()
+    meters=db.execute(
+        "SELECT m.*,u.name unit_name,l.name location_name FROM network_meters m "
+        "LEFT JOIN water_units u ON u.id=m.unit_id "
+        "LEFT JOIN water_locations l ON l.id=m.location_id "
+        "WHERE m.status='active' ORDER BY CASE m.meter_type WHEN 'main' THEN 0 ELSE 1 END,m.name"
+    ).fetchall()
+    all_locations=flatten_locations()
+    paths={x["id"]:x["path"] for x in all_locations}
     rows=[]
     for m in meters:
-        rr=db.execute("SELECT COALESCE(SUM(consumption),0) s FROM network_meter_readings WHERE meter_id=? AND reading_date BETWEEN ? AND ?",(m["id"],start,end)).fetchone()
-        incoming=float(rr["s"] or 0)
-        children=db.execute("SELECT id FROM network_meters WHERE parent_meter_id=? AND status='active'",(m["id"],)).fetchall()
-        child_ids=[r["id"] for r in children]
+        reading_stats=db.execute(
+            "SELECT COUNT(*) c, COALESCE(SUM(consumption),0) s FROM network_meter_readings WHERE meter_id=? AND reading_date BETWEEN ? AND ?",
+            (m["id"],start,end)
+        ).fetchone()
+        reading_count=int(reading_stats["c"] or 0)
+        incoming=float(reading_stats["s"] or 0)
+
+        child_rows=db.execute(
+            "SELECT id,location_id FROM network_meters WHERE parent_meter_id=? AND status='active'",
+            (m["id"],)
+        ).fetchall()
+        child_ids=[int(x["id"]) for x in child_rows]
         child_consumption=0.0
+        child_reading_count=0
         if child_ids:
             marks=",".join("?" for _ in child_ids)
-            child_consumption=float(db.execute(f"SELECT COALESCE(SUM(consumption),0) s FROM network_meter_readings WHERE meter_id IN ({marks}) AND reading_date BETWEEN ? AND ?",child_ids+[start,end]).fetchone()["s"] or 0)
+            child_stats=db.execute(
+                f"SELECT COUNT(*) c, COALESCE(SUM(consumption),0) s FROM network_meter_readings WHERE meter_id IN ({marks}) AND reading_date BETWEEN ? AND ?",
+                child_ids+[start,end]
+            ).fetchone()
+            child_reading_count=int(child_stats["c"] or 0)
+            child_consumption=float(child_stats["s"] or 0)
+
         subscriber_consumption=0.0
-        if m["location_id"]:
-            prefix=location_path(m["location_id"])
-            loc_ids=[x["id"] for x in flatten_locations() if x["path"]==prefix or x["path"].startswith(prefix+" / ")]
-            child_locs=[]
-            if child_ids:
-                child_locs=[x["location_id"] for x in db.execute(f"SELECT location_id FROM network_meters WHERE id IN ({','.join('?' for _ in child_ids)})",child_ids).fetchall() if x["location_id"]]
+        subscriber_invoice_count=0
+        if m["location_id"] and m["location_id"] in paths:
+            root_path=paths[m["location_id"]]
+            location_ids=[x["id"] for x in all_locations if x["path"]==root_path or x["path"].startswith(root_path+" / ")]
             excluded=set()
-            all_locs=flatten_locations()
-            for cl in child_locs:
-                cp=location_path(cl)
-                excluded.update(x["id"] for x in all_locs if x["path"]==cp or x["path"].startswith(cp+" / "))
-            target=[x for x in loc_ids if x not in excluded]
+            for child in child_rows:
+                cl=child["location_id"]
+                if not cl or cl not in paths:
+                    continue
+                cp=paths[cl]
+                excluded.update(x["id"] for x in all_locations if x["path"]==cp or x["path"].startswith(cp+" / "))
+            target=[x for x in location_ids if x not in excluded]
             if target:
                 marks=",".join("?" for _ in target)
-                subscriber_consumption=float(db.execute(f"SELECT COALESCE(SUM(i.consumption),0) s FROM invoices i JOIN subscribers s ON s.id=i.subscriber_id WHERE s.active=1 AND s.location_id IN ({marks}) AND i.invoice_date BETWEEN ? AND ?",target+[start,end]).fetchone()["s"] or 0)
+                sub_stats=db.execute(
+                    f"SELECT COUNT(i.id) c, COALESCE(SUM(i.consumption),0) s "
+                    f"FROM invoices i JOIN subscribers s ON s.id=i.subscriber_id "
+                    f"WHERE s.active=1 AND s.location_id IN ({marks}) AND i.invoice_date BETWEEN ? AND ?",
+                    target+[start,end]
+                ).fetchone()
+                subscriber_invoice_count=int(sub_stats["c"] or 0)
+                subscriber_consumption=float(sub_stats["s"] or 0)
+
         distributed=child_consumption+subscriber_consumption
-        loss=incoming-distributed
-        pct=(loss/incoming*100) if incoming>0 else 0
-        rows.append({"id":m["id"],"name":m["name"],"meter_number":m["meter_number"],"meter_type":m["meter_type"],"unit_name":m["unit_name"],"location_name":m["location_name"],"incoming":incoming,"children_consumption":child_consumption,"subscriber_consumption":subscriber_consumption,"distributed":distributed,"loss":loss,"loss_pct":pct})
+        if reading_count==0:
+            status="no_meter_readings"
+            loss=None
+            loss_pct=None
+        elif child_reading_count==0 and subscriber_invoice_count==0:
+            status="no_downstream_data"
+            loss=None
+            loss_pct=None
+        else:
+            status="complete"
+            loss=incoming-distributed
+            loss_pct=(loss/incoming*100) if incoming else 0.0
+
+        rows.append({
+            "id":m["id"],"name":m["name"],"meter_number":m["meter_number"],
+            "meter_type":m["meter_type"],"unit_name":m["unit_name"],"location_name":m["location_name"],
+            "incoming":incoming,"children_consumption":child_consumption,
+            "subscriber_consumption":subscriber_consumption,"distributed":distributed,
+            "loss":loss,"loss_pct":loss_pct,"status":status,
+            "reading_count":reading_count,"child_reading_count":child_reading_count,
+            "subscriber_invoice_count":subscriber_invoice_count,
+        })
     return rows
