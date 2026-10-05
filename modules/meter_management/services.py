@@ -373,6 +373,7 @@ def main_meter_month_rows(month_label=None):
 
         subscriber_consumption = 0.0
         subscriber_count = 0
+        subscriber_read_count = 0
         invoice_count = 0
         if meter["location_id"] and meter["location_id"] in paths:
             root_path = paths[meter["location_id"]]
@@ -403,7 +404,26 @@ def main_meter_month_rows(month_label=None):
                 ).fetchone()
                 subscriber_count = int(sub_stats["c"] or 0)
 
-                inv_stats = db.execute(
+                # القراءات الجماعية هي المصدر التشغيلي الأساسي للمفقودات،
+                # سواء كانت القراءة ما زالت بانتظار الفاتورة أو أصبحت مفوترة.
+                bulk_stats = db.execute(
+                    f"""
+                    SELECT COUNT(DISTINCT br.subscriber_id) c,
+                           COALESCE(SUM(br.current_reading - br.previous_reading),0) s
+                    FROM bulk_readings br
+                    JOIN subscribers s ON s.id=br.subscriber_id
+                    WHERE s.active=1
+                      AND s.location_id IN ({marks})
+                      AND substr(COALESCE(br.month_label,br.reading_date),1,7)=?
+                      AND br.current_reading IS NOT NULL
+                    """,
+                    target + [month],
+                ).fetchone()
+                subscriber_read_count = int(bulk_stats["c"] or 0)
+                subscriber_consumption = float(bulk_stats["s"] or 0)
+
+                # دعم البيانات القديمة التي لديها فاتورة للشهر دون قراءة جماعية مقابلة.
+                fallback_stats = db.execute(
                     f"""
                     SELECT COUNT(i.id) c, COALESCE(SUM(i.consumption),0) s
                     FROM invoices i
@@ -411,11 +431,17 @@ def main_meter_month_rows(month_label=None):
                     WHERE s.active=1
                       AND s.location_id IN ({marks})
                       AND substr(COALESCE(i.month_label,i.invoice_date),1,7)=?
+                      AND NOT EXISTS (
+                          SELECT 1 FROM bulk_readings br
+                          WHERE br.subscriber_id=i.subscriber_id
+                            AND substr(COALESCE(br.month_label,br.reading_date),1,7)=?
+                      )
                     """,
-                    target + [month],
+                    target + [month, month],
                 ).fetchone()
-                invoice_count = int(inv_stats["c"] or 0)
-                subscriber_consumption = float(inv_stats["s"] or 0)
+                invoice_count = int(fallback_stats["c"] or 0)
+                subscriber_read_count += invoice_count
+                subscriber_consumption += float(fallback_stats["s"] or 0)
 
         incoming = None
         if current:
@@ -430,7 +456,7 @@ def main_meter_month_rows(month_label=None):
             status = "missing_children"
             loss = None
             loss_pct = None
-        elif subscriber_count and invoice_count == 0:
+        elif subscriber_count and subscriber_read_count < subscriber_count:
             status = "missing_subscribers"
             loss = None
             loss_pct = None
@@ -456,6 +482,7 @@ def main_meter_month_rows(month_label=None):
             "child_read_count": child_read,
             "child_unread_count": len(child_rows) - child_read,
             "subscriber_count": subscriber_count,
+            "subscriber_read_count": subscriber_read_count,
             "invoice_count": invoice_count,
             "subscriber_consumption": subscriber_consumption,
             "children_consumption": child_consumption,
