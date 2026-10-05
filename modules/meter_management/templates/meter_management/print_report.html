@@ -26,7 +26,7 @@ th{background:#f4f7fb}.print{position:fixed;top:15px;left:15px;background:#1a56d
   <div class="box">النسبة<br><strong>{{ '%.1f'|format(total_pct) }}%</strong></div>
 </div>
 <table>
-<thead><tr><th>العداد الرئيسي</th><th>الموقع</th><th>قراءة سابقة</th><th>قراءة {{ month_label }}</th><th>استهلاك</th><th>الفروع</th><th>المفقودات</th><th>الحالة</th></tr></thead>
+<thead><tr><th>العداد الرئيسي</th><th>الموقع</th><th>السابقة</th><th>قراءة الشهر</th><th>استهلاك الرئيسي</th><th>الفروع المقروءة</th><th>استهلاك الفروع</th><th>قراءات المشتركين</th><th>استهلاك المشتركين</th><th>المفقودات</th><th>الحالة</th></tr></thead>
 <tbody>
 {% for r in rows %}
 <tr>
@@ -36,6 +36,9 @@ th{background:#f4f7fb}.print{position:fixed;top:15px;left:15px;background:#1a56d
   <td>{% if r.reading is not none %}{{ '%.1f'|format(r.reading) }}{% else %}لم تدخل{% endif %}</td>
   <td>{% if r.incoming is not none %}{{ '%.1f'|format(r.incoming) }}{% else %}—{% endif %}</td>
   <td>{{ r.child_read_count }} / {{ r.child_count }}</td>
+  <td>{{ "%.1f"|format(r.children_consumption) }}</td>
+  <td>{{ r.subscriber_read_count }} / {{ r.subscriber_count }}</td>
+  <td>{{ "%.1f"|format(r.subscriber_consumption) }}</td>
   <td>{% if r.loss is not none %}{{ '%.1f'|format(r.loss) }} ({{ '%.1f'|format(r.loss_pct) }}%){% else %}—{% endif %}</td>
   <td>
     {% if r.status=='complete' %}مكتمل
