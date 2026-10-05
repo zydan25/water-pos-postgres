@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, timedelta
 from functools import wraps
 
 from flask import abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
@@ -11,7 +11,7 @@ from . import bp
 from .models import ensure_schema
 from .services import (
     delete_location, flatten_locations, location_children_map, location_path, loss_rows, monthly_loss_summary, available_loss_months,
-    main_meter_month_rows, normalize_meter_month, meter_detail as get_meter_detail,
+    main_meter_month_rows, normalize_meter_month, meter_month_reading, meter_detail as get_meter_detail,
     default_unit_id, meter_rows, record_reading, save_location, save_meter, save_unit, unit_rows,
 )
 
@@ -383,7 +383,7 @@ def reading_new():
             next_month = date(y + 1, 1, 1)
         else:
             next_month = date(y, m + 1, 1)
-        selected_date = (next_month - __import__("datetime").timedelta(days=1)).isoformat()
+        selected_date = (next_month - timedelta(days=1)).isoformat()
 
     return render_template(
         "meter_management/reading_form.html",
