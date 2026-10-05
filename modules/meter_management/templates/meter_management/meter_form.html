@@ -51,7 +51,8 @@
           <label class="form-label fw-bold">موقع العداد</label>
           <input type="hidden" name="location_id" id="network-location-id" value="{{ meter.location_id or '' }}">
 
-          <div class="mm-location-field" id="network-location-selector">
+          <div class="mm-location-field" id="network-location-selector"
+               data-tree-url="{{ url_for('meter_management.api_locations_tree') }}">
             <button type="button" class="mm-location-trigger" id="network-location-trigger">
               <span class="mm-location-value {% if not current_location_path %}placeholder{% endif %}" id="network-location-value">
                 {{ current_location_path or 'اختر الموقع من الشجرة' }}
