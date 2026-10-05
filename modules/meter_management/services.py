@@ -140,6 +140,13 @@ def record_reading(data, user_id):
     db.commit()
 
 
+def default_unit_id():
+    ensure_schema()
+    db = get_db()
+    row = db.execute("SELECT id FROM water_units WHERE name='وحدة' ORDER BY id LIMIT 1").fetchone()
+    return row["id"] if row else None
+
+
 def unit_rows():
     ensure_schema()
     db = get_db()
