@@ -2179,14 +2179,67 @@ def create_app():
         return [int(r["id"]) for r in rows]
     
     
+    def _bulk_invoice_month_key(row):
+        """تطبيع شهر الفاتورة، بما في ذلك الصيغ القديمة مثل 9 و2026-9."""
+        raw_label = str(row["month_label"] or "").strip() if row is not None else ""
+        raw_date = str(row["invoice_date"] or "").strip() if row is not None else ""
+        year_from_date = raw_date[:4] if len(raw_date) >= 4 and raw_date[:4].isdigit() else ""
+        raw = raw_label.replace("/", "-")
+        parts = raw.split("-")
+
+        if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+            year, month = int(parts[0]), int(parts[1])
+            if 1 <= month <= 12:
+                return f"{year:04d}-{month:02d}"
+
+        if raw.isdigit():
+            month = int(raw)
+            if 1 <= month <= 12 and year_from_date:
+                return f"{int(year_from_date):04d}-{month:02d}"
+
+        if len(raw_date) >= 7 and raw_date[:4].isdigit():
+            try:
+                year = int(raw_date[:4])
+                month = int(raw_date[5:7])
+                if 1 <= month <= 12:
+                    return f"{year:04d}-{month:02d}"
+            except (TypeError, ValueError):
+                pass
+        return ""
+
+    def _bulk_reading_month_key(row):
+        """تطبيع شهر القراءة الجماعية بنفس طريقة الفواتير."""
+        raw_label = str(row["month_label"] or "").strip() if row is not None else ""
+        raw_date = str(row["reading_date"] or "").strip() if row is not None else ""
+        year_from_date = raw_date[:4] if len(raw_date) >= 4 and raw_date[:4].isdigit() else ""
+        raw = raw_label.replace("/", "-")
+        parts = raw.split("-")
+
+        if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+            year, month = int(parts[0]), int(parts[1])
+            if 1 <= month <= 12:
+                return f"{year:04d}-{month:02d}"
+
+        if raw.isdigit():
+            month = int(raw)
+            if 1 <= month <= 12 and year_from_date:
+                return f"{int(year_from_date):04d}-{month:02d}"
+
+        if len(raw_date) >= 7 and raw_date[:4].isdigit():
+            try:
+                year = int(raw_date[:4])
+                month = int(raw_date[5:7])
+                if 1 <= month <= 12:
+                    return f"{year:04d}-{month:02d}"
+            except (TypeError, ValueError):
+                pass
+        return ""
+
     def _bulk_previous_reading_map(db, subscriber_ids, month_label, allow_bulk=True):
-        """خريطة القراءة السابقة حسب الشهر المختار.
-        - الشهر الحالي: آخر فاتورة سابقة فقط.
-        - الشهر التاريخي: آخر فاتورة سابقة، وإن لم توجد فآخر قراءة جماعية سابقة.
-        """
+        """القراءة السابقة: آخر فاتورة سابقة أولاً، ثم القراءة الجماعية عند الحاجة."""
         if not subscriber_ids:
             return {}
-        month_label, month_start, _month_end, _reading_date = _bulk_month_dates(month_label)
+        month_label = _normalize_bulk_month(month_label)
         marks = ",".join("?" for _ in subscriber_ids)
 
         invoice_rows = db.execute(
@@ -2195,76 +2248,51 @@ def create_app():
             FROM invoices
             WHERE subscriber_id IN ({marks})
               AND current_reading IS NOT NULL
-              AND (
-                    (
-                        TRIM(COALESCE(invoice_date,'')) <> ''
-                        AND substr(TRIM(invoice_date),1,10) < ?
-                    )
-                    OR
-                    (
-                        TRIM(COALESCE(invoice_date,'')) = ''
-                        AND substr(TRIM(COALESCE(month_label,'')),1,7) < ?
-                    )
-              )
-            ORDER BY
-                subscriber_id,
-                CASE
-                    WHEN TRIM(COALESCE(invoice_date,'')) <> ''
-                        THEN substr(TRIM(invoice_date),1,10)
-                    ELSE substr(TRIM(COALESCE(month_label,'')),1,7)
-                END DESC,
-                id DESC
             """,
-            list(subscriber_ids) + [month_start, month_label],
+            list(subscriber_ids),
         ).fetchall()
 
         result = {}
+        candidates = {}
         for row in invoice_rows:
             sid = int(row["subscriber_id"])
-            if sid not in result:
-                result[sid] = float(row["current_reading"] or 0)
+            key = _bulk_invoice_month_key(row)
+            if key and key < month_label:
+                candidates.setdefault(sid, []).append(row)
+
+        for sid, rows in candidates.items():
+            rows.sort(key=lambda x: (_bulk_invoice_month_key(x), int(x["id"] or 0)), reverse=True)
+            result[sid] = float(rows[0]["current_reading"] or 0)
 
         if not allow_bulk:
             return result
 
-        missing_ids = [sid for sid in subscriber_ids if int(sid) not in result]
+        missing_ids = [int(sid) for sid in subscriber_ids if int(sid) not in result]
         if not missing_ids:
             return result
 
-        missing_marks = ",".join("?" for _ in missing_ids)
+        mm = ",".join("?" for _ in missing_ids)
         bulk_rows = db.execute(
             f"""
             SELECT subscriber_id, current_reading, reading_date, month_label, id
             FROM bulk_readings
-            WHERE subscriber_id IN ({missing_marks})
+            WHERE subscriber_id IN ({mm})
               AND current_reading IS NOT NULL
-              AND (
-                    (
-                        TRIM(COALESCE(reading_date,'')) <> ''
-                        AND substr(TRIM(reading_date),1,10) < ?
-                    )
-                    OR
-                    (
-                        TRIM(COALESCE(reading_date,'')) = ''
-                        AND substr(TRIM(COALESCE(month_label,'')),1,7) < ?
-                    )
-              )
-            ORDER BY
-                subscriber_id,
-                CASE
-                    WHEN TRIM(COALESCE(reading_date,'')) <> ''
-                        THEN substr(TRIM(reading_date),1,10)
-                    ELSE substr(TRIM(COALESCE(month_label,'')),1,7)
-                END DESC,
-                id DESC
             """,
-            missing_ids + [month_start, month_label],
+            missing_ids,
         ).fetchall()
 
+        candidates = {}
         for row in bulk_rows:
             sid = int(row["subscriber_id"])
+            key = _bulk_reading_month_key(row)
+            if key and key < month_label:
+                candidates.setdefault(sid, []).append(row)
+
+        for sid, rows in candidates.items():
+            rows.sort(key=lambda x: (_bulk_reading_month_key(x), int(x["id"] or 0)), reverse=True)
             if sid not in result:
-                result[sid] = float(row["current_reading"] or 0)
+                result[sid] = float(rows[0]["current_reading"] or 0)
 
         return result
 
@@ -2482,37 +2510,38 @@ def create_app():
         )
 
         pending_map = {}
+        invoice_map = {}
         if subscriber_ids:
             marks = ",".join("?" for _ in subscriber_ids)
+
             pending_rows = db.execute(
                 f"""
                 SELECT *
                 FROM bulk_readings
                 WHERE subscriber_id IN ({marks})
-                  AND substr(COALESCE(month_label, reading_date),1,7)=?
-                  AND COALESCE(invoiced,0)=0
+                  AND current_reading IS NOT NULL
                 ORDER BY id DESC
                 """,
-                subscriber_ids + [month_label],
+                subscriber_ids,
             ).fetchall()
             for row in pending_rows:
-                pending_map.setdefault(int(row["subscriber_id"]), row)
+                if _bulk_reading_month_key(row) == month_label and not int(row["invoiced"] or 0):
+                    pending_map.setdefault(int(row["subscriber_id"]), row)
 
-        invoice_map = {}
-        if subscriber_ids:
-            marks = ",".join("?" for _ in subscriber_ids)
             invoice_rows = db.execute(
                 f"""
-                SELECT id,subscriber_id,invoice_no,current_reading,previous_reading
+                SELECT id,subscriber_id,invoice_no,current_reading,previous_reading,
+                       invoice_date,month_label
                 FROM invoices
                 WHERE subscriber_id IN ({marks})
-                  AND substr(COALESCE(month_label, invoice_date),1,7)=?
+                  AND current_reading IS NOT NULL
                 ORDER BY id DESC
                 """,
-                subscriber_ids + [month_label],
+                subscriber_ids,
             ).fetchall()
             for row in invoice_rows:
-                invoice_map.setdefault(int(row["subscriber_id"]), row)
+                if _bulk_invoice_month_key(row) == month_label:
+                    invoice_map.setdefault(int(row["subscriber_id"]), row)
 
         main_meters = main_meter_month_rows(month_label)
         if location_id:
@@ -2654,32 +2683,41 @@ def create_app():
             ).fetchall()
 
         subscriber_ids = [int(x["id"]) for x in subs]
-        previous_map = _bulk_previous_reading_map(db, subscriber_ids, month_label)
+        previous_map = _bulk_previous_reading_map(db, subscriber_ids, month_label, allow_bulk=not is_current_month)
+        is_current_month = month_label == date.today().strftime("%Y-%m")
         pending_map = {}
         invoice_map = {}
         if subscriber_ids:
             marks = ",".join("?" for _ in subscriber_ids)
-            for row in db.execute(
+            pending_rows = db.execute(
                 f"""
-                SELECT * FROM bulk_readings
+                SELECT *
+                FROM bulk_readings
                 WHERE subscriber_id IN ({marks})
-                  AND substr(COALESCE(month_label,reading_date),1,7)=?
+                  AND current_reading IS NOT NULL
                 ORDER BY id DESC
                 """,
-                subscriber_ids + [month_label],
-            ).fetchall():
-                pending_map.setdefault(int(row["subscriber_id"]), row)
-            for row in db.execute(
+                subscriber_ids,
+            ).fetchall()
+            for row in pending_rows:
+                if _bulk_reading_month_key(row) == month_label:
+                    pending_map.setdefault(int(row["subscriber_id"]), row)
+
+            invoice_rows = db.execute(
                 f"""
-                SELECT id,subscriber_id,invoice_no,current_reading,previous_reading
+                SELECT id,subscriber_id,invoice_no,current_reading,previous_reading,
+                       invoice_date,month_label
                 FROM invoices
                 WHERE subscriber_id IN ({marks})
-                  AND substr(COALESCE(month_label,invoice_date),1,7)=?
+                  AND current_reading IS NOT NULL
                 ORDER BY id DESC
                 """,
-                subscriber_ids + [month_label],
-            ).fetchall():
-                invoice_map.setdefault(int(row["subscriber_id"]), row)
+                subscriber_ids,
+            ).fetchall()
+            for row in invoice_rows:
+                if _bulk_invoice_month_key(row) == month_label:
+                    invoice_map.setdefault(int(row["subscriber_id"]), row)
+
 
         report_rows = []
         for sub in subs:
