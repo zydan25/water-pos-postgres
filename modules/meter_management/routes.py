@@ -255,6 +255,7 @@ def meter_new():
         locations=flatten_locations(),
         parents=meter_rows(),
         current_location_path="",
+        default_unit_id=default_unit_id(),
     )
 
 
@@ -282,6 +283,7 @@ def meter_edit(meter_id):
         locations=flatten_locations(),
         parents=parents,
         current_location_path=location_path(meter["location_id"]) if meter["location_id"] else "",
+        default_unit_id=default_unit_id(),
     )
 
 
