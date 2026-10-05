@@ -82,6 +82,7 @@
         <div class="mm-loss-detail-list">
           <div><span>عدادات فرعية</span><strong>{{ r.child_read_count }} مقروءة / {{ r.child_count }} إجمالاً</strong></div>
           <div><span>استهلاك الفروع</span><strong>{{ '%.1f'|format(r.children_consumption) }}</strong></div>
+          <div><span>قراءات المشتركين</span><strong>{{ r.subscriber_read_count }} / {{ r.subscriber_count }}</strong></div>
           <div><span>استهلاك المشتركين</span><strong>{{ '%.1f'|format(r.subscriber_consumption) }}</strong></div>
           <div><span>المفقودات</span><strong class="{% if r.loss is not none and r.loss>0 %}text-danger{% elif r.loss is not none %}text-success{% endif %}">{% if r.loss is not none %}{{ '%.1f'|format(r.loss) }} وحدة · {{ '%.1f'|format(r.loss_pct) }}%{% else %}غير محسوبة{% endif %}</strong></div>
         </div>
