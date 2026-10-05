@@ -40,11 +40,14 @@
         <div class="col-md-4">
           <label class="form-label fw-bold">الوحدة</label>
           <select class="form-select" name="unit_id">
-            <option value="">بدون وحدة</option>
             {% for u in units %}
-            <option value="{{ u.id }}" {% if meter.unit_id==u.id %}selected{% endif %}>{{ u.name }}</option>
+            <option value="{{ u.id }}"
+              {% if meter.unit_id==u.id or (mode=='new' and default_unit_id==u.id) %}selected{% endif %}>
+              {{ u.name }}
+            </option>
             {% endfor %}
           </select>
+          <div class="form-text">الوحدة الافتراضية الحالية هي «وحدة».</div>
         </div>
 
         <div class="col-md-4">
