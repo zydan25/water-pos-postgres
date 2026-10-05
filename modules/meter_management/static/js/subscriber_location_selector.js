@@ -45,11 +45,23 @@
     results.innerHTML=matches.length?matches.map(n=>'<div class="mm-location-result" data-id="'+n.id+'"><strong>'+esc(n.name)+'</strong><div class="mm-location-path">'+esc(pathOf(n))+'</div></div>').join(''):'<div class="mm-location-empty">لا توجد نتيجة مطابقة.</div>';
     results.querySelectorAll('[data-id]').forEach(el=>el.addEventListener('click',()=>setSelected(indexed.get(String(el.dataset.id)))));
   }
+  async function loadCurrent(){
+    if(!currentUrl)return;
+    try{
+      const cr=await fetch(currentUrl,{headers:{Accept:'application/json'}});
+      if(!cr.ok)return;
+      const c=await cr.json();
+      if(c.location_id){
+        hidden.value=c.location_id;
+        value.textContent=c.path||c.name||'';
+        value.classList.remove('placeholder');
+      }
+    }catch(e){}
+  }
   async function load(){
     if(loaded)return;
     const res=await fetch(treeUrl,{headers:{Accept:'application/json'}});if(!res.ok)throw new Error('tree');
     const json=await res.json();data=json.tree||[];indexed.clear();index(data);render(data,tree,0);loaded=true;
-    if(currentUrl){try{const cr=await fetch(currentUrl,{headers:{Accept:'application/json'}});if(cr.ok){const c=await cr.json();if(c.location_id){hidden.value=c.location_id;value.textContent=c.path||c.name||'';value.classList.remove('placeholder');}}}catch(e){}}
   }
   async function open(){trigger.classList.add('open');panel.classList.add('open');try{await load();search.focus();}catch(e){tree.innerHTML='<div class="mm-location-empty">تعذر تحميل شجرة المواقع.</div>';}}
   function close(){trigger.classList.remove('open');panel.classList.remove('open');}
@@ -59,5 +71,6 @@
   document.addEventListener('click',e=>{if(!root.contains(e.target))close();});
   root.closest('form')?.addEventListener('submit',()=>close());
   if(legacy.value){value.textContent=legacy.value;value.classList.remove('placeholder');}
+  if(currentUrl){loadCurrent();}
   window.MMOpenLocationSelector=open;
 })();
