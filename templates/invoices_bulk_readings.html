@@ -490,9 +490,9 @@
     const subscriber=view==='subscribers';
     subscriberView.hidden=!subscriber;meterView.hidden=subscriber;
     viewSubscribersBtn.classList.toggle('active',subscriber);viewMetersBtn.classList.toggle('active',!subscriber);
-    document.getElementById('subscriberTools').style.visibility=subscriber?'visible':'hidden';
-    if(!subscriber)document.getElementById('bulkResultsCount').textContent='{{ main_meters|length }} عداد رئيسي';
-    else updateSummary();
+    document.getElementById('subscriberTools').style.display=subscriber?'flex':'none';
+    document.getElementById('bulkResultsCount').textContent=subscriber?'{{ subscribers|length }} مشترك':'{{ main_meters|length }} عداد رئيسي';
+    if(subscriber)updateSummary();
   }
   viewSubscribersBtn?.addEventListener('click',()=>setView('subscribers'));
   viewMetersBtn?.addEventListener('click',()=>setView('meters'));
