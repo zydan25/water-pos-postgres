@@ -1,3 +1,113 @@
 {% extends "base.html" %}
-{% block head %}<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/meter_management.css') }}">{% endblock %}
-{% block content %}<div class="container mm-form-page"><div class="mm-page-title"><div><div class="mm-eyebrow">المواقع</div><h3>{{ 'إضافة موقع جديد' if mode=='new' else 'تعديل الموقع' }}</h3></div><a class="btn btn-outline-secondary" href="{{ url_for('meter_management.locations') }}">رجوع</a></div><div class="mm-card mm-form-card"><form method="post"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><div class="row g-3"><div class="col-md-8"><label class="form-label fw-bold">اسم الموقع *</label><input class="form-control" name="name" value="{{ location.name or '' }}" required placeholder="مثال: مشورة"></div><div class="col-md-4"><label class="form-label fw-bold">نوع المستوى</label><select class="form-select" name="location_type">{% for t in ['محافظة','مديرية','منطقة','قرية','حي','تجمع','موقع'] %}<option value="{{ t }}" {% if (location.location_type or 'منطقة')==t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div><div class="col-md-6"><label class="form-label fw-bold">الوحدة التشغيلية</label><select class="form-select" name="unit_id"><option value="">بدون وحدة</option>{% for u in units %}<option value="{{ u.id }}" {% if location.unit_id==u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}</select></div><div class="col-md-6"><label class="form-label fw-bold">الموقع الأب</label><select class="form-select" name="parent_id"><option value="">جذر مستقل</option>{% for p in parents %}<option value="{{ p.id }}" {% if location.parent_id==p.id %}selected{% endif %}>{{ p.path }}</option>{% endfor %}</select></div><div class="col-md-4"><label class="form-label fw-bold">الرمز</label><input class="form-control" name="code" value="{{ location.code or '' }}" placeholder="LOC-01"></div><div class="col-md-4"><label class="form-label fw-bold">الترتيب</label><input class="form-control" type="number" name="sort_order" value="{{ location.sort_order if location.sort_order is not none else 0 }}"></div><div class="col-md-4"><label class="form-label fw-bold">الحالة</label><select class="form-select" name="active"><option value="1" {% if location.active is not defined or location.active %}selected{% endif %}>نشط</option><option value="0" {% if location.active is defined and not location.active %}selected{% endif %}>متوقف</option></select></div><div class="col-12"><label class="form-label fw-bold">ملاحظات</label><textarea class="form-control" name="notes" rows="3">{{ location.notes or '' }}</textarea></div></div><div class="mm-form-actions"><button class="btn btn-primary btn-lg">حفظ الموقع</button><a class="btn btn-outline-secondary btn-lg" href="{{ url_for('meter_management.locations') }}">إلغاء</a></div></form></div></div>{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/meter_management.css') }}">
+<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/subscriber_location.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mm-form-page">
+  <div class="mm-page-title">
+    <div>
+      <div class="mm-eyebrow">إدارة المواقع</div>
+      <h3>{{ 'إضافة موقع جديد' if mode=='new' else 'تعديل الموقع' }}</h3>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('meter_management.locations') }}">رجوع</a>
+  </div>
+
+  <div class="mm-card mm-form-card">
+    <form method="post">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+      <div class="row g-3">
+        <div class="col-md-8">
+          <label class="form-label fw-bold">اسم الموقع *</label>
+          <input class="form-control" name="name" value="{{ location.name or '' }}" required placeholder="مثال: مشورة">
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label fw-bold">نوع المستوى</label>
+          <select class="form-select" name="location_type">
+            {% for t in ['محافظة','مديرية','منطقة','قرية','حي','تجمع','موقع'] %}
+            <option value="{{ t }}" {% if (location.location_type or 'منطقة')==t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label fw-bold">الوحدة التشغيلية</label>
+          <select class="form-select" name="unit_id">
+            {% for u in units %}
+            <option value="{{ u.id }}"
+              {% if location.unit_id==u.id or (mode=='new' and not location.unit_id and default_unit_id==u.id) %}selected{% endif %}>
+              {{ u.name }}
+            </option>
+            {% endfor %}
+          </select>
+          <div class="form-text">الوحدة الافتراضية الحالية هي «وحدة» ويمكن تغييرها عند الحاجة.</div>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label fw-bold">الموقع الأب</label>
+          <input type="hidden" name="parent_id" id="location-parent-id" value="{{ location.parent_id or '' }}">
+
+          <div class="mm-location-field" id="location-parent-selector"
+               data-tree-url="{{ url_for('meter_management.api_locations_tree') }}"
+               data-blocked-id="{{ blocked_location_id or '' }}">
+            <button type="button" class="mm-location-trigger" id="location-parent-trigger">
+              <span class="mm-location-value {% if not current_parent_path %}placeholder{% endif %}" id="location-parent-value">
+                {{ current_parent_path or 'اختر الموقع الأب من الشجرة' }}
+              </span>
+              <span class="mm-location-chevron"><i class="bi bi-chevron-down"></i></span>
+            </button>
+
+            <div class="mm-location-panel" id="location-parent-panel">
+              <div class="mm-location-search">
+                <input type="search" class="form-control" id="location-parent-search"
+                       placeholder="بحث في المناطق والقرى..." autocomplete="off">
+              </div>
+              <div class="mm-location-results" id="location-parent-results" hidden></div>
+              <div class="mm-location-tree" id="location-parent-tree">
+                <div class="mm-location-empty">جارٍ تحميل شجرة المواقع...</div>
+              </div>
+              <span class="mm-location-clear" id="location-parent-clear" role="button">مسح الاختيار — جذر مستقل</span>
+            </div>
+          </div>
+          <div class="form-text">نفس شجرة اختيار موقع المشترك؛ اختر المستوى الذي سيظهر الموقع تحته.</div>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label fw-bold">الرمز</label>
+          <input class="form-control" name="code" value="{{ location.code or '' }}" placeholder="LOC-01">
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label fw-bold">الترتيب</label>
+          <input class="form-control" type="number" name="sort_order" value="{{ location.sort_order if location.sort_order is not none else 0 }}">
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label fw-bold">الحالة</label>
+          <select class="form-select" name="active">
+            <option value="1" {% if location.active is not defined or location.active %}selected{% endif %}>نشط</option>
+            <option value="0" {% if location.active is defined and not location.active %}selected{% endif %}>متوقف</option>
+          </select>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label fw-bold">ملاحظات</label>
+          <textarea class="form-control" name="notes" rows="3">{{ location.notes or '' }}</textarea>
+        </div>
+      </div>
+
+      <div class="mm-form-actions">
+        <button class="btn btn-primary btn-lg" type="submit">حفظ الموقع</button>
+        <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('meter_management.locations') }}">إلغاء</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('meter_management.static', filename='js/location_parent_selector.js') }}"></script>
+{% endblock %}
