@@ -106,6 +106,7 @@ def dashboard():
         meters=meter_rows()[:8],
         units=unit_rows()[:6],
         loss_rows=loss_rows()[:8],
+        tree=location_children_map(),
     )
 
 
