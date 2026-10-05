@@ -11,7 +11,7 @@
   const hidden = document.getElementById('network-location-id');
   const value = document.getElementById('network-location-value');
 
-  const treeUrl = "{{ url_for('meter_management.api_locations_tree') }}";
+  const treeUrl = root.dataset.treeUrl || '';
   let indexed = new Map();
   let loaded = false;
 
