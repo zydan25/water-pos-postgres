@@ -75,10 +75,14 @@
           <div class="form-text">نفس شجرة اختيار موقع المشترك؛ اختر المستوى الذي سيظهر الموقع تحته.</div>
         </div>
 
+        {% if mode=='edit' %}
         <div class="col-md-4">
           <label class="form-label fw-bold">الرمز</label>
-          <input class="form-control" name="code" value="{{ location.code or '' }}" placeholder="LOC-01">
+          <input class="form-control" name="code" value="{{ location.code or '' }}" readonly>
         </div>
+        {% else %}
+        <input type="hidden" name="code" value="">
+        {% endif %}
 
         <div class="col-md-4">
           <label class="form-label fw-bold">الترتيب</label>
