@@ -580,6 +580,10 @@ def available_loss_months():
             SELECT substr(COALESCE(month_label,invoice_date),1,7) AS month_key
             FROM invoices
             WHERE COALESCE(month_label,invoice_date) IS NOT NULL
+            UNION
+            SELECT substr(COALESCE(month_label,reading_date),1,7) AS month_key
+            FROM bulk_readings
+            WHERE COALESCE(month_label,reading_date) IS NOT NULL
         )
         WHERE month_key IS NOT NULL AND month_key <> ''
         ORDER BY month_key DESC
