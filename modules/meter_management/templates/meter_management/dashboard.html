@@ -10,7 +10,8 @@
     <div><div class="mm-eyebrow">إدارة الشبكة</div><h2>العدادات والوحدات</h2><div class="text-muted">مركز تشغيل الشبكة ومتابعة القراءات والمفقودات</div></div>
     <div class="mm-actions">
       <a class="btn btn-primary" href="{{ url_for('meter_management.meter_new') }}"><i class="bi bi-plus-circle"></i> عداد رئيسي</a>
-      <a class="btn btn-outline-primary" href="{{ url_for('meter_management.location_new') }}"><i class="bi bi-plus"></i> موقع</a>
+      <a class="btn btn-outline-primary" href="{{ url_for('meter_management.locations') }}"><i class="bi bi-geo-alt"></i> إدارة المناطق والقرى</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('meter_management.location_new') }}"><i class="bi bi-plus"></i> إضافة موقع</a>
       <a class="btn btn-outline-secondary" href="{{ url_for('meter_management.reading_new') }}"><i class="bi bi-speedometer2"></i> قراءة</a>
     </div>
   </div>
