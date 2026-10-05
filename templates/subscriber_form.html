@@ -5,11 +5,11 @@
 .form-section-title { font-weight:800; color:#1a56db; font-size:.9rem; text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px; }
 .required-star { color:#dc2626; }
 </style>
+<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/subscriber_location.css') }}">
 {% endblock %}
 {% block content %}
 <div class="container" style="max-width:860px;">
 
-  <!-- Header -->
   <div class="d-flex align-items-center gap-3 mb-4">
     <div style="background:{% if mode=='new' %}#1a56db{% else %}#059669{% endif %};color:white;border-radius:14px;padding:12px 16px;font-size:1.4rem;">
       {% if mode=='new' %}➕{% else %}✏️{% endif %}
@@ -24,7 +24,6 @@
 
   <form method="post" id="sub-form">
 
-    <!-- Section 1: Basic info -->
     <div class="form-section">
       <div class="form-section-title"><i class="bi bi-person-vcard me-1"></i>البيانات الأساسية</div>
       <div class="row g-3">
@@ -51,11 +50,10 @@
         <div class="col-md-3">
           <label class="form-label fw-bold">الحالة</label>
           <select class="form-select" name="active">
-          {% set active = subscriber.active if subscriber is not none and 'active' in subscriber else 1 %}
-
-<option value="1" {% if active|int != 0 %}selected{% endif %}>✅ نشط</option>
-<option value="0" {% if active|int == 0 %}selected{% endif %}>⏸️ متوقف</option>
-                  </select>
+            {% set active = subscriber.active if subscriber is not none and 'active' in subscriber else 1 %}
+            <option value="1" {% if active|int != 0 %}selected{% endif %}>✅ نشط</option>
+            <option value="0" {% if active|int == 0 %}selected{% endif %}>⏸️ متوقف</option>
+          </select>
         </div>
         <div class="col-md-4">
           <label class="form-label fw-bold">رقم العداد</label>
@@ -72,12 +70,34 @@
                    placeholder="9677XXXXXXXX">
           </div>
         </div>
+
         <div class="col-md-4">
-          <label class="form-label fw-bold">القرية / المنطقة</label>
-          <input class="form-control" name="village"
-                 value="{{ subscriber.village or '' }}"
-                 placeholder="مثال: مشورة">
+          <label class="form-label fw-bold">الموقع</label>
+          <input type="hidden" name="village" id="legacy-village" value="{{ subscriber.village or '' }}">
+          <input type="hidden" name="location_id" id="subscriber-location-id" value="">
+          <div class="mm-location-field" id="mm-location-selector"
+               data-subscriber-id="{{ subscriber.id if mode=='edit' else '' }}"
+               data-tree-url="{{ url_for('meter_management.api_locations_tree') }}"
+               data-current-url="{{ url_for('meter_management.api_subscriber_location', subscriber_id=subscriber.id) if mode=='edit' else '' }}">
+            <button type="button" class="mm-location-trigger" id="mm-location-trigger">
+              <span class="mm-location-value placeholder" id="mm-location-value">اختر الموقع من الشجرة</span>
+              <span class="mm-location-chevron"><i class="bi bi-chevron-down"></i></span>
+            </button>
+            <div class="mm-location-panel" id="mm-location-panel">
+              <div class="mm-location-search">
+                <input type="search" class="form-control" id="mm-location-search"
+                       placeholder="بحث في المناطق والقرى..." autocomplete="off">
+              </div>
+              <div class="mm-location-results" id="mm-location-results" hidden></div>
+              <div class="mm-location-tree" id="mm-location-tree">
+                <div class="mm-location-empty">اضغط لفتح شجرة المواقع.</div>
+              </div>
+              <span class="mm-location-clear" id="mm-location-clear" role="button">مسح الاختيار</span>
+            </div>
+          </div>
+          <div class="form-text">اختيار الموقع من الشجرة يحافظ على القرية القديمة أيضًا للتوافق مع النظام الحالي.</div>
         </div>
+
         <div class="col-md-4">
           <label class="form-label fw-bold">العنوان</label>
           <input class="form-control" name="address"
@@ -87,7 +107,6 @@
       </div>
     </div>
 
-    <!-- Section 2: Billing -->
     <div class="form-section">
       <div class="form-section-title"><i class="bi bi-cash-coin me-1"></i>إعدادات الفوترة</div>
       <div class="row g-3">
@@ -122,7 +141,6 @@
       </div>
     </div>
 
-    <!-- Section 3: بيانات الفاتورة الافتتاحية -->
     <div class="form-section">
       <div class="form-section-title"><i class="bi bi-receipt-cutoff me-1"></i>بيانات آخر فاتورة / الرصيد الافتتاحي</div>
       <div class="row g-3">
@@ -148,14 +166,12 @@
       </div>
     </div>
 
-    <!-- Section 3: Notes -->
     <div class="form-section">
       <div class="form-section-title"><i class="bi bi-journal-text me-1"></i>ملاحظات</div>
       <textarea class="form-control" name="notes" rows="3"
                 placeholder="أي ملاحظات إضافية...">{{ subscriber.notes or '' }}</textarea>
     </div>
 
-    <!-- Actions -->
     <div class="d-flex gap-3 flex-wrap">
       <button class="btn btn-primary btn-lg px-5" type="submit">
         <i class="bi bi-check-lg me-1"></i>
@@ -170,12 +186,10 @@
       </a>
       {% endif %}
     </div>
-
   </form>
 </div>
 
 <script>
-// Live monthly estimate
 function updateEstimate() {
   const up  = parseFloat(document.querySelector('[name=default_unit_price]').value)  || {{ setting('default_unit_price',3500)|float }};
   const fee = parseFloat(document.querySelector('[name=default_subscription_fee]').value) || {{ setting('default_subscription_fee',500)|float }};
@@ -185,11 +199,11 @@ document.querySelector('[name=default_unit_price]')?.addEventListener('input', u
 document.querySelector('[name=default_subscription_fee]')?.addEventListener('input', updateEstimate);
 updateEstimate();
 
-// Prevent double submit
 document.getElementById('sub-form').addEventListener('submit', function() {
   const btn = this.querySelector('[type=submit]');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الحفظ...';
 });
 </script>
+<script src="{{ url_for('meter_management.static', filename='js/subscriber_location_selector.js') }}"></script>
 {% endblock %}
