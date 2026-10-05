@@ -17,7 +17,12 @@
   }
   function esc(v){return String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));}
   document.querySelectorAll('.mm-tree[data-unit-id]').forEach(el=>{
-    const id=String(el.dataset.unitId);const nodes=rootNodes.filter(n=>id==='__none__'?(!n.unit_id):String(n.unit_id)===id);
+    const id=String(el.dataset.unitId);
+    const nodes=rootNodes.filter(n=>{
+      if(id==='__all__') return true;
+      if(id==='__none__') return !n.unit_id;
+      return String(n.unit_id)===id;
+    });
     nodes.forEach(n=>el.appendChild(row(n)));
     if(!nodes.length)el.innerHTML='<div class="mm-empty">لا توجد مواقع في هذا القسم.</div>';
   });
