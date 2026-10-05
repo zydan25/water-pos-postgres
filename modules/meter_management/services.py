@@ -223,6 +223,204 @@ def location_path(location_id):
     return " / ".join(reversed(parts))
 
 
+def normalize_meter_month(value=None):
+    value = (value or "").strip()
+    try:
+        return datetime.strptime(value + "-01", "%Y-%m-%d").strftime("%Y-%m")
+    except ValueError:
+        return date.today().strftime("%Y-%m")
+
+
+def meter_month_reading(db, meter_id, month_label):
+    """آخر قراءة للعداد داخل الشهر المحدد فقط."""
+    month = normalize_meter_month(month_label)
+    row = db.execute(
+        """
+        SELECT *
+        FROM network_meter_readings
+        WHERE meter_id=?
+          AND substr(reading_date,1,7)=?
+        ORDER BY reading_date DESC,id DESC
+        LIMIT 1
+        """,
+        (meter_id, month),
+    ).fetchone()
+    if not row:
+        return None
+    return row
+
+
+def meter_previous_before_month(db, meter_id, month_label, initial_reading=0):
+    """آخر قراءة قبل بداية الشهر، لتثبيت القراءة السابقة الخاصة بالشهر."""
+    month = normalize_meter_month(month_label)
+    row = db.execute(
+        """
+        SELECT reading_value, reading_date, id
+        FROM network_meter_readings
+        WHERE meter_id=?
+          AND substr(reading_date,1,7) < ?
+        ORDER BY reading_date DESC,id DESC
+        LIMIT 1
+        """,
+        (meter_id, month),
+    ).fetchone()
+    if row:
+        return float(row["reading_value"] or 0)
+    return float(initial_reading or 0)
+
+
+def main_meter_month_rows(month_label=None):
+    """بطاقات العدادات الرئيسية للشهر مع حالة قراءة الفروع والمفقودات."""
+    ensure_schema()
+    db = get_db()
+    month = normalize_meter_month(month_label)
+    rows = db.execute(
+        """
+        SELECT m.*, u.name unit_name, l.name location_name
+        FROM network_meters m
+        LEFT JOIN water_units u ON u.id=m.unit_id
+        LEFT JOIN water_locations l ON l.id=m.location_id
+        WHERE m.status='active' AND m.meter_type='main'
+        ORDER BY m.name,m.id
+        """
+    ).fetchall()
+
+    all_locations = flatten_locations()
+    paths = {x["id"]: x["path"] for x in all_locations}
+    out = []
+
+    for meter in rows:
+        current = meter_month_reading(db, meter["id"], month)
+        previous = meter_previous_before_month(db, meter["id"], month, meter["initial_reading"])
+        child_rows = db.execute(
+            """
+            SELECT m.id,m.name,m.meter_number,m.location_id,m.meter_type,
+                   l.name location_name
+            FROM network_meters m
+            LEFT JOIN water_locations l ON l.id=m.location_id
+            WHERE m.parent_meter_id=? AND m.status='active'
+            ORDER BY m.name,m.id
+            """,
+            (meter["id"],),
+        ).fetchall()
+
+        child_cards = []
+        child_read = 0
+        child_consumption = 0.0
+        for child in child_rows:
+            cr = meter_month_reading(db, child["id"], month)
+            cp = meter_previous_before_month(db, child["id"], month, 0)
+            ccons = None
+            if cr:
+                child_read += 1
+                ccons = max(0.0, float(cr["reading_value"] or 0) - cp)
+                child_consumption += ccons
+            child_cards.append({
+                "id": child["id"],
+                "name": child["name"],
+                "meter_number": child["meter_number"],
+                "location_name": child["location_name"],
+                "reading": float(cr["reading_value"] or 0) if cr else None,
+                "previous": cp,
+                "consumption": ccons,
+                "read": bool(cr),
+            })
+
+        subscriber_consumption = 0.0
+        subscriber_count = 0
+        invoice_count = 0
+        if meter["location_id"] and meter["location_id"] in paths:
+            root_path = paths[meter["location_id"]]
+            location_ids = [
+                x["id"] for x in all_locations
+                if x["path"] == root_path or x["path"].startswith(root_path + " / ")
+            ]
+            child_location_ids = [x["location_id"] for x in child_rows if x["location_id"]]
+            excluded = set()
+            for child_location_id in child_location_ids:
+                cp = paths.get(child_location_id)
+                if not cp:
+                    continue
+                excluded.update(
+                    x["id"] for x in all_locations
+                    if x["path"] == cp or x["path"].startswith(cp + " / ")
+                )
+            target = [x for x in location_ids if x not in excluded]
+            if target:
+                marks = ",".join("?" for _ in target)
+                sub_stats = db.execute(
+                    f"""
+                    SELECT COUNT(*) c
+                    FROM subscribers s
+                    WHERE s.active=1 AND s.location_id IN ({marks})
+                    """,
+                    target,
+                ).fetchone()
+                subscriber_count = int(sub_stats["c"] or 0)
+
+                inv_stats = db.execute(
+                    f"""
+                    SELECT COUNT(i.id) c, COALESCE(SUM(i.consumption),0) s
+                    FROM invoices i
+                    JOIN subscribers s ON s.id=i.subscriber_id
+                    WHERE s.active=1
+                      AND s.location_id IN ({marks})
+                      AND substr(COALESCE(i.month_label,i.invoice_date),1,7)=?
+                    """,
+                    target + [month],
+                ).fetchone()
+                invoice_count = int(inv_stats["c"] or 0)
+                subscriber_consumption = float(inv_stats["s"] or 0)
+
+        incoming = None
+        if current:
+            incoming = max(0.0, float(current["reading_value"] or 0) - previous)
+
+        distributed = child_consumption + subscriber_consumption
+        if not current:
+            status = "missing_main"
+            loss = None
+            loss_pct = None
+        elif child_rows and child_read < len(child_rows):
+            status = "missing_children"
+            loss = None
+            loss_pct = None
+        elif subscriber_count and invoice_count == 0:
+            status = "missing_subscribers"
+            loss = None
+            loss_pct = None
+        else:
+            status = "complete"
+            loss = (incoming or 0.0) - distributed
+            loss_pct = (loss / incoming * 100) if incoming else 0.0
+
+        out.append({
+            "id": meter["id"],
+            "name": meter["name"],
+            "meter_number": meter["meter_number"],
+            "unit_name": meter["unit_name"],
+            "location_name": meter["location_name"],
+            "initial_reading": float(meter["initial_reading"] or 0),
+            "previous": previous,
+            "reading": float(current["reading_value"] or 0) if current else None,
+            "reading_date": current["reading_date"] if current else None,
+            "incoming": incoming,
+            "children": child_cards,
+            "child_count": len(child_rows),
+            "child_read_count": child_read,
+            "child_unread_count": len(child_rows) - child_read,
+            "subscriber_count": subscriber_count,
+            "invoice_count": invoice_count,
+            "subscriber_consumption": subscriber_consumption,
+            "children_consumption": child_consumption,
+            "distributed": distributed,
+            "loss": loss,
+            "loss_pct": loss_pct,
+            "status": status,
+        })
+    return out
+
+
 def meter_rows():
     ensure_schema(); db=get_db()
     return db.execute("""
