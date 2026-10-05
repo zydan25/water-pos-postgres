@@ -425,7 +425,7 @@ def api_meter_location(meter_id):
     })
 
 
-@bp.route("/api/subscribers/<int<subscriber_id>/location")
+@bp.route("/api/subscribers/<int:subscriber_id>/location")
 @role_required(["admin", "manager", "technician", "staff", "collector"])
 def api_subscriber_location(subscriber_id):
     db = get_db()
