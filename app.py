@@ -1274,8 +1274,9 @@ def create_app():
             q = request.args.get("q", "").strip()
             status = request.args.get("status", "").strip()
             sort = request.args.get("sort", "added").strip()
-            if sort not in {"added", "name", "arrears", "reading"}:
+            if sort not in {"added", "name", "arrears", "reading", "village"}:
                 sort = "added"
+            location_id = request.args.get("location_id", type=int)
 
             db = get_db()
 
@@ -1323,6 +1324,32 @@ def create_app():
                 like = f"%{q}%"
                 params.extend([like, like, like, like])
 
+            location_path_text = ""
+            if location_id:
+                valid_location = db.execute(
+                    "SELECT id FROM water_locations WHERE id=? AND active=1",
+                    (location_id,),
+                ).fetchone()
+                if valid_location:
+                    sql += """
+                        AND s.location_id IN (
+                            WITH RECURSIVE locs(id) AS (
+                                SELECT ?
+                                UNION ALL
+                                SELECT wl.id
+                                FROM water_locations wl
+                                JOIN locs ON wl.parent_id = locs.id
+                            )
+                            SELECT id FROM locs
+                        )
+                    """
+                    params.append(location_id)
+                    from modules.meter_management.services import location_path as _location_path
+                    location_path_text = _location_path(location_id)
+                else:
+                    location_id = None
+
+
             if status == "active":
                 sql += " AND s.active = 1"
             elif status == "inactive":
@@ -1333,6 +1360,7 @@ def create_app():
                 "name": "LOWER(s.name) ASC, s.id DESC",
                 "arrears": "display_arrears DESC, LOWER(s.name) ASC, s.id DESC",
                 "reading": "display_last_reading DESC, LOWER(s.name) ASC, s.id DESC",
+                "village": "LOWER(COALESCE(s.village, '')) ASC, LOWER(s.name) ASC, s.id DESC",
             }[sort]
             sql += f" ORDER BY {order_sql}"
 
@@ -1345,6 +1373,8 @@ def create_app():
                 selected_account_ids=_selected_account_ids_from_request(),
                 status=status,
                 sort=sort,
+                location_id=location_id,
+                location_path=location_path_text,
             )
     @app.route("/subscribers/<int:subscriber_id>")
     @login_required
