@@ -254,6 +254,11 @@
           العدادات الفرعية: <strong>{{ m.child_read_count }}</strong> مقروءة من <strong>{{ m.child_count }}</strong>
           {% if m.child_unread_count %} · متبقي <strong>{{ m.child_unread_count }}</strong>{% endif %}
         </div>
+        <div class="bulk-child-status {% if m.subscriber_read_count >= m.subscriber_count %}good{% else %}warn{% endif %}">
+          <i class="bi bi-people me-1"></i>
+          قراءات المشتركين: <strong>{{ m.subscriber_read_count }}</strong> / {{ m.subscriber_count }}
+          {% if m.subscriber_count and m.subscriber_read_count < m.subscriber_count %} · متبقي <strong>{{ m.subscriber_count - m.subscriber_read_count }}</strong>{% endif %}
+        </div>
 
         {% if m.children %}
         <div class="bulk-child-list">
