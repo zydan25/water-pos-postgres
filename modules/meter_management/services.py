@@ -53,6 +53,12 @@ def save_location(data, location_id=None):
         raise ValueError("لا يمكن جعل الموقع أبًا لنفسه.")
     location_type = (data.get("location_type") or "منطقة").strip()
     code = (data.get("code") or "").strip() or None
+    if not code:
+        code = f"LOC-{int(datetime.utcnow().timestamp())}"
+        suffix = 1
+        while db.execute("SELECT 1 FROM water_locations WHERE code=? LIMIT 1", (code,)).fetchone():
+            suffix += 1
+            code = f"LOC-{int(datetime.utcnow().timestamp())}-{suffix}"
     sort_order = to_int(data.get("sort_order"), 0) or 0
     notes = (data.get("notes") or "").strip()
     active = 1 if str(data.get("active", "1")) not in {"0","false","False"} else 0
