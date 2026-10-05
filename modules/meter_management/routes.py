@@ -11,7 +11,7 @@ from . import bp
 from .models import ensure_schema
 from .services import (
     delete_location, flatten_locations, location_children_map, location_path, loss_rows, meter_detail as get_meter_detail,
-    meter_rows, record_reading, save_location, save_meter, save_unit, unit_rows,
+    default_unit_id, meter_rows, record_reading, save_location, save_meter, save_unit, unit_rows,
 )
 
 
@@ -179,7 +179,7 @@ def location_new():
         parents=flatten_locations(),
         current_parent_path="",
         blocked_location_id=None,
-        default_unit_id=(units[0]["id"] if units else None),
+        default_unit_id=default_unit_id(),
     )
 
 
@@ -214,7 +214,7 @@ def location_edit(location_id):
         parents=parents,
         current_parent_path=location_path(location["parent_id"]) if location["parent_id"] else "",
         blocked_location_id=location_id,
-        default_unit_id=(location["unit_id"] or (units[0]["id"] if units else None)),
+        default_unit_id=default_unit_id(),
     )
 
 
