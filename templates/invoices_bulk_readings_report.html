@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>تقرير قراءات المشتركين</title>
+<style>
+body{font-family:Tahoma,Arial,sans-serif;margin:22px;color:#1f2937}
+header{border-bottom:2px solid #1769e0;padding-bottom:12px;margin-bottom:16px}
+h1{margin:0 0 6px;font-size:22px}.meta{color:#66758a;font-size:12px}
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:15px}
+.box{border:1px solid #dbe4f0;border-radius:10px;padding:10px}.box small{color:#718096}.box strong{display:block;margin-top:3px;font-size:18px}
+table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe4f0;padding:7px 8px;text-align:right;font-size:11px}
+th{background:#f5f8fc}.missing{color:#b42318;font-weight:800}.entered{color:#18864b;font-weight:800}
+.print{position:fixed;top:12px;left:12px;background:#1769e0;color:#fff;border:0;border-radius:8px;padding:8px 14px}
+@media print{.print{display:none}}
+</style>
+</head>
+<body>
+<button class="print" onclick="window.print()">طباعة</button>
+<header>
+<h1>تقرير قراءات المشتركين</h1>
+<div class="meta">الشهر: {{ month_label }} · الموقع: {{ location_path }}</div>
+</header>
+<div class="summary">
+<div class="box"><small>إجمالي المشتركين</small><strong>{{ total }}</strong></div>
+<div class="box"><small>تم إدخال القراءة</small><strong class="entered">{{ entered }}</strong></div>
+<div class="box"><small>لم تدخل القراءة</small><strong class="missing">{{ missing }}</strong></div>
+</div>
+<table>
+<thead><tr><th>#</th><th>الحساب</th><th>اسم المشترك</th><th>الموقع</th><th>العداد</th><th>السابقة</th><th>الحالية</th><th>الاستهلاك</th><th>المصدر</th></tr></thead>
+<tbody>
+{% for r in rows %}
+<tr>
+<td>{{ loop.index }}</td>
+<td>{{ r.account_number }}</td>
+<td>{{ r.name }}</td>
+<td>{{ r.location_name }}</td>
+<td>{{ r.meter_number or '—' }}</td>
+<td>{{ '%.1f'|format(r.previous) }}</td>
+<td>{% if r.current is not none %}{{ '%.1f'|format(r.current) }}{% else %}<span class="missing">غير مدخلة</span>{% endif %}</td>
+<td>{% if r.consumption is not none %}{{ '%.1f'|format(r.consumption) }}{% else %}—{% endif %}</td>
+<td class="{{ 'entered' if r.complete else 'missing' }}">{{ r.source }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</body>
+</html>
