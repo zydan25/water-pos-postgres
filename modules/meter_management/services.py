@@ -339,7 +339,7 @@ def main_meter_month_rows(month_label=None):
         previous = meter_previous_before_month(db, meter["id"], month, meter["initial_reading"])
         child_rows = db.execute(
             """
-            SELECT m.id,m.name,m.meter_number,m.location_id,m.meter_type,
+            SELECT m.id,m.name,m.meter_number,m.location_id,m.meter_type,m.initial_reading,
                    l.name location_name
             FROM network_meters m
             LEFT JOIN water_locations l ON l.id=m.location_id
@@ -354,7 +354,7 @@ def main_meter_month_rows(month_label=None):
         child_consumption = 0.0
         for child in child_rows:
             cr = meter_month_reading(db, child["id"], month)
-            cp = meter_previous_before_month(db, child["id"], month, 0)
+            cp = meter_previous_before_month(db, child["id"], month, child["initial_reading"])
             ccons = None
             if cr:
                 child_read += 1
