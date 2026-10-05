@@ -2309,7 +2309,7 @@ def create_app():
         }
     
     
-        @app.route("/invoices/bulk-readings", methods=["GET", "POST"])
+    @app.route("/invoices/bulk-readings", methods=["GET", "POST"])
     @login_required
     @role_required(["admin", "staff"])
     def invoices_bulk_readings():
