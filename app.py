@@ -2179,19 +2179,16 @@ def create_app():
         return [int(r["id"]) for r in rows]
     
     
-    def _bulk_previous_reading_map(db, subscriber_ids, month_label):
-        """إرجاع القراءة السابقة وفق ترتيب المصدر الصحيح:
-        1) آخر فاتورة سابقة للمشترك.
-        2) آخر قراءة جماعية محفوظة فقط إذا لم توجد فاتورة سابقة.
-        وتُستخدم بيانات المشترك كاحتياط أخير في المتصلين بهذه الدالة.
+    def _bulk_previous_reading_map(db, subscriber_ids, month_label, allow_bulk=True):
+        """خريطة القراءة السابقة حسب الشهر المختار.
+        - الشهر الحالي: آخر فاتورة سابقة فقط.
+        - الشهر التاريخي: آخر فاتورة سابقة، وإن لم توجد فآخر قراءة جماعية سابقة.
         """
         if not subscriber_ids:
             return {}
         month_label, month_start, _month_end, _reading_date = _bulk_month_dates(month_label)
         marks = ",".join("?" for _ in subscriber_ids)
 
-        # الفاتورة هي المصدر الأساسي للقراءة السابقة؛ لأن القراءة تصبح فاتورة
-        # بعد اعتماد/طباعة الفاتورة، ولا ينبغي أن تتغلب قراءة جماعية أقدم أو أحدث عليها.
         invoice_rows = db.execute(
             f"""
             SELECT subscriber_id, current_reading, invoice_date, month_label, id
@@ -2227,7 +2224,9 @@ def create_app():
             if sid not in result:
                 result[sid] = float(row["current_reading"] or 0)
 
-        # لا ننتقل إلى القراءات الجماعية إلا للمشتركين الذين لا توجد لهم فاتورة سابقة.
+        if not allow_bulk:
+            return result
+
         missing_ids = [sid for sid in subscriber_ids if int(sid) not in result]
         if not missing_ids:
             return result
@@ -2334,10 +2333,16 @@ def create_app():
         except (TypeError, ValueError):
             raise ValueError("أدخل قراءة رقمية صحيحة.")
     
-        if existing:
+        is_current_month = month_label == date.today().strftime("%Y-%m")
+        if existing and not is_current_month:
+            # في الشهر التاريخي نحافظ على السابقة المسجلة مع قراءة ذلك الشهر.
             previous = float(existing["previous_reading"] or 0)
         else:
-            previous_map = _bulk_previous_reading_map(db, [subscriber_id], month_label)
+            # في الشهر الحالي نعيد حساب السابقة من آخر فاتورة، حتى لو كان
+            # هناك سجل جماعي محفوظ سابقًا بقراءة سابقة قديمة.
+            previous_map = _bulk_previous_reading_map(
+                db, [subscriber_id], month_label, allow_bulk=not is_current_month
+            )
             previous = previous_map.get(subscriber_id, float(subscriber["last_reading"] or 0))
     
         if current < previous:
@@ -2471,7 +2476,10 @@ def create_app():
             ).fetchall()
 
         subscriber_ids = [int(s["id"]) for s in subscribers_rows]
-        previous_map = _bulk_previous_reading_map(db, subscriber_ids, month_label)
+        is_current_month = month_label == date.today().strftime("%Y-%m")
+        previous_map = _bulk_previous_reading_map(
+            db, subscriber_ids, month_label, allow_bulk=not is_current_month
+        )
 
         pending_map = {}
         if subscriber_ids:
@@ -2495,7 +2503,7 @@ def create_app():
             marks = ",".join("?" for _ in subscriber_ids)
             invoice_rows = db.execute(
                 f"""
-                SELECT id,subscriber_id,invoice_no,current_reading
+                SELECT id,subscriber_id,invoice_no,current_reading,previous_reading
                 FROM invoices
                 WHERE subscriber_id IN ({marks})
                   AND substr(COALESCE(month_label, invoice_date),1,7)=?
@@ -2514,16 +2522,28 @@ def create_app():
                 if meter.get("location_id") in selected_location_ids
             ]
 
+        is_current_month = month_label == date.today().strftime("%Y-%m")
+        previous_map = _bulk_previous_reading_map(
+            db,
+            subscriber_ids,
+            month_label,
+            allow_bulk=not is_current_month,
+        )
+
         reading_state = {}
         for sub in subscribers_rows:
             sid = int(sub["id"])
             invoice = invoice_map.get(sid)
             pending = pending_map.get(sid)
-            previous = (
-                float(pending["previous_reading"] or 0) if pending else
-                previous_map.get(sid, float(sub["last_reading"] or 0))
-            )
+
             if invoice:
+                # إذا كانت هناك فاتورة في الشهر المختار فهي المرجع النهائي
+                # لقراءة ذلك الشهر، وتظهر القراءة كما ثبتت في الفاتورة.
+                previous = float(
+                    invoice["previous_reading"]
+                    if invoice["previous_reading"] is not None
+                    else previous_map.get(sid, float(sub["last_reading"] or 0))
+                )
                 current = float(invoice["current_reading"] or 0)
                 reading_state[sid] = {
                     "previous": previous,
@@ -2535,8 +2555,26 @@ def create_app():
                     "invoice_no": invoice["invoice_no"],
                     "reading_id": None,
                 }
-            elif pending:
+                continue
+
+            if pending:
+                # القراءة الجماعية المحفوظة في الشهر التاريخي تعرض كما حفظت.
+                # أما الشهر الحالي فيُعاد ربط السابقة بآخر فاتورة قبل الشهر.
+                previous = (
+                    previous_map.get(sid, float(sub["last_reading"] or 0))
+                    if is_current_month
+                    else float(pending["previous_reading"] or 0)
+                )
                 current = float(pending["current_reading"] or 0)
+
+                # إصلاح السابقة المخزنة تلقائيًا للشهر الحالي حتى لا تُنشأ الفاتورة
+                # لاحقًا بمرجع قديم، دون تغيير القراءة الحالية.
+                if is_current_month and abs(float(pending["previous_reading"] or 0) - previous) > 0.000001:
+                    db.execute(
+                        "UPDATE bulk_readings SET previous_reading=?, updated_at=? WHERE id=?",
+                        (previous, now_iso(), pending["id"]),
+                    )
+
                 reading_state[sid] = {
                     "previous": previous,
                     "current": current,
@@ -2547,17 +2585,22 @@ def create_app():
                     "invoice_no": None,
                     "reading_id": int(pending["id"]),
                 }
-            else:
-                reading_state[sid] = {
-                    "previous": previous,
-                    "current": None,
-                    "consumption": None,
-                    "saved": False,
-                    "invoiced": False,
-                    "invoice_id": None,
-                    "invoice_no": None,
-                    "reading_id": None,
-                }
+                continue
+
+            # لا توجد فاتورة ولا قراءة للشهر المختار:
+            # للفترة الحالية نبحث عن آخر فاتورة، والتاريخي يسمح بآخر قراءة جماعية
+            # بعد استنفاد الفواتير؛ وإن لم يوجد شيء فهذه قراءة المشترك الأساسية.
+            previous = previous_map.get(sid, float(sub["last_reading"] or 0))
+            reading_state[sid] = {
+                "previous": previous,
+                "current": None,
+                "consumption": None,
+                "saved": False,
+                "invoiced": False,
+                "invoice_id": None,
+                "invoice_no": None,
+                "reading_id": None,
+            }
 
         return render_template(
             "invoices_bulk_readings.html",
@@ -2628,7 +2671,7 @@ def create_app():
                 pending_map.setdefault(int(row["subscriber_id"]), row)
             for row in db.execute(
                 f"""
-                SELECT id,subscriber_id,invoice_no,current_reading
+                SELECT id,subscriber_id,invoice_no,current_reading,previous_reading
                 FROM invoices
                 WHERE subscriber_id IN ({marks})
                   AND substr(COALESCE(month_label,invoice_date),1,7)=?
@@ -2643,10 +2686,18 @@ def create_app():
             sid = int(sub["id"])
             pending = pending_map.get(sid)
             invoice = invoice_map.get(sid)
-            previous = float(
-                pending["previous_reading"] if pending else
-                previous_map.get(sid, float(sub["last_reading"] or 0))
-            )
+
+            if invoice:
+                previous = float(
+                    invoice["previous_reading"]
+                    if invoice["previous_reading"] is not None
+                    else previous_map.get(sid, float(sub["last_reading"] or 0))
+                )
+            elif pending and not is_current_month:
+                previous = float(pending["previous_reading"] or 0)
+            else:
+                previous = previous_map.get(sid, float(sub["last_reading"] or 0))
+
             current = None
             source = "غير مدخلة"
             if invoice:
@@ -2655,6 +2706,7 @@ def create_app():
             elif pending:
                 current = float(pending["current_reading"] or 0)
                 source = "قراءة محفوظة"
+
             report_rows.append({
                 "account_number": sub["account_number"],
                 "name": sub["name"],
