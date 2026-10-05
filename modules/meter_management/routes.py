@@ -357,20 +357,41 @@ def readings():
 @bp.route("/readings/new", methods=["GET", "POST"])
 @role_required(["admin", "manager", "technician", "staff"])
 def reading_new():
+    requested_month = (
+        request.form.get("month_label", "").strip()
+        if request.method == "POST"
+        else request.args.get("month_label", "").strip()
+    )
+    month_label = normalize_meter_month(requested_month) if requested_month else date.today().strftime("%Y-%m")
+
     if request.method == "POST":
         try:
             record_reading(request.form, session.get("user_id"))
-            flash("تم حفظ القراءة وتسجيل الاستهلاك.", "success")
+            flash("تم حفظ قراءة العداد للشهر المحدد.", "success")
             meter_id = request.form.get("meter_id", type=int)
-            return redirect(url_for("meter_management.readings", meter_id=meter_id))
+            return redirect(url_for("meter_management.readings", meter_id=meter_id, month_label=month_label))
         except Exception as exc:
             get_db().rollback()
             flash(str(exc), "danger")
+
+    meter_id = request.args.get("meter_id", type=int)
+    current = meter_month_reading(get_db(), meter_id, month_label) if meter_id else None
+    selected_date = current["reading_date"] if current else date.today().isoformat()
+    if not current and month_label != date.today().strftime("%Y-%m"):
+        y, m = [int(x) for x in month_label.split("-")]
+        if m == 12:
+            next_month = date(y + 1, 1, 1)
+        else:
+            next_month = date(y, m + 1, 1)
+        selected_date = (next_month - __import__("datetime").timedelta(days=1)).isoformat()
+
     return render_template(
         "meter_management/reading_form.html",
         meters=meter_rows(),
-        today=date.today().isoformat(),
-        prefill_meter=request.args.get("meter_id", type=int),
+        today=selected_date,
+        month_label=month_label,
+        prefill_meter=meter_id,
+        existing_reading=current,
     )
 
 
