@@ -571,15 +571,15 @@ def previous_reading_date_for(db, subscriber_id, before_date):
     row = db.execute(
         """
         SELECT dr.date AS d FROM (
-            SELECT current_reading_date AS date, id AS ord, 0 AS pr
+            SELECT current_reading_date AS date, id AS ord
             FROM invoices
             WHERE subscriber_id=? AND current_reading_date IS NOT NULL AND current_reading_date < ?
             UNION ALL
-            SELECT reading_date AS date, id AS ord, 1 AS pr
+            SELECT reading_date AS date, id AS ord
             FROM bulk_readings
-            WHERE subscriber_id=? AND reading_date < ? AND COALESCE(invoiced,0)=1
+            WHERE subscriber_id=? AND reading_date < ? AND current_reading IS NOT NULL
         ) dr
-        ORDER BY dr.pr, dr.date DESC, dr.ord DESC
+        ORDER BY dr.date DESC, dr.ord DESC
         LIMIT 1
         """,
         (subscriber_id, before_date, subscriber_id, before_date),
