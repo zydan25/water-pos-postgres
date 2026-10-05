@@ -306,7 +306,11 @@ def meter_detail(meter_id):
 def readings():
     db = get_db()
     meter_id = request.args.get("meter_id", type=int)
-    month_label = request.args.get("month_label", "").strip()
+    month_param = request.args.get("month_label")
+    if month_param is not None and month_param.strip().lower() == "all":
+        month_label = ""
+    else:
+        month_label = normalize_meter_month(month_param)
     meter_type = request.args.get("meter_type", "").strip()
     sort = request.args.get("sort", "date").strip()
     sql = """
