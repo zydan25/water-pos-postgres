@@ -13,10 +13,10 @@ table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe4f0;padding
 th{background:#f5f8fc}.missing{color:#b42318;font-weight:800}.entered{color:#18864b;font-weight:800}
 .print{position:fixed;top:12px;left:12px;background:#1769e0;color:#fff;border:0;border-radius:8px;padding:8px 14px}
 @media print{.print{display:none}}
-</style>
+.print-nav-back{position:fixed;top:15px;right:15px;z-index:20;background:#fff;color:#334155;border:1px solid #dbe4f0;border-radius:10px;padding:8px 13px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(15,23,42,.07)}.print-nav-back:hover{background:#f5f8fc;color:#1769e0}@media print{.print-nav-back{display:none}}</style>
 </head>
 <body>
-<button class="print" onclick="window.print()">طباعة</button>
+<button class="print-nav-back" type="button" onclick="returnToApp()">← رجوع</button><button class="print" onclick="window.print()">طباعة</button>
 <header>
 <h1>تقرير قراءات المشتركين</h1>
 <div class="meta">الشهر: {{ month_label }} · الموقع: {{ location_path }}</div>
@@ -44,5 +44,22 @@ th{background:#f5f8fc}.missing{color:#b42318;font-weight:800}.entered{color:#188
 {% endfor %}
 </tbody>
 </table>
-</body>
+<script>
+function returnToApp(){
+  var ref=document.referrer||'';
+  if(ref){window.location.href=ref;return;}
+  if(window.history.length>1){window.history.back();return;}
+  window.location.href='/';
+}
+(function(){
+  try{
+    history.pushState({__waterPrintGuard:true},'',location.href);
+    window.addEventListener('popstate',function(){
+      var ref=document.referrer||'';
+      if(ref){window.location.href=ref;}
+      else{window.location.href='/';}
+    });
+  }catch(e){}
+})();
+</script></body>
 </html>
