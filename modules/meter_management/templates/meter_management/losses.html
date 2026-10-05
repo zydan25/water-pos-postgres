@@ -7,14 +7,56 @@
   <div class="mm-page-title">
     <div>
       <div class="mm-eyebrow">الرقابة التشغيلية</div>
-      <h3>لوحة المفقودات الشهرية</h3>
-      <div class="text-muted">الحساب خاص بشهر {{ month_label }} فقط ولا يخلط بيانات شهر آخر.</div>
+      <h3>{% if all_months %}سجل المفقودات لكل الأشهر{% else %}لوحة المفقودات الشهرية{% endif %}</h3>
+      <div class="text-muted">
+        {% if all_months %}مراجعة شهرية مستقلة دون خلط استهلاك أو قراءات شهر بآخر.{% else %}الحساب خاص بشهر {{ month_label }} فقط ولا يخلط بيانات شهر آخر.{% endif %}
+      </div>
     </div>
     <div class="mm-actions">
-      <a class="btn btn-outline-primary" href="{{ url_for('meter_management.readings',month_label=month_label,meter_type='main') }}"><i class="bi bi-speedometer2"></i> قراءات الرئيسية</a>
-      <a class="btn btn-outline-dark" href="{{ url_for('meter_management.print_losses',month_label=month_label) }}" target="_blank"><i class="bi bi-printer"></i> تقرير وطباعة</a>
+      {% if all_months %}
+        <a class="btn btn-primary" href="{{ url_for('meter_management.losses') }}"><i class="bi bi-calendar-month"></i> الشهر الحالي</a>
+        <a class="btn btn-outline-dark" href="{{ url_for('meter_management.print_losses') }}" target="_blank"><i class="bi bi-printer"></i> تقرير الشهر الحالي</a>
+      {% else %}
+        <a class="btn btn-outline-primary" href="{{ url_for('meter_management.readings',month_label=month_label,meter_type='main') }}"><i class="bi bi-speedometer2"></i> قراءات الرئيسية</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('meter_management.losses',month_label='all') }}"><i class="bi bi-calendar3"></i> كل الأشهر</a>
+        <a class="btn btn-outline-dark" href="{{ url_for('meter_management.print_losses',month_label=month_label) }}" target="_blank"><i class="bi bi-printer"></i> تقرير وطباعة</a>
+      {% endif %}
     </div>
   </div>
+
+  {% if all_months %}
+  <div class="mm-card">
+    <div class="mm-card-head">
+      <div><h5>ملخص المفقودات الشهري</h5><span>افتح أي شهر لرؤية تفاصيل العدادات الرئيسية وحالة القراءات.</span></div>
+      <span class="mm-pill">{{ month_summaries|length }} شهر</span>
+    </div>
+    <div class="mm-all-months-grid">
+      {% for m in month_summaries %}
+      <div class="mm-all-month-card">
+        <div class="d-flex justify-content-between align-items-center gap-2">
+          <strong>{{ m.month_label }}</strong>
+          {% if m.incomplete_count %}
+            <span class="badge text-bg-warning">{{ m.incomplete_count }} ناقص</span>
+          {% else %}
+            <span class="badge text-bg-success">مكتمل</span>
+          {% endif %}
+        </div>
+        <div class="mm-all-month-metrics">
+          <div><small>الرئيسية</small><b>{{ m.main_read }} / {{ m.main_total }}</b></div>
+          <div><small>الفروع</small><b>{{ m.child_read }} / {{ m.child_total }}</b></div>
+          <div><small>الفقد</small><b class="text-danger">{{ '%.1f'|format(m.total_loss) }}</b></div>
+          <div><small>النسبة</small><b>{{ '%.1f'|format(m.total_pct) }}%</b></div>
+        </div>
+        <a class="btn btn-sm btn-outline-primary w-100 mt-3" href="{{ url_for('meter_management.losses',month_label=m.month_label) }}">
+          <i class="bi bi-eye me-1"></i>تفاصيل {{ m.month_label }}
+        </a>
+      </div>
+      {% else %}
+      <div class="mm-empty">لا توجد أشهر مسجلة بعد.</div>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
 
   <div class="mm-month-panel">
     <div>
@@ -22,7 +64,7 @@
       <strong>مفقودات شبكة المياه · {{ month_label }}</strong>
     </div>
     <form class="d-flex align-items-end gap-2 flex-wrap">
-      <select name="month_label" class="form-select" style="height:44px;min-width:180px;border-radius:12px" onchange="this.form.submit()">
+      <select name="month_label" class="form-select" style="height:44px;min-width:180px;border-radius:12px">
         {% for m in months %}
           <option value="{{ m }}" {% if m==month_label %}selected{% endif %}>{{ m }}</option>
         {% endfor %}
@@ -45,7 +87,7 @@
     <i class="bi bi-exclamation-triangle-fill mt-1"></i>
     <div>
       <strong>هناك قراءات ناقصة لهذا الشهر.</strong>
-      لن يظهر رقم مفقودات لعداد غير مكتمل، حتى لا يؤثر نقص القراءة على التقارير.
+      لن يظهر رقم مفقود لعداد غير مكتمل، حتى لا يؤثر نقص القراءة على التقارير.
       <div class="small mt-1">المقارنات المكتملة {{ complete_count }} · غير المكتملة {{ incomplete_count }} · الفروع غير المقروءة {{ child_unread }}.</div>
     </div>
   </div>
@@ -61,7 +103,9 @@
             <div class="mm-main-meter-number">{{ r.meter_number }}</div>
           </div>
           {% if r.status=='complete' %}
-            <span class="badge {% if r.loss_pct>10 %}text-bg-danger{% elif r.loss_pct>5 %}text-bg-warning{% else %}text-bg-success{% endif %}">{{ '%.1f'|format(r.loss_pct) }}%</span>
+            <span class="badge {% if r.loss<0 or r.loss_pct>10 %}text-bg-danger{% elif r.loss_pct>5 %}text-bg-warning{% else %}text-bg-success{% endif %}">
+              {{ '%.1f'|format(r.loss_pct) }}%
+            </span>
           {% elif r.status=='missing_main' %}
             <span class="badge text-bg-danger">قراءة رئيسية ناقصة</span>
           {% elif r.status=='missing_children' %}
@@ -81,10 +125,12 @@
 
         <div class="mm-loss-detail-list">
           <div><span>عدادات فرعية</span><strong>{{ r.child_read_count }} مقروءة / {{ r.child_count }} إجمالاً</strong></div>
-          <div><span>استهلاك الفروع</span><strong>{{ '%.1f'|format(r.children_consumption) }}</strong></div>
           <div><span>قراءات المشتركين</span><strong>{{ r.subscriber_read_count }} / {{ r.subscriber_count }}</strong></div>
+          <div><span>استهلاك الفروع</span><strong>{{ '%.1f'|format(r.children_consumption) }}</strong></div>
           <div><span>استهلاك المشتركين</span><strong>{{ '%.1f'|format(r.subscriber_consumption) }}</strong></div>
-          <div><span>المفقودات</span><strong class="{% if r.loss is not none and r.loss>0 %}text-danger{% elif r.loss is not none %}text-success{% endif %}">{% if r.loss is not none %}{{ '%.1f'|format(r.loss) }} وحدة · {{ '%.1f'|format(r.loss_pct) }}%{% else %}غير محسوبة{% endif %}</strong></div>
+          <div><span>المفقودات</span><strong class="{% if r.loss is not none and (r.loss>0 or r.loss<0) %}text-danger{% endif %}">
+            {% if r.loss is not none %}{{ '%.1f'|format(r.loss) }} وحدة · {{ '%.1f'|format(r.loss_pct) }}%{% else %}غير محسوبة{% endif %}
+          </strong></div>
         </div>
 
         {% if r.status=='missing_main' %}
@@ -92,9 +138,9 @@
         {% elif r.status=='missing_children' %}
           <div class="mm-loss-state warn"><i class="bi bi-diagram-3 me-1"></i>يوجد {{ r.child_unread_count }} عداد فرعي لم تُدخل قراءته لهذا الشهر.</div>
         {% elif r.status=='missing_subscribers' %}
-          <div class="mm-loss-state warn"><i class="bi bi-people me-1"></i>لم تكتمل بيانات استهلاك المشتركين لهذا الشهر.</div>
+          <div class="mm-loss-state warn"><i class="bi bi-people me-1"></i>يوجد {{ r.subscriber_count - r.subscriber_read_count }} مشترك لم تدخل قراءته لهذا الشهر.</div>
         {% else %}
-          <div class="mm-loss-state good"><i class="bi bi-check-circle me-1"></i>الحساب مكتمل ويمكن الاعتماد على مفقوداته لهذا الشهر.</div>
+          <div class="mm-loss-state good"><i class="bi bi-check-circle me-1"></i>اكتملت القراءات ويمكن الاعتماد على مفقودات هذا الشهر.</div>
         {% endif %}
 
         <div class="mm-main-meter-actions">
@@ -108,5 +154,6 @@
       <div class="col-12"><div class="mm-card mm-empty">لا توجد عدادات رئيسية لهذا الاختيار.</div></div>
     {% endfor %}
   </div>
+  {% endif %}
 </div>
 {% endblock %}
