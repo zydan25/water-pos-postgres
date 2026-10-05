@@ -399,6 +399,7 @@ def init_db(app):
             FOREIGN KEY(subscriber_id) REFERENCES subscribers(id)
         )""")
 
+        db.execute("CREATE INDEX IF NOT EXISTS ix_bulk_readings_subscriber_month ON bulk_readings(subscriber_id, month_label)")
         # 4. جدول السندات والمدفوعات
         db.execute("""
         CREATE TABLE IF NOT EXISTS payments (
