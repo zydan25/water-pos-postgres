@@ -7,53 +7,138 @@
 {% block content %}
 <div class="container-fluid mm-page">
   <div class="mm-hero">
-    <div><div class="mm-eyebrow">إدارة الشبكة</div><h2>العدادات والوحدات</h2><div class="text-muted">مركز تشغيل الشبكة ومتابعة القراءات والمفقودات</div></div>
+    <div>
+      <div class="mm-eyebrow">إدارة الشبكة</div>
+      <h2>لوحة تشغيل شبكة المياه</h2>
+      <div class="text-muted">متابعة العدادات الرئيسية والفرعية والقراءات والمفقودات حسب الشهر.</div>
+    </div>
     <div class="mm-actions">
       <a class="btn btn-primary" href="{{ url_for('meter_management.meter_new') }}"><i class="bi bi-plus-circle"></i> عداد رئيسي</a>
-      <a class="btn btn-outline-primary" href="{{ url_for('meter_management.locations') }}"><i class="bi bi-geo-alt"></i> إدارة المناطق والقرى</a>
-      <a class="btn btn-outline-secondary" href="{{ url_for('meter_management.location_new') }}"><i class="bi bi-plus"></i> إضافة موقع</a>
-      <a class="btn btn-outline-secondary" href="{{ url_for('meter_management.reading_new') }}"><i class="bi bi-speedometer2"></i> قراءة</a>
+      <a class="btn btn-outline-primary" href="{{ url_for('meter_management.locations') }}"><i class="bi bi-geo-alt"></i> المناطق والقرى</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('meter_management.reading_new') }}"><i class="bi bi-speedometer2"></i> قراءة عداد</a>
     </div>
+  </div>
+
+  <div class="mm-month-panel">
+    <div>
+      <div class="mm-month-caption">الشهر التشغيلي للوحة</div>
+      <strong>قراءات ومفقودات شهر {{ month_label }}</strong>
+    </div>
+    <form class="d-flex align-items-end gap-2" method="get">
+      <div><input type="month" name="month_label" class="form-control" value="{{ month_label }}"></div>
+      <button class="btn btn-primary"><i class="bi bi-arrow-repeat"></i> تحديث</button>
+    </form>
   </div>
 
   <div class="row g-2 mm-stats">
-    {% for value,label,icon in [(stats.units,'الوحدات','bi-diagram-3'),(stats.locations,'المواقع','bi-geo-alt'),(stats.main_meters,'العدادات الرئيسية','bi-speedometer'),(stats.meters,'كل عدادات الشبكة','bi-bezier2'),(stats.linked_subscribers,'مشتركون مرتبطون','bi-people'),(stats.unlinked_subscribers,'مشتركون بلا موقع','bi-exclamation-triangle')] %}
+    {% for value,label,icon in [
+      (stats.units,'الوحدات','bi-diagram-3'),
+      (stats.locations,'المواقع','bi-geo-alt'),
+      (stats.main_meters,'العدادات الرئيسية','bi-speedometer'),
+      (stats.meters,'كل عدادات الشبكة','bi-bezier2'),
+      (monthly.main_read,'رئيسية مقروءة','bi-check2-circle'),
+      (monthly.main_unread,'رئيسية غير مقروءة','bi-exclamation-circle')
+    ] %}
     <div class="col-6 col-md-4 col-xl-2"><div class="mm-stat-card"><i class="bi {{ icon }}"></i><div class="mm-stat-value">{{ value }}</div><div class="mm-stat-label">{{ label }}</div></div></div>
     {% endfor %}
-  </div>
-
-  <div class="row g-3 mt-1">
-    <div class="col-xl-7">
-      <div class="mm-card h-100">
-        <div class="mm-card-head"><div><h5>العدادات الرئيسية</h5><span>البنية الأساسية للشبكة</span></div><a href="{{ url_for('meter_management.meters') }}">عرض الكل</a></div>
-        <div class="mm-grid-cards">
-          {% for m in meters %}<div class="mm-mini-card"><div class="d-flex justify-content-between"><strong>{{ m.name }}</strong><span class="badge text-bg-light">{{ 'رئيسي' if m.meter_type=='main' else 'فرعي' }}</span></div><div class="small text-muted">{{ m.meter_number }}{% if m.location_name %} · {{ m.location_name }}{% endif %}</div><div class="mm-mini-value">{{ '%.0f'|format(m.last_reading or m.initial_reading or 0) }}</div><div class="small text-muted">آخر قراءة</div><a class="btn btn-sm btn-outline-primary mt-2" href="{{ url_for('meter_management.meter_detail',meter_id=m.id) }}">التفاصيل</a></div>{% else %}<div class="mm-empty">لا توجد عدادات شبكة بعد.</div>{% endfor %}
-        </div>
-      </div>
-    </div>
-    <div class="col-xl-5">
-      <div class="mm-card h-100">
-        <div class="mm-card-head"><div><h5>الوحدات</h5><span>الكيانات التشغيلية</span></div><a href="{{ url_for('meter_management.units') }}">إدارة</a></div>
-        {% for u in units %}<div class="mm-list-row"><div><strong>{{ u.name }}</strong><div class="small text-muted">{{ u.code }}</div></div><span class="mm-pill">{{ u.location_count }} موقع · {{ u.meter_count }} عداد</span></div>{% else %}<div class="mm-empty">أضف أول وحدة تشغيلية.</div>{% endfor %}
-      </div>
-    </div>
   </div>
 
   <div class="mm-card mt-3">
     <div class="mm-card-head">
       <div>
-        <h5><i class="bi bi-geo-alt me-1"></i>المناطق والقرى</h5>
-        <span>شجرة المواقع المستخدمة مع المشتركين والعدادات</span>
+        <h5><i class="bi bi-speedometer2 me-1"></i>العدادات الرئيسية · {{ month_label }}</h5>
+        <span>قراءة الشهر الحالية، السابقة، استهلاك الشهر، والفروع المرتبطة.</span>
       </div>
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('meter_management.locations') }}">إدارة المناطق والقرى</a>
+      <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('meter_management.readings',month_label=month_label,meter_type='main') }}">سجل القراءات</a>
+        <a class="btn btn-sm btn-outline-danger" href="{{ url_for('meter_management.losses',month_label=month_label) }}">المفقودات</a>
+      </div>
     </div>
-    <div class="mm-tree" data-unit-id="__all__"></div>
+
+    <div class="mm-main-meter-grid">
+      {% for m in main_meters %}
+      <div class="mm-main-meter-card {% if m.reading is none %}missing{% endif %}">
+        <div class="mm-main-meter-head">
+          <div class="min-w-0">
+            <div class="mm-main-meter-name">{{ m.name }}</div>
+            <div class="mm-main-meter-number">{{ m.meter_number }}</div>
+          </div>
+          {% if m.reading is none %}
+            <span class="badge text-bg-danger">لم تدخل قراءة</span>
+          {% elif m.status == 'complete' %}
+            <span class="badge text-bg-success">مكتمل</span>
+          {% else %}
+            <span class="badge text-bg-warning">بيانات ناقصة</span>
+          {% endif %}
+        </div>
+
+        <div class="mm-main-meter-location"><i class="bi bi-geo-alt me-1"></i>{{ m.location_name or 'بدون موقع' }}</div>
+
+        <div class="mm-main-reading">
+          <div><small>السابقة</small><strong>{{ '%.1f'|format(m.previous) }}</strong></div>
+          <div class="current"><small>قراءة {{ month_label }}</small><strong>{% if m.reading is not none %}{{ '%.1f'|format(m.reading) }}{% else %}—{% endif %}</strong></div>
+          <div><small>استهلاك الشهر</small><strong>{% if m.incoming is not none %}{{ '%.1f'|format(m.incoming) }}{% else %}—{% endif %}</strong></div>
+        </div>
+
+        <div class="mm-main-meter-status">
+          <span><i class="bi bi-diagram-3 me-1"></i>الفروع: <strong>{{ m.child_read_count }}</strong> / {{ m.child_count }} قراءة</span>
+          <span>{% if m.child_unread_count %}<b class="text-danger">{{ m.child_unread_count }} ناقصة</b>{% else %}<b class="text-success">كلها مقروءة</b>{% endif %}</span>
+        </div>
+        <div class="mm-child-progress"><span style="width:{{ ((m.child_read_count / m.child_count * 100) if m.child_count else 100)|round(0) }}%"></span></div>
+
+        <div class="mm-detail-list mt-2">
+          <div><span>المشتركون داخل النطاق</span><strong>{{ m.subscriber_count }}</strong></div>
+          <div><span>استهلاك الفواتير للشهر</span><strong>{{ '%.1f'|format(m.subscriber_consumption) }}</strong></div>
+          <div><span>المفقودات</span><strong class="{% if m.loss is not none and m.loss>0 %}text-danger{% elif m.loss is not none %}text-success{% endif %}">{% if m.loss is not none %}{{ '%.1f'|format(m.loss) }} ({{ '%.1f'|format(m.loss_pct) }}%){% else %}غير محسوبة{% endif %}</strong></div>
+        </div>
+
+        <div class="mm-main-meter-actions">
+          <a class="btn btn-sm btn-primary" href="{{ url_for('meter_management.reading_new',meter_id=m.id) }}"><i class="bi bi-pencil-square"></i> قراءة</a>
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('meter_management.readings',meter_id=m.id,month_label=month_label) }}"><i class="bi bi-file-text"></i> تقرير</a>
+          <a class="btn btn-sm btn-outline-danger" href="{{ url_for('meter_management.losses',month_label=month_label,meter_id=m.id) }}"><i class="bi bi-droplet-half"></i> مفقودات</a>
+          <a class="btn btn-sm btn-outline-dark" href="{{ url_for('meter_management.meter_detail',meter_id=m.id) }}">التفاصيل</a>
+        </div>
+      </div>
+      {% else %}
+      <div class="mm-empty">لا توجد عدادات رئيسية حتى الآن.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="row g-3 mt-1">
+    <div class="col-xl-7">
+      <div class="mm-card h-100">
+        <div class="mm-card-head"><div><h5>المناطق والقرى</h5><span>شجرة المواقع المستخدمة مع المشتركين والعدادات</span></div><a class="btn btn-sm btn-outline-primary" href="{{ url_for('meter_management.locations') }}">إدارة</a></div>
+        <div class="mm-tree" data-unit-id="__all__"></div>
+      </div>
+    </div>
+    <div class="col-xl-5">
+      <div class="mm-card h-100">
+        <div class="mm-card-head"><div><h5>المفقودات · {{ month_label }}</h5><span>حسب قراءات الشهر المحدد فقط</span></div><a href="{{ url_for('meter_management.losses',month_label=month_label) }}">عرض الكل</a></div>
+        <div class="mm-loss-summary-grid">
+          <div class="mm-loss-summary-item"><small>الوارد</small><strong>{{ '%.1f'|format(monthly.total_in) }}</strong></div>
+          <div class="mm-loss-summary-item"><small>الموزع</small><strong>{{ '%.1f'|format(monthly.total_dist) }}</strong></div>
+          <div class="mm-loss-summary-item danger"><small>الفقد</small><strong>{{ '%.1f'|format(monthly.total_loss) }}</strong></div>
+          <div class="mm-loss-summary-item warning"><small>النسبة</small><strong>{{ '%.1f'|format(monthly.total_pct) }}%</strong></div>
+        </div>
+        <div class="mm-loss-state {% if monthly.incomplete_count %}warn{% else %}good{% endif %}">
+          <i class="bi {% if monthly.incomplete_count %}bi-exclamation-triangle{% else %}bi-check-circle{% endif %} me-1"></i>
+          {% if monthly.incomplete_count %}
+            توجد {{ monthly.incomplete_count }} عدادات رئيسية أو مقارنات غير مكتملة؛ لا يتم احتساب فقد غير موثوق لها.
+          {% else %}
+            جميع مقارنات العدادات الرئيسية للشهر مكتملة.
+          {% endif %}
+        </div>
+        <div class="small text-muted mt-3">العدادات الفرعية المقروءة: <strong>{{ monthly.child_read }}</strong> / {{ monthly.child_total }}.</div>
+      </div>
+    </div>
   </div>
 
   <div class="mm-card mt-3">
-    <div class="mm-card-head"><div><h5>المفقودات</h5><span>مقارنة تدفق الشبكة بالاستهلاك الموزع</span></div><a href="{{ url_for('meter_management.losses') }}">تقرير كامل</a></div>
-    <div class="table-responsive"><table class="table mm-table align-middle"><thead><tr><th>العداد</th><th>الوارد</th><th>الموزع</th><th>الفقد</th><th>الحالة</th></tr></thead><tbody>{% for r in loss_rows %}<tr><td><strong>{{ r.name }}</strong><div class="small text-muted">{{ r.meter_number }}</div></td><td>{{ '%.1f'|format(r.incoming) }}</td><td>{{ '%.1f'|format(r.distributed) }}</td><td class="{% if r.status=='complete' and r.loss>0 %}text-danger{% else %}text-success{% endif %} fw-bold">{% if r.status=='complete' %}{{ '%.1f'|format(r.loss) }}{% else %}—{% endif %}</td><td><span class="badge {% if r.status=='complete' %}text-bg-success{% else %}text-bg-secondary{% endif %}">{% if r.status=='complete' %}{{ '%.1f'|format(r.loss_pct) }}%{% elif r.status=='no_meter_readings' %}لا توجد قراءة{% else %}بيانات غير مكتملة{% endif %}</span></td></tr>{% else %}<tr><td colspan="5" class="text-center text-muted py-4">لا توجد بيانات كافية.</td></tr>{% endfor %}</tbody></table></div>
-    <div class="d-flex flex-wrap gap-2 mt-2"><a class="btn btn-outline-secondary" href="{{ url_for('meter_management.print_losses') }}" target="_blank"><i class="bi bi-printer"></i> طباعة التقرير</a><a class="btn btn-outline-dark" href="{{ url_for('meter_management.print_network') }}" target="_blank"><i class="bi bi-diagram-3"></i> طباعة شبكة العدادات</a></div>
+    <div class="mm-card-head"><div><h5>الوحدات التشغيلية</h5><span>ملخص سريع</span></div><a href="{{ url_for('meter_management.units') }}">إدارة</a></div>
+    {% for u in units %}
+      <div class="mm-list-row"><div><strong>{{ u.name }}</strong><div class="small text-muted">{{ u.code }}</div></div><span class="mm-pill">{{ u.location_count }} موقع · {{ u.meter_count }} عداد</span></div>
+    {% else %}<div class="mm-empty">لا توجد وحدات.</div>{% endfor %}
   </div>
 </div>
 {% endblock %}
