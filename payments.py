@@ -112,3 +112,12 @@ def add():
         db.rollback()
         flash(f"حدث خطأ أثناء التسديد: {exc}", "danger")
     return redirect(url_for("payments.index"))
+
+
+@bp.record_once
+def _register_meter_management(state):
+    # إبقاء app.py كما هو: التطبيق الجديد يُسجَّل تلقائيًا عند تسجيل Blueprint السداد.
+    from modules.meter_management import bp as meter_management_bp
+
+    if "meter_management" not in state.app.blueprints:
+        state.app.register_blueprint(meter_management_bp, url_prefix="/meter-management")
