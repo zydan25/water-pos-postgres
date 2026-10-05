@@ -2316,33 +2316,41 @@ def create_app():
             if subscriber["location_id"] not in set(location_ids):
                 raise ValueError("هذا المشترك ليس ضمن الموقع المحدد أو فروعه.")
     
-        invoice = db.execute(
+        invoice = None
+        invoice_rows = db.execute(
             """
-            SELECT id,invoice_no,current_reading
+            SELECT id,invoice_no,current_reading,invoice_date,month_label
             FROM invoices
-            WHERE subscriber_id=?
-              AND substr(COALESCE(month_label, invoice_date), 1, 7)=?
+            WHERE subscriber_id=? AND current_reading IS NOT NULL
             ORDER BY id DESC
-            LIMIT 1
             """,
-            (subscriber_id, month_label),
-        ).fetchone()
+            (subscriber_id,),
+        ).fetchall()
+        for row in invoice_rows:
+            if _bulk_invoice_month_key(row) == month_label:
+                invoice = row
+                break
+
         if invoice:
-            raise ValueError(f"تم إصدار الفاتورة رقم {invoice['invoice_no']} لهذا المشترك في شهر {month_label}.")
-    
-        existing = db.execute(
+            raise ValueError(
+                f"تم إصدار الفاتورة رقم {invoice['invoice_no']} لهذا المشترك في شهر {month_label}."
+            )
+
+        existing = None
+        bulk_rows = db.execute(
             """
             SELECT *
             FROM bulk_readings
-            WHERE subscriber_id=?
-              AND substr(COALESCE(month_label, reading_date), 1, 7)=?
-              AND COALESCE(invoiced,0)=0
+            WHERE subscriber_id=? AND current_reading IS NOT NULL
             ORDER BY id DESC
-            LIMIT 1
             """,
-            (subscriber_id, month_label),
-        ).fetchone()
-    
+            (subscriber_id,),
+        ).fetchall()
+        for row in bulk_rows:
+            if _bulk_reading_month_key(row) == month_label and not int(row["invoiced"] or 0):
+                existing = row
+                break
+
         raw = "" if current_value is None else str(current_value).strip()
         if raw == "":
             if existing:
