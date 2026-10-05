@@ -1,26 +1,42 @@
 {% extends "base.html" %}
-{% block head %}<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/meter_management.css') }}">{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/meter_management.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mm-page">
-  <div class="mm-page-title"><div><div class="mm-eyebrow">الشبكة الجغرافية</div><h3>المناطق والقرى</h3><div class="text-muted">شجرة واحدة قابلة للتفرع وتستخدم لربط المشتركين والعدادات.</div></div><div class="mm-actions"><a class="btn btn-primary" href="{{ url_for('meter_management.location_new') }}"><i class="bi bi-plus-circle"></i> إضافة موقع</a><a class="btn btn-outline-primary" href="{{ url_for('meter_management.unit_new') }}">وحدة تشغيلية</a><a class="btn btn-outline-dark" href="{{ url_for('meter_management.print_network') }}" target="_blank"><i class="bi bi-printer"></i> طباعة</a></div></div>
+  <div class="mm-page-title">
+    <div>
+      <div class="mm-eyebrow">الشبكة الجغرافية</div>
+      <h3>المناطق والقرى</h3>
+      <div class="text-muted">جميع المناطق والقرى والمواقع في شجرة واحدة، وتستخدم لربط المشتركين والعدادات.</div>
+    </div>
+    <div class="mm-actions">
+      <a class="btn btn-primary" href="{{ url_for('meter_management.location_new') }}">
+        <i class="bi bi-plus-circle"></i> إضافة موقع
+      </a>
+      <a class="btn btn-outline-primary" href="{{ url_for('meter_management.unit_new') }}">وحدة تشغيلية</a>
+      <a class="btn btn-outline-dark" href="{{ url_for('meter_management.print_network') }}" target="_blank">
+        <i class="bi bi-printer"></i> طباعة
+      </a>
+    </div>
+  </div>
 
   <div class="row g-3">
-    {% for u in units %}
     <div class="col-12">
       <div class="mm-card">
-        <div class="mm-card-head"><div><span class="mm-code">{{ u.code }}</span><h5>{{ u.name }}</h5><span>{{ u.location_count }} موقع · {{ u.meter_count }} عداد</span></div><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('meter_management.unit_edit',unit_id=u.id) }}">تعديل الوحدة</a></div>
-        <div id="tree-{{ u.id }}" class="mm-tree" data-unit-id="{{ u.id }}"></div>
-      </div>
-    </div>
-    {% endfor %}
-
-    <div class="col-12">
-      <div class="mm-card">
-        <div class="mm-card-head"><div><h5>مواقع غير مصنفة</h5><span>المواقع القديمة التي تم تحويلها من حقل القرية دون تغيير بيانات المشترك.</span></div></div>
-        <div id="tree-unassigned" class="mm-tree" data-unit-id="__none__"></div>
+        <div class="mm-card-head">
+          <div>
+            <h5>شجرة المناطق والقرى</h5>
+            <span>تظهر هنا كل المواقع بمختلف مستوياتها دون اشتراط ربطها بوحدة تشغيلية.</span>
+          </div>
+        </div>
+        <div id="tree-all-locations" class="mm-tree" data-unit-id="__all__"></div>
       </div>
     </div>
   </div>
 </div>
-<script>window.MM_LOCATIONS={{ tree|tojson }};</script><script src="{{ url_for('meter_management.static',filename='js/tree.js') }}"></script>
+
+<script>window.MM_LOCATIONS={{ tree|tojson }};</script>
+<script src="{{ url_for('meter_management.static',filename='js/tree.js') }}"></script>
 {% endblock %}
