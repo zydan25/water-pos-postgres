@@ -93,7 +93,7 @@
         </div>
 
         <div class="mm-main-meter-actions">
-          <a class="btn btn-sm btn-primary" href="{{ url_for('meter_management.reading_new',meter_id=m.id) }}"><i class="bi bi-pencil-square"></i> قراءة</a>
+          <a class="btn btn-sm btn-primary" href="{{ url_for('meter_management.reading_new',meter_id=m.id,month_label=month_label) }}"><i class="bi bi-pencil-square"></i> قراءة</a>
           <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('meter_management.readings',meter_id=m.id,month_label=month_label) }}"><i class="bi bi-file-text"></i> تقرير</a>
           <a class="btn btn-sm btn-outline-danger" href="{{ url_for('meter_management.losses',month_label=month_label,meter_id=m.id) }}"><i class="bi bi-droplet-half"></i> مفقودات</a>
           <a class="btn btn-sm btn-outline-dark" href="{{ url_for('meter_management.meter_detail',meter_id=m.id) }}">التفاصيل</a>
