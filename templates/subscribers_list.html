@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block head %}
+<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/subscriber_location.css') }}">
 <style>
   .subscriber-page{padding-bottom:1rem}
   .subscriber-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
@@ -72,6 +73,30 @@
   .subscriber-search-control .position-relative{max-width:430px;width:100%}
   .subscriber-search-control input{padding-left:36px}
   .subscriber-search-icon{left:12px;pointer-events:none}
+  .subscriber-location-filter{position:relative;min-width:280px;flex:1}
+  .subscriber-location-trigger{width:100%;min-height:38px;background:#fff;border:1px solid #d7e0eb;border-radius:10px;padding:7px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:right}
+  .subscriber-location-trigger.open{border-color:#8bb5ef;box-shadow:0 0 0 3px rgba(23,105,224,.08)}
+  .subscriber-location-value{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#374151;font-size:.78rem}
+  .subscriber-location-value.placeholder{color:#8b97a8}
+  .subscriber-location-panel{position:absolute;z-index:1085;right:0;left:0;top:calc(100% + 6px);background:#fff;border:1px solid #dce4ee;border-radius:14px;box-shadow:0 16px 40px rgba(15,23,42,.14);padding:9px;display:none}
+  .subscriber-location-panel.open{display:block}
+  .subscriber-location-search{margin-bottom:7px}
+  .subscriber-location-tree{max-height:280px;overflow:auto;padding:2px}
+  .subscriber-location-node{border-bottom:1px solid #f3f5f8}
+  .subscriber-location-node:last-child{border-bottom:0}
+  .subscriber-location-row{display:flex;align-items:center;gap:6px;padding:7px 3px;border-radius:9px}
+  .subscriber-location-row:hover{background:#f5f8fd}
+  .subscriber-location-arrow{width:26px;height:26px;border:0;background:#f4f6f9;border-radius:7px;color:#667085;display:flex;align-items:center;justify-content:center;flex:none}
+  .subscriber-location-indent{width:26px;flex:none}
+  .subscriber-location-label{min-width:0;flex:1;cursor:pointer}
+  .subscriber-location-name{font-size:.78rem;font-weight:800;color:#1f2937;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .subscriber-location-meta{font-size:.63rem;color:#8490a3;margin-top:1px}
+  .subscriber-location-children{margin-right:25px;border-right:1px dashed #d7e0ea;padding-right:6px}
+  .subscriber-location-result{padding:8px;border-radius:9px;cursor:pointer}
+  .subscriber-location-result:hover{background:#f5f8fd}
+  .subscriber-location-path{font-size:.64rem;color:#7b8798;margin-top:1px}
+  .subscriber-location-clear{font-size:.7rem;color:#6b7280;cursor:pointer;padding:5px 4px;display:inline-block}
+  .subscriber-location-clear:hover{color:#dc2626}
   @media(max-width:767.98px){
     .subscriber-controls-row{flex-direction:column;align-items:stretch;padding:9px}
     .subscriber-sort-control{justify-content:space-between}
@@ -136,9 +161,32 @@
       <select id="subscriber-sort" class="form-select form-select-sm" aria-label="فرز المشتركين">
         <option value="added" {% if sort=='added' %}selected{% endif %}>تاريخ الإضافة</option>
         <option value="name" {% if sort=='name' %}selected{% endif %}>الاسم</option>
+        <option value="village" {% if sort=='village' %}selected{% endif %}>القرية / الموقع</option>
         <option value="arrears" {% if sort=='arrears' %}selected{% endif %}>المتأخرات الأعلى</option>
         <option value="reading" {% if sort=='reading' %}selected{% endif %}>قراءة العداد</option>
       </select>
+    </div>
+
+    <div class="subscriber-location-filter" id="subscriber-location-filter"
+         data-tree-url="{{ url_for('meter_management.api_locations_tree') }}"
+         data-selected-id="{{ location_id or '' }}">
+      <button type="button" class="subscriber-location-trigger {% if not location_path %}open-placeholder{% endif %}" id="subscriber-location-trigger">
+        <span class="subscriber-location-value {% if not location_path %}placeholder{% endif %}" id="subscriber-location-value">
+          {{ location_path or 'القرية / الموقع' }}
+        </span>
+        <span><i class="bi bi-chevron-down"></i></span>
+      </button>
+      <div class="subscriber-location-panel" id="subscriber-location-panel">
+        <div class="subscriber-location-search">
+          <input type="search" class="form-control form-control-sm" id="subscriber-location-search"
+                 placeholder="بحث في المناطق والقرى..." autocomplete="off">
+        </div>
+        <div id="subscriber-location-results" class="subscriber-location-results" hidden></div>
+        <div id="subscriber-location-tree" class="subscriber-location-tree">
+          <div class="text-muted small p-2">جارٍ تحميل شجرة المواقع...</div>
+        </div>
+        <span id="subscriber-location-clear" class="subscriber-location-clear">عرض كل المشتركين</span>
+      </div>
     </div>
 
     <div class="subscriber-search-control">
@@ -268,6 +316,105 @@
     card.dataset.search=card.dataset.search || '';
   });
   applySearch();
+
+  // فلتر القرية/الموقع بنفس فكرة شجرة اختيار موقع المشترك.
+  const locRoot=document.getElementById('subscriber-location-filter');
+  const locTrigger=document.getElementById('subscriber-location-trigger');
+  const locPanel=document.getElementById('subscriber-location-panel');
+  const locSearch=document.getElementById('subscriber-location-search');
+  const locTree=document.getElementById('subscriber-location-tree');
+  const locResults=document.getElementById('subscriber-location-results');
+  const locClear=document.getElementById('subscriber-location-clear');
+  const locValue=document.getElementById('subscriber-location-value');
+  const locSelectedId=String(locRoot?.dataset.selectedId||'');
+  let locData=[]; let locIndex=new Map(); let locLoaded=false;
+
+  const esc=v=>String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  function index(nodes){
+    (nodes||[]).forEach(n=>{locIndex.set(String(n.id),n);index(n.children||[]);});
+  }
+  function pathOf(n){
+    const parts=[];let cur=n;
+    while(cur){parts.unshift(cur.name);cur=cur.parent_id?locIndex.get(String(cur.parent_id)):null;}
+    return parts.join(' / ');
+  }
+  function renderTree(nodes,target,depth){
+    target.innerHTML='';
+    (nodes||[]).forEach(n=>{
+      const wrap=document.createElement('div');wrap.className='subscriber-location-node';
+      const row=document.createElement('div');row.className='subscriber-location-row';
+      row.style.paddingRight=(depth*13+2)+'px';
+      const has=(n.children||[]).length>0;
+      if(has){
+        const b=document.createElement('button');b.type='button';b.className='subscriber-location-arrow';
+        b.innerHTML='<i class="bi bi-chevron-left"></i>';
+        const ch=document.createElement('div');ch.className='subscriber-location-children';ch.hidden=true;
+        renderTree(n.children,ch,depth+1);
+        row.appendChild(b);wrap.appendChild(row);wrap.appendChild(ch);
+        b.addEventListener('click',e=>{
+          e.stopPropagation();
+          ch.hidden=!ch.hidden;
+          b.innerHTML=ch.hidden?'<i class="bi bi-chevron-left"></i>':'<i class="bi bi-chevron-down"></i>';
+        });
+      }else{
+        const sp=document.createElement('span');sp.className='subscriber-location-indent';row.appendChild(sp);wrap.appendChild(row);
+      }
+      const label=document.createElement('div');label.className='subscriber-location-label';
+      label.innerHTML='<div class="subscriber-location-name">'+esc(n.name)+'</div><div class="subscriber-location-meta">'+
+        esc(n.location_type||'موقع')+' · '+(n.subscriber_count||0)+' مشترك</div>';
+      row.appendChild(label);
+      row.addEventListener('click',e=>{
+        if(e.target.closest('.subscriber-location-arrow'))return;
+        const params=new URLSearchParams(window.location.search);
+        params.set('location_id',n.id);
+        window.location.href=window.location.pathname+'?'+params.toString();
+      });
+      target.appendChild(wrap);
+    });
+  }
+  function showLocResults(q){
+    if(!q){locResults.hidden=true;locTree.hidden=false;return;}
+    locTree.hidden=true;locResults.hidden=false;
+    const qq=q.toLocaleLowerCase();const matches=[];
+    locIndex.forEach(n=>{
+      const p=pathOf(n);
+      if((n.name||'').toLocaleLowerCase().includes(qq)||p.toLocaleLowerCase().includes(qq)||(n.code||'').toLocaleLowerCase().includes(qq))matches.push(n);
+    });
+    locResults.innerHTML=matches.length?matches.map(n=>'<div class="subscriber-location-result" data-id="'+n.id+'"><strong>'+
+      esc(n.name)+'</strong><div class="subscriber-location-path">'+esc(pathOf(n))+' · '+(n.subscriber_count||0)+' مشترك</div></div>').join(''):
+      '<div class="text-muted small p-2">لا توجد نتيجة مطابقة.</div>';
+    locResults.querySelectorAll('[data-id]').forEach(el=>el.addEventListener('click',()=>{
+      const id=el.dataset.id;
+      const params=new URLSearchParams(window.location.search);params.set('location_id',id);
+      window.location.href=window.location.pathname+'?'+params.toString();
+    }));
+  }
+  async function loadLocTree(){
+    if(locLoaded)return;
+    try{
+      const res=await fetch(locRoot.dataset.treeUrl,{headers:{Accept:'application/json'}});
+      if(!res.ok)throw new Error();
+      const json=await res.json();
+      locData=json.tree||[];locIndex.clear();index(locData);renderTree(locData,locTree,0);locLoaded=true;
+    }catch(e){
+      locTree.innerHTML='<div class="text-muted small p-2">تعذر تحميل شجرة المواقع.</div>';
+    }
+  }
+  locTrigger?.addEventListener('click',async e=>{
+    e.preventDefault();
+    const open=locPanel.classList.contains('open');
+    locPanel.classList.toggle('open',!open);locTrigger.classList.toggle('open',!open);
+    if(!open){await loadLocTree();locSearch.focus();}
+  });
+  locSearch?.addEventListener('input',()=>showLocResults(locSearch.value.trim()));
+  locClear?.addEventListener('click',()=>{
+    const params=new URLSearchParams(window.location.search);
+    params.delete('location_id');
+    window.location.href=params.toString()?window.location.pathname+'?'+params.toString():window.location.pathname;
+  });
+  document.addEventListener('click',e=>{
+    if(locRoot && !locRoot.contains(e.target)){locPanel.classList.remove('open');locTrigger?.classList.remove('open');}
+  });
 })();
 </script>
 {% endblock %}
