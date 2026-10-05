@@ -95,9 +95,6 @@ def ensure_schema():
             )
             default_unit = conn.execute(text("SELECT id FROM water_units WHERE name = 'وحدة' ORDER BY id LIMIT 1")).first()
         default_unit_id = default_unit[0]
-        # المواقع والعدادات الحالية كانت تعمل كوحدة واحدة، لذلك نربط السجلات غير المصنفة بالوحدة الافتراضية دون المساس بالمواقع المصنفة مسبقًا.
-        conn.execute(text("UPDATE water_locations SET unit_id = :unit_id WHERE unit_id IS NULL"), {"unit_id": default_unit_id})
-        conn.execute(text("UPDATE network_meters SET unit_id = :unit_id WHERE unit_id IS NULL"), {"unit_id": default_unit_id})
 
         # ترحيل آمن للمواقع النصية القديمة: ننشئ موقعًا بسيطًا لكل قيمة village غير فارغة،
         # ثم نربط المشتركين به دون حذف أو تعديل القيمة القديمة.
@@ -109,3 +106,8 @@ def ensure_schema():
                 if not existing:
                     conn.execute(text("INSERT INTO water_locations (unit_id,parent_id,code,name,location_type,active,sort_order,created_at) VALUES (NULL,NULL,NULL,:name,'قرية',1,0,CURRENT_TIMESTAMP)"), {"name": name})
             conn.execute(text("UPDATE subscribers SET location_id=(SELECT wl.id FROM water_locations wl WHERE wl.parent_id IS NULL AND wl.name=TRIM(subscribers.village) LIMIT 1) WHERE (location_id IS NULL OR location_id=0) AND village IS NOT NULL AND TRIM(village) <> ''"))
+            # المواقع المنشأة أثناء الترحيل تحصل كذلك على الوحدة الافتراضية.
+            conn.execute(text("UPDATE water_locations SET unit_id = :unit_id WHERE unit_id IS NULL"), {"unit_id": default_unit_id})
+        # أي عدادات قديمة بلا وحدة تُعامل كوحدة «وحدة» المستخدمة حاليًا.
+        conn.execute(text("UPDATE network_meters SET unit_id = :unit_id WHERE unit_id IS NULL"), {"unit_id": default_unit_id})
+
