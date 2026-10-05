@@ -1,4 +1,38 @@
 {% extends "base.html" %}
+
+{% macro render_location(nodes, depth=0) %}
+  {% for n in nodes %}
+    <div class="mm-tree-node">
+      <div class="mm-tree-row">
+        {% if n.children %}
+          <span class="mm-tree-spacer"><i class="bi bi-chevron-left"></i></span>
+        {% else %}
+          <span class="mm-tree-spacer"></span>
+        {% endif %}
+        <div class="mm-tree-content" style="padding-right: {{ depth * 22 }}px;">
+          <div class="mm-tree-name">{{ n.name }}</div>
+          <div class="mm-tree-meta">
+            {{ n.location_type or 'موقع' }}
+            · {{ n.subscriber_count or 0 }} مشترك
+            · {{ n.meter_count or 0 }} عداد
+          </div>
+        </div>
+        <div class="mm-tree-actions">
+          <a class="btn btn-sm btn-outline-secondary"
+             href="{{ url_for('meter_management.location_edit', location_id=n.id) }}">تعديل</a>
+          <a class="btn btn-sm btn-outline-primary"
+             href="{{ url_for('meter_management.location_new') }}?parent_id={{ n.id }}">إضافة فرع</a>
+        </div>
+      </div>
+      {% if n.children %}
+        <div class="mm-tree-children">
+          {{ render_location(n.children, depth + 1) }}
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% endmacro %}
+
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/meter_management.css') }}">
 {% endblock %}
@@ -15,28 +49,33 @@
       <a class="btn btn-primary" href="{{ url_for('meter_management.location_new') }}">
         <i class="bi bi-plus-circle"></i> إضافة موقع
       </a>
-      <a class="btn btn-outline-primary" href="{{ url_for('meter_management.unit_new') }}">وحدة تشغيلية</a>
+      <a class="btn btn-outline-primary" href="{{ url_for('meter_management.unit_new') }}">
+        وحدة تشغيلية
+      </a>
       <a class="btn btn-outline-dark" href="{{ url_for('meter_management.print_network') }}" target="_blank">
         <i class="bi bi-printer"></i> طباعة
       </a>
     </div>
   </div>
 
-  <div class="row g-3">
-    <div class="col-12">
-      <div class="mm-card">
-        <div class="mm-card-head">
-          <div>
-            <h5>شجرة المناطق والقرى</h5>
-            <span>تظهر هنا كل المواقع بمختلف مستوياتها دون اشتراط ربطها بوحدة تشغيلية.</span>
-          </div>
-        </div>
-        <div id="tree-all-locations" class="mm-tree" data-unit-id="__all__"></div>
+  <div class="mm-card">
+    <div class="mm-card-head">
+      <div>
+        <h5>شجرة المناطق والقرى</h5>
+        <span>كل المواقع الموجودة في النظام تظهر هنا مباشرة.</span>
       </div>
+      <span class="mm-pill">{{ locations|length }} موقع</span>
     </div>
+
+    {% if tree %}
+      <div class="mm-tree mm-locations-server-tree">
+        {{ render_location(tree) }}
+      </div>
+    {% else %}
+      <div class="mm-empty">
+        لا توجد مناطق أو قرى أو مواقع مسجلة في قاعدة البيانات.
+      </div>
+    {% endif %}
   </div>
 </div>
-
-<script>window.MM_LOCATIONS={{ tree|tojson }};</script>
-<script src="{{ url_for('meter_management.static',filename='js/tree.js') }}"></script>
 {% endblock %}
