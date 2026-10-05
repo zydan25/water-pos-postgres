@@ -162,6 +162,15 @@ def unit_rows():
 def location_children_map():
     ensure_schema()
     db = get_db()
+    # اربط أي مواقع موجودة بلا وحدة بالوحدة الافتراضية الحالية قبل بناء الشجرة،
+    # لأن بعض المواقع قد تكون أُنشئت/استوردت بعد أول تشغيل لتهيئة المخطط.
+    default_unit = db.execute("SELECT id FROM water_units WHERE name='وحدة' ORDER BY id LIMIT 1").fetchone()
+    if default_unit:
+        db.execute(
+            "UPDATE water_locations SET unit_id=? WHERE unit_id IS NULL",
+            (default_unit["id"],),
+        )
+        db.commit()
     rows = db.execute("SELECT id,unit_id,parent_id,code,name,location_type,active,sort_order,notes FROM water_locations ORDER BY sort_order,name,id").fetchall()
     by_parent = {}
     for r in rows:
