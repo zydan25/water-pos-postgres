@@ -335,8 +335,9 @@ def losses():
     start = request.args.get("start", date(date.today().year, date.today().month, 1).isoformat())
     end = request.args.get("end", date.today().isoformat())
     rows = loss_rows(start, end)
-    total_in = sum(x["incoming"] for x in rows)
-    total_dist = sum(x["distributed"] for x in rows)
+    complete_rows = [x for x in rows if x.get("status") == "complete"]
+    total_in = sum(x["incoming"] for x in complete_rows)
+    total_dist = sum(x["distributed"] for x in complete_rows)
     total_loss = total_in - total_dist
     return render_template(
         "meter_management/losses.html",
@@ -347,6 +348,8 @@ def losses():
         total_dist=total_dist,
         total_loss=total_loss,
         total_pct=(total_loss / total_in * 100 if total_in else 0),
+        complete_count=len(complete_rows),
+        incomplete_count=len(rows)-len(complete_rows),
     )
 
 
@@ -356,8 +359,9 @@ def print_losses():
     start = request.args.get("start", date(date.today().year, date.today().month, 1).isoformat())
     end = request.args.get("end", date.today().isoformat())
     rows = loss_rows(start, end)
-    total_in = sum(x["incoming"] for x in rows)
-    total_dist = sum(x["distributed"] for x in rows)
+    complete_rows = [x for x in rows if x.get("status") == "complete"]
+    total_in = sum(x["incoming"] for x in complete_rows)
+    total_dist = sum(x["distributed"] for x in complete_rows)
     total_loss = total_in - total_dist
     return render_template(
         "meter_management/print_report.html",
