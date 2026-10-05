@@ -1,3 +1,87 @@
 {% extends "base.html" %}
-{% block head %}<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/meter_management.css') }}">{% endblock %}
-{% block content %}<div class="container-fluid mm-page"><div class="mm-page-title"><div><div class="mm-eyebrow">قراءات الشبكة</div><h3>سجل القراءات</h3></div><div class="mm-actions"><a class="btn btn-primary" href="{{ url_for('meter_management.reading_new',meter_id=selected_meter) if selected_meter else url_for('meter_management.reading_new') }}"><i class="bi bi-plus-circle"></i> تسجيل قراءة</a><a class="btn btn-outline-secondary" href="{{ url_for('meter_management.meters') }}">العدادات</a></div></div><div class="mm-filter-bar"><a class="btn btn-sm {% if not selected_meter %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{{ url_for('meter_management.readings') }}">كل العدادات</a>{% for m in meters %}<a class="btn btn-sm {% if selected_meter==m.id %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{{ url_for('meter_management.readings',meter_id=m.id) }}">{{ m.name }}</a>{% endfor %}</div><div class="row g-2">{% for r in readings %}<div class="col-12 col-md-6 col-xl-4"><div class="mm-card mm-reading-card"><div class="d-flex justify-content-between"><strong>{{ r.meter_name }}</strong><span>{{ r.reading_date }}</span></div><div class="mm-reading-values"><div><small>السابقة</small><strong>{{ '%.1f'|format(r.previous_reading) }}</strong></div><div><small>الحالية</small><strong>{{ '%.1f'|format(r.reading_value) }}</strong></div><div><small>الاستهلاك</small><strong>{{ '%.1f'|format(r.consumption) }}</strong></div></div><div class="small text-muted">{{ r.note or 'بدون ملاحظات' }} · {{ r.creator_name or 'النظام' }}</div></div></div>{% else %}<div class="col-12"><div class="mm-card mm-empty">لا توجد قراءات مسجلة.</div></div>{% endfor %}</div></div>{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/meter_management.css') }}">
+{% endblock %}
+{% block content %}
+<div class="container-fluid mm-page">
+  <div class="mm-page-title">
+    <div>
+      <div class="mm-eyebrow">قراءات العدادات</div>
+      <h3>سجل القراءات الشهرية</h3>
+      <div class="text-muted">يمكنك عرض قراءات شهر محدد أو كل الأشهر.</div>
+    </div>
+    <div class="mm-actions">
+      <a class="btn btn-primary" href="{{ url_for('meter_management.reading_new',meter_id=selected_meter) if selected_meter else url_for('meter_management.reading_new') }}"><i class="bi bi-plus-circle"></i> تسجيل قراءة</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('meter_management.meters') }}">العدادات</a>
+    </div>
+  </div>
+
+  <div class="mm-card mb-3">
+    <form class="row g-2 align-items-end">
+      <div class="col-12 col-md-4">
+        <div class="mm-month-caption">الشهر</div>
+        <select name="month_label" class="form-select" style="height:44px;border-radius:12px">
+          <option value="">كل الأشهر</option>
+          {% for m in months %}<option value="{{ m }}" {% if month_label==m %}selected{% endif %}>{{ m }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-3">
+        <div class="mm-month-caption">نوع العداد</div>
+        <select name="meter_type" class="form-select" style="height:44px;border-radius:12px">
+          <option value="">كل العدادات</option>
+          <option value="main" {% if meter_type=='main' %}selected{% endif %}>العدادات الرئيسية</option>
+          <option value="sub" {% if meter_type=='sub' %}selected{% endif %}>العدادات الفرعية</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-3">
+        <div class="mm-month-caption">الفرز حسب</div>
+        <select name="sort" class="form-select" style="height:44px;border-radius:12px">
+          <option value="date" {% if sort=='date' %}selected{% endif %}>الأحدث</option>
+          <option value="meter" {% if sort=='meter' %}selected{% endif %}>اسم العداد</option>
+          <option value="location" {% if sort=='location' %}selected{% endif %}>الموقع</option>
+          <option value="reading" {% if sort=='reading' %}selected{% endif %}>القراءة الحالية</option>
+          <option value="consumption" {% if sort=='consumption' %}selected{% endif %}>الاستهلاك</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-2">
+        {% if selected_meter %}<input type="hidden" name="meter_id" value="{{ selected_meter }}">{% endif %}
+        <button class="btn btn-primary w-100" style="height:44px"><i class="bi bi-funnel"></i> عرض</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-3"><div class="mm-stat-card"><div class="mm-stat-value">{{ readings|length }}</div><div class="mm-stat-label">القراءات المعروضة</div></div></div>
+    <div class="col-6 col-md-3"><div class="mm-stat-card"><div class="mm-stat-value">{{ month_label or 'الكل' }}</div><div class="mm-stat-label">الفترة</div></div></div>
+    <div class="col-6 col-md-3"><div class="mm-stat-card"><div class="mm-stat-value">{{ meter_type=='main' and 'رئيسية' or (meter_type=='sub' and 'فرعية' or 'الكل') }}</div><div class="mm-stat-label">النوع</div></div></div>
+    <div class="col-6 col-md-3"><div class="mm-stat-card"><div class="mm-stat-value">{{ '%.1f'|format(readings|sum(attribute='consumption')) }}</div><div class="mm-stat-label">إجمالي الاستهلاك المعروض</div></div></div>
+  </div>
+
+  <div class="row g-3">
+    {% for r in readings %}
+    <div class="col-12 col-md-6 col-xl-4">
+      <div class="mm-card mm-reading-card h-100">
+        <div>
+          <strong>{{ r.meter_name }}</strong>
+          <span class="badge {% if r.meter_type=='main' %}text-bg-primary{% else %}text-bg-light text-secondary{% endif %}">{{ 'رئيسي' if r.meter_type=='main' else 'فرعي' }}</span>
+        </div>
+        <div class="small text-muted mt-1">{{ r.meter_number }} · {{ r.location_name or 'بدون موقع' }}</div>
+        <div class="small text-muted mt-1">الشهر: <strong>{{ r.reading_date[:7] }}</strong> · التاريخ {{ r.reading_date }}</div>
+        <div class="mm-reading-values">
+          <div><small>السابقة</small><strong>{{ '%.1f'|format(r.previous_reading) }}</strong></div>
+          <div><small>الحالية</small><strong>{{ '%.1f'|format(r.reading_value) }}</strong></div>
+          <div><small>الاستهلاك</small><strong class="text-success">{{ '%.1f'|format(r.consumption) }}</strong></div>
+        </div>
+        <div class="small text-muted mt-2">{{ r.note or 'بدون ملاحظات' }}</div>
+        <div class="mm-card-buttons">
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('meter_management.meter_detail',meter_id=r.meter_id) }}">العداد</a>
+          {% if r.meter_type=='main' %}<a class="btn btn-sm btn-outline-danger" href="{{ url_for('meter_management.losses',month_label=r.reading_date[:7],meter_id=r.meter_id) }}">المفقودات</a>{% endif %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+      <div class="col-12"><div class="mm-card mm-empty">لا توجد قراءات مطابقة.</div></div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
