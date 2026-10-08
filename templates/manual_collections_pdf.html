@@ -101,6 +101,7 @@
     .data td.name {
       text-align: right;
       font-weight: 700;
+      font-size: {{ "%.2f"|format(9.5 * ((name_scale or 100) / 100)) }}px;
     }
 
     .data td.strong {
@@ -203,7 +204,7 @@
           <td>{{ "{:,.0f}".format(row.consumption_amount or 0) }}</td>
           <td>{{ "{:,.0f}".format(row.opening_balance or 0) }}</td>
           <td class="strong">{{ "{:,.0f}".format(row.total_amount or 0) }}</td>
-          <td></td>
+          <td>{% if show_received %}{{ "{:,.0f}".format(row.paid_amount or 0) }}{% endif %}</td>
           <td></td>
           <td class="received">{{ "{:,.0f}".format(row.previous_paid_amount or 0) }}</td>
         </tr>
