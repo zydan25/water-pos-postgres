@@ -64,8 +64,8 @@
 
     {% if print_styles is defined %}{% for key, cfg in print_styles.reading.items() %}
     [data-print-style="{{ key }}"] { background-color: {{ cfg.bg }} !important; color: {{ cfg.text }} !important; }
+    .data th[data-print-style="{{ key }}"] { background-color: {{ cfg.bg }} !important; color: {{ cfg.text }} !important; }
     {% endfor %}{% endif %}
-    /* ── جدول البيانات ── */
     table.data {
       margin-top: 4px;
       border-collapse: collapse;
