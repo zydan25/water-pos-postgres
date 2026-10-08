@@ -35,6 +35,7 @@ INVOICE_STYLE_FIELDS = [
     ("stub_engineer_value", "الكعب — البرمجة والتصميم"),
     ("main_title", "الفاتورة الرئيسية — نوع الفاتورة"),
     ("main_org", "الفاتورة الرئيسية — اسم المنظمة"),
+    ("main_logo", "الفاتورة الرئيسية — خانة الشعار"),
     ("main_month_label", "الفاتورة الرئيسية — تسمية الشهر"),
     ("main_month_value", "الفاتورة الرئيسية — الشهر"),
     ("main_region_label", "الفاتورة الرئيسية — تسمية المنطقة / العنوان"),
@@ -90,7 +91,7 @@ def _invoice_defaults():
         if key == "stub_org":
             data[key] = _style("#ffffff", "#000000")
         elif key in {
-            "main_title", "main_org", "stub_tafqit", "footer_note", "footer_design",
+            "main_title", "main_org", "main_logo", "stub_tafqit", "footer_note", "footer_design",
             "readings_value", "bottom_consumption_value", "bottom_total_value",
         }:
             data[key] = _style("#ffffff", "#000000")
