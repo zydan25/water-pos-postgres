@@ -112,6 +112,9 @@
       background: #f8fafc;
     }
 
+    {% if print_styles is defined %}{% for key, cfg in print_styles.collection.items() %}
+    [data-print-style="{{ key }}"] { background-color: {{ cfg.bg }} !important; color: {{ cfg.text }} !important; }
+    {% endfor %}{% endif %}
     .received {
       background: #fff7ed !important;
     }
@@ -126,27 +129,27 @@
     <!-- السطر الأول: القرية / كشف شهر / الهجري -->
     <table class="topline">
       <tr>
-        <td class="lbl">القرية</td>
-        <td class="val">{{ village_name }}</td>
-        <td class="lbl">كشف شهر</td>
-        <td class="val">{{ report_month_name }}</td>
-        <td class="val">{{ report_year }}</td>
-        <td class="lbl">{{ hijri_month_name }}</td>
-        <td class="val">{{ hijri_year }}</td>
+        <td class="lbl" data-print-style="topline_label">القرية</td>
+        <td class="val" data-print-style="topline_value">{{ village_name }}</td>
+        <td class="lbl" data-print-style="topline_label">كشف شهر</td>
+        <td class="val" data-print-style="topline_value">{{ report_month_name }}</td>
+        <td class="val" data-print-style="topline_value">{{ report_year }}</td>
+        <td class="lbl" data-print-style="topline_label">{{ hijri_month_name }}</td>
+        <td class="val" data-print-style="topline_value">{{ hijri_year }}</td>
       </tr>
     </table>
 
     <!-- السطر الثاني: الملخص -->
     <table class="summary" style="margin-top:2px">
       <tr>
-        <td class="lbl">عدد المشتركين</td>
-        <td class="val">{{ "{:,.0f}".format(s.count or 0) }}</td>
-        <td class="lbl">اجمالي الاستهلاك</td>
-        <td class="val">{{ "{:,.0f}".format(s.consumption_amount or 0) }}</td>
-        <td class="lbl">اجمالي الوحدات</td>
-        <td class="val">{{ "{:,.0f}".format(s.units or 0) }}</td>
-        <td class="lbl">اجمالي المستلمة</td>
-        <td class="val">{{ "{:,.0f}".format(s.received or 0) }}</td>
+        <td class="lbl" data-print-style="summary_label">عدد المشتركين</td>
+        <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.count or 0) }}</td>
+        <td class="lbl" data-print-style="summary_label">اجمالي الاستهلاك</td>
+        <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.consumption_amount or 0) }}</td>
+        <td class="lbl" data-print-style="summary_label">اجمالي الوحدات</td>
+        <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.units or 0) }}</td>
+        <td class="lbl" data-print-style="summary_label">اجمالي المستلمة</td>
+        <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.received or 0) }}</td>
       </tr>
     </table>
 
@@ -171,20 +174,20 @@
       </colgroup>
       <thead>
         <tr>
-          <th>م</th>
-          <th>رقم الحساب</th>
-          <th>القرية</th>
-          <th>الحارة</th>
-          <th>رقم العداد</th>
-          <th>أسماء المشتركين</th>
-          <th>السابقة</th>
-          <th>الحالية</th>
-          <th>إجمالي الوحدات</th>
-          <th>مقدار الاستهلاك</th>
-          <th>المتاخرات</th>
-          <th>إجمالي الفاتورة</th>
-          <th>المستلم</th>
-          <th>ملاحظات</th>
+          <th data-print-style="table_header">م</th>
+          <th data-print-style="table_header">رقم الحساب</th>
+          <th data-print-style="table_header">القرية</th>
+          <th data-print-style="table_header">الحارة</th>
+          <th data-print-style="table_header">رقم العداد</th>
+          <th data-print-style="table_header">أسماء المشتركين</th>
+          <th data-print-style="table_header">السابقة</th>
+          <th data-print-style="table_header">الحالية</th>
+          <th data-print-style="table_header">إجمالي الوحدات</th>
+          <th data-print-style="table_header">مقدار الاستهلاك</th>
+          <th data-print-style="table_header">المتاخرات</th>
+          <th data-print-style="table_header">إجمالي الفاتورة</th>
+          <th data-print-style="table_header">المستلم</th>
+          <th data-print-style="table_header">ملاحظات</th>
           <th class="received">{{ received_prev_label }}</th>
         </tr>
       </thead>
