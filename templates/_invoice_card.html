@@ -70,6 +70,15 @@
   .dl-nowrap { white-space: nowrap; }
   .footer-strip { border-top: 1px solid #000; }
   .cut { display: none; }
+
+  {% if print_styles is defined %}
+  {% for key, cfg in print_styles.invoice.items() %}
+  .invoice [data-print-style="{{ key }}"] {
+    background-color: {{ cfg.bg }} !important;
+    color: {{ cfg.text }} !important;
+  }
+  {% endfor %}
+  {% endif %}
 </style>
 
 <div class="invoice">
@@ -79,52 +88,52 @@
       <td class="stub-col">
         <table class="inner-table">
           <tr>
-            <td colspan="2" style="padding: 1px;">
+            <td colspan="2" style="padding: 1px;" data-print-style="stub_org">
               <div class="org-name">{{ settings.organization_name }}</div>
               <span class="org-title">فاتورة مياه</span>
               {% if qr %}<img class="qr-img" src="{{ qr }}" alt="QR">{% endif %}
             </td>
           </tr>
           <tr>
-            <td style="width: 35%;">المشترك</td>
-            <td style="width: 65%; font-size: 9.5pt;">{{ invoice.subscriber_name }}</td>
+            <td style="width: 35%;" data-print-style="stub_subscriber_label">المشترك</td>
+            <td style="width: 65%; font-size: 9.5pt;" data-print-style="stub_subscriber_value">{{ invoice.subscriber_name }}</td>
           </tr>
           <tr>
-            <td class="bg-gray">شهر / عداد</td>
-            <td>{{ invoice.month_label|month_name }} / {{ invoice.meter_number or '—' }}</td>
+            <td class="bg-gray" data-print-style="stub_month_label">شهر / عداد</td>
+            <td data-print-style="stub_month_value">{{ invoice.month_label|month_name }} / {{ invoice.meter_number or '—' }}</td>
           </tr>
           <tr>
-            <td class="bg-gray">رقم الفاتورة</td>
-            <td class="td-big">{{ invoice.invoice_no }}</td>
+            <td class="bg-gray" data-print-style="stub_number_label">رقم الفاتورة</td>
+            <td class="td-big" data-print-style="stub_number_value">{{ invoice.invoice_no }}</td>
           </tr>
           <tr>
-            <td class="bg-gray">المنطقة</td>
-            <td>{{ invoice.village or invoice.address or '—' }}</td>
+            <td class="bg-gray" data-print-style="stub_region_label">المنطقة</td>
+            <td data-print-style="stub_region_value">{{ invoice.village or invoice.address or '—' }}</td>
           </tr>
           <tr>
-            <td class="bg-gray">المبلغ المستحق</td>
-            <td class="td-big">{{ final_total|num }} {{ currency }}</td>
+            <td class="bg-gray" data-print-style="stub_due_label">المبلغ المستحق</td>
+            <td class="td-big" data-print-style="stub_due_value">{{ final_total|num }} {{ currency }}</td>
           </tr>
           <tr>
-            <td colspan="2" class="stub-tafqit" style="padding: 1px;">
+            <td colspan="2" class="stub-tafqit" style="padding: 1px;" data-print-style="stub_tafqit">
               {{ final_total|tafqit(currency) }}
             </td>
           </tr>
           <tr>
-            <td class="bg-gray">ملاحظات</td>
-            <td style="font-size: 8.5pt; line-height: 1.3;">{{ invoice.notes or '—' }}</td>
+            <td class="bg-gray" data-print-style="stub_notes_label">ملاحظات</td>
+            <td style="font-size: 8.5pt; line-height: 1.3;" data-print-style="stub_notes_value">{{ invoice.notes or '—' }}</td>
           </tr>
           <tr>
-            <td class="bg-gray">أُصدرت بواسطة</td>
-            <td style="font-size: 9pt;">{{ invoice.created_by_name or '—' }}</td>
+            <td class="bg-gray" data-print-style="stub_created_label">أُصدرت بواسطة</td>
+            <td style="font-size: 9pt;" data-print-style="stub_created_value">{{ invoice.created_by_name or '—' }}</td>
           </tr>
           <tr>
-            <td class="bg-gray">التاريخ</td>
-            <td style="font-size: 9pt;">{{ invoice.invoice_date }}</td>
+            <td class="bg-gray" data-print-style="stub_date_label">التاريخ</td>
+            <td style="font-size: 9pt;" data-print-style="stub_date_value">{{ invoice.invoice_date }}</td>
           </tr>
           <tr>
-            <td class="bg-gray">برمجة وتصميم</td>
-            <td style="font-size: 8pt;">{{ settings.engineer_name or settings.project_name }}</td>
+            <td class="bg-gray" data-print-style="stub_engineer_label">برمجة وتصميم</td>
+            <td style="font-size: 8pt;" data-print-style="stub_engineer_value">{{ settings.engineer_name or settings.project_name }}</td>
           </tr>
         </table>
       </td>
@@ -133,9 +142,9 @@
       <td class="main-col">
         <table class="inner-table">
           <tr>
-            <td style="width: 22%; font-size: 10pt;">فاتورة مياه منزلي</td>
-            <td style="width: 60%;" class="header-title">{{ settings.organization_name }}</td>
-            <td style="width: 18%;" rowspan="2">
+            <td style="width: 22%; font-size: 10pt;" data-print-style="main_title">فاتورة مياه منزلي</td>
+            <td style="width: 60%;" class="header-title" data-print-style="main_org">{{ settings.organization_name }}</td>
+            <td style="width: 18%;" rowspan="2" data-print-style="main_logo">
               <svg width="44" height="44" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="50" cy="50" r="46" stroke="#000" stroke-width="4" fill="none" stroke-dasharray="6,3"/>
                 <circle cx="50" cy="50" r="38" stroke="#000" stroke-width="2" fill="none"/>
@@ -145,33 +154,33 @@
             </td>
           </tr>
           <tr>
-            <td class="bg-gray">فاتورة شهر</td>
-            <td>{{ invoice.month_label|month_name }}</td>
+            <td class="bg-gray" data-print-style="main_month_label">فاتورة شهر</td>
+            <td data-print-style="main_month_value">{{ invoice.month_label|month_name }}</td>
           </tr>
           <tr>
-            <td class="bg-gray">المنطقة / العنوان</td>
-            <td colspan="2">{% if invoice.village and invoice.address and invoice.village != invoice.address %}{{ invoice.village }} - {{ invoice.address }}{% else %}{{ invoice.village or invoice.address or '—' }}{% endif %}</td>
+            <td class="bg-gray" data-print-style="main_region_label">المنطقة / العنوان</td>
+            <td colspan="2" data-print-style="main_region_value">{% if invoice.village and invoice.address and invoice.village != invoice.address %}{{ invoice.village }} - {{ invoice.address }}{% else %}{{ invoice.village or invoice.address or '—' }}{% endif %}</td>
           </tr>
           <tr>
-            <td class="bg-gray">إسم المشترك</td>
-            <td colspan="2" style="font-size: 11.5pt;">{{ invoice.subscriber_name }}</td>
+            <td class="bg-gray" data-print-style="main_name_label">إسم المشترك</td>
+            <td colspan="2" style="font-size: 11.5pt;" data-print-style="main_name_value">{{ invoice.subscriber_name }}</td>
           </tr>
         </table>
 
         <table class="inner-table" style="margin-top: -1px;">
           <tr>
-            <td style="width: 14%;" class="bg-gray">رقم المشترك</td>
-            <td style="width: 14%;" class="td-big2">{{ invoice.account_number }}</td>
-            <td style="width: 14%;" class="bg-gray">رقم العداد</td>
-            <td style="width: 20%;" class="td-big2">{{ invoice.meter_number or '—' }}</td>
-            <td style="width: 14%;" class="bg-gray">حالة التوصيل</td>
-            <td style="width: 24%;" class="td-big2">{{ connection_status }}</td>
+            <td style="width: 14%;" class="bg-gray" data-print-style="main_account_label">رقم المشترك</td>
+            <td style="width: 14%;" class="td-big2" data-print-style="main_account_value">{{ invoice.account_number }}</td>
+            <td style="width: 14%;" class="bg-gray" data-print-style="main_meter_label">رقم العداد</td>
+            <td style="width: 20%;" class="td-big2" data-print-style="main_meter_value">{{ invoice.meter_number or '—' }}</td>
+            <td style="width: 14%;" class="bg-gray" data-print-style="main_connection_label">حالة التوصيل</td>
+            <td style="width: 24%;" class="td-big2" data-print-style="main_connection_value">{{ connection_status }}</td>
           </tr>
           <tr>
-            <td class="bg-gray">رقم الفاتورة</td>
-            <td class="td-big2">{{ invoice.invoice_no }}</td>
-            <td class="bg-gray">فترة الاستهلاك</td>
-            <td colspan="3" class="td-big2" style="font-size: 9.5pt; font-weight: bold;">
+            <td class="bg-gray" data-print-style="main_invoice_label">رقم الفاتورة</td>
+            <td class="td-big2" data-print-style="main_invoice_value">{{ invoice.invoice_no }}</td>
+            <td class="bg-gray" data-print-style="main_period_label">فترة الاستهلاك</td>
+            <td colspan="3" class="td-big2" style="font-size: 9.5pt; font-weight: bold;" data-print-style="main_period_value">
               {% set period_from = invoice.previous_reading_date
                     or (previous_invoice.current_reading_date if previous_invoice and previous_invoice.current_reading_date else None)
                     or (previous_invoice.invoice_date if previous_invoice and previous_invoice.invoice_date else None) %}
@@ -188,49 +197,49 @@
         <table class="inner-table" style="margin-top: -1px;">
           <thead>
             <tr class="bg-gray">
-              <th colspan="2">قراءة العداد</th>
-              <th rowspan="2">الاستهلاك</th>
-              <th rowspan="2">قيمة الاستهلاك</th>
-              <th rowspan="2">الاشتراك</th>
-              <th colspan="2">الشهر السابق</th>
-              <th rowspan="2">المتأخرات</th>
-              <th rowspan="2">المبلغ المستحق</th>
+              <th colspan="2" data-print-style="readings_header">قراءة العداد</th>
+              <th rowspan="2" data-print-style="readings_header">الاستهلاك</th>
+              <th rowspan="2" data-print-style="readings_header">قيمة الاستهلاك</th>
+              <th rowspan="2" data-print-style="readings_header">الاشتراك</th>
+              <th colspan="2" data-print-style="readings_header">الشهر السابق</th>
+              <th rowspan="2" data-print-style="readings_header">المتأخرات</th>
+              <th rowspan="2" data-print-style="readings_header">المبلغ المستحق</th>
             </tr>
             <tr class="bg-gray">
-              <th>السابقة</th>
-              <th>الحالية</th>
-              <th>القيمة</th>
-              <th>المدفوع</th>
+              <th data-print-style="readings_header">السابقة</th>
+              <th data-print-style="readings_header">الحالية</th>
+              <th data-print-style="readings_header">القيمة</th>
+              <th data-print-style="readings_header">المدفوع</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>{{ "%.0f"|format(invoice.previous_reading or 0) }}</td>
-              <td>{{ "%.0f"|format(invoice.current_reading or 0) }}</td>
-              <td>{{ "%.0f"|format(invoice.consumption or 0) }}</td>
-              <td>{{ (invoice.consumption_amount or 0)|num }}</td>
-              <td>{{ (invoice.subscription_fee or 0)|num }}</td>
-              <td>{% if opening_balance > 0 %}{{ opening_balance|num }}{% elif opening_balance < 0 %}لكم {{ (opening_balance|abs)|num }}{% else %}0{% endif %}</td>
-              <td>{{ paid|num }}</td>
-              <td>{% if opening_balance > 0 %}{{ opening_balance|num }}{% else %}0{% endif %}</td>
-              <td class="td-big">{{ final_total|num }}</td>
+              <td data-print-style="readings_value">{{ "%.0f"|format(invoice.previous_reading or 0) }}</td>
+              <td data-print-style="readings_value">{{ "%.0f"|format(invoice.current_reading or 0) }}</td>
+              <td data-print-style="readings_value">{{ "%.0f"|format(invoice.consumption or 0) }}</td>
+              <td data-print-style="readings_value">{{ (invoice.consumption_amount or 0)|num }}</td>
+              <td data-print-style="readings_value">{{ (invoice.subscription_fee or 0)|num }}</td>
+              <td data-print-style="readings_value">{% if opening_balance > 0 %}{{ opening_balance|num }}{% elif opening_balance < 0 %}لكم {{ (opening_balance|abs)|num }}{% else %}0{% endif %}</td>
+              <td data-print-style="readings_value">{{ paid|num }}</td>
+              <td data-print-style="readings_value">{% if opening_balance > 0 %}{{ opening_balance|num }}{% else %}0{% endif %}</td>
+              <td class="td-big" data-print-style="readings_value">{{ final_total|num }}</td>
             </tr>
           </tbody>
         </table>
 
         <table class="inner-table" style="margin-top: -1px;">
           <tr>
-            <td style="width: 20%;" class="bg-gray">قيمة الاستهلاك</td>
-            <td style="width: 18%;">{{ (invoice.consumption_amount or 0)|num }} {{ currency }}</td>
-            <td rowspan="2" style="width: 62%;" class="footer-note">
+            <td style="width: 20%;" class="bg-gray" data-print-style="bottom_consumption_label">قيمة الاستهلاك</td>
+            <td style="width: 18%;" data-print-style="bottom_consumption_value">{{ (invoice.consumption_amount or 0)|num }} {{ currency }}</td>
+            <td rowspan="2" style="width: 62%;" class="footer-note" data-print-style="footer_note">
               {% if invoice.other_charges %}الرسوم والإضافات : {{ (invoice.other_charges or 0)|num }} {{ currency }} | {% endif %}
               {% if remaining > 0 %}المتبقي : {{ remaining|num }} {{ currency }}{% else %}المتبقي : مسدد{% endif %}<br>
               الرجاء سرعة سداد الفاتورة خلال أسبوع تجنباً للفصل وغرامة التأخير
             </td>
           </tr>
           <tr>
-            <td class="bg-gray">الإجمالي المستحق</td>
-            <td class="td-big">{{ final_total|num }} {{ currency }}</td>
+            <td class="bg-gray" data-print-style="bottom_total_label">الإجمالي المستحق</td>
+            <td class="td-big" data-print-style="bottom_total_value">{{ final_total|num }} {{ currency }}</td>
           </tr>
         </table>
 
@@ -239,7 +248,7 @@
   </table>
   <table class="inner-table footer-strip" style="margin-top: -1px;">
     <tr>
-      <td style="font-size: 7.5pt; padding: 1px 3px;">برمجة وتصميم : {{ settings.engineer_name or settings.project_name }}</td>
+      <td style="font-size: 7.5pt; padding: 1px 3px;" data-print-style="footer_design">برمجة وتصميم : {{ settings.engineer_name or settings.project_name }}</td>
     </tr>
   </table>
 </div>
