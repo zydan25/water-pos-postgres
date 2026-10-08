@@ -118,6 +118,9 @@
     .received {
       background: #fff7ed !important;
     }
+    {% if print_styles is defined %}{% for key, cfg in print_styles.collection.items() %}
+    .data th[data-print-style="{{ key }}"] { background-color: {{ cfg.bg }} !important; color: {{ cfg.text }} !important; }
+    {% endfor %}{% endif %}
   </style>
 </head>
 <body>
