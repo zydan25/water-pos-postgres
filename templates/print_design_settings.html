@@ -1,0 +1,448 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+  .design-shell { max-width: 1500px; margin-inline: auto; }
+  .design-hero {
+    background: linear-gradient(135deg, #f8fafc, #eef2ff);
+    border: 1px solid #dbe4f0;
+    border-radius: 22px;
+  }
+  .style-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    background: #fff;
+    height: 100%;
+  }
+  .style-row {
+    display: grid;
+    grid-template-columns: minmax(240px, 1fr) minmax(190px, 230px) minmax(190px, 230px);
+    gap: 12px;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px dashed #e2e8f0;
+  }
+  .style-row:last-child { border-bottom: 0; }
+  .style-name { font-weight: 700; color: #1e293b; }
+  .color-pair {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .color-pair .color-picker {
+    width: 46px;
+    height: 38px;
+    padding: 3px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+  .color-pair .hex-value {
+    min-width: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+  }
+  .preview-paper {
+    background: #fff;
+    border: 1px solid #dbe4f0;
+    border-radius: 18px;
+    padding: 14px;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, .06);
+    overflow: auto;
+  }
+  .preview-paper.invoice-preview {
+    background: #f1f5f9;
+  }
+  .preview-title {
+    font-weight: 800;
+    color: #0f172a;
+  }
+  .preview-note {
+    font-size: 12px;
+    color: #64748b;
+  }
+  .report-preview {
+    max-width: 1100px;
+    margin-inline: auto;
+  }
+  .report-preview table {
+    border-collapse: collapse;
+    width: 100%;
+    table-layout: fixed;
+  }
+  .report-preview td,
+  .report-preview th {
+    border: 1px solid #94a3b8;
+    padding: 7px 6px;
+    text-align: center;
+    vertical-align: middle;
+    font-size: 12px;
+  }
+  .report-preview .sample-row td {
+    background: #fff;
+    color: #111827;
+  }
+  .preview-reading-head {
+    font-size: 18px;
+    font-weight: 800;
+    text-align: center;
+    padding: 10px;
+    border: 1px solid #94a3b8;
+  }
+  @media (max-width: 1000px) {
+    .style-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="design-shell">
+
+    <div class="design-hero p-4 mb-4">
+      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <div>
+          <div class="small text-muted mb-1">الإعدادات ← تصميم الطباعة</div>
+          <h3 class="mb-2 fw-bold">إعداد ألوان الفواتير وكشوف القراءة والتحصيل</h3>
+          <div class="text-muted">
+            غيّر لون خلفية كل خانة ولون الخط داخلها، وستظهر النتيجة مباشرة في المعاينة. الألوان الحالية هي الافتراضية الحالية للنظام.
+          </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <a href="{{ url_for('settings') }}" class="btn btn-outline-secondary">عودة للإعدادات</a>
+          <button type="submit" form="printDesignForm" class="btn btn-primary px-4">حفظ كل التعديلات</button>
+        </div>
+      </div>
+    </div>
+
+    <form method="post" id="printDesignForm">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+      <ul class="nav nav-pills nav-fill gap-2 mb-3" id="designTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#invoiceTab" type="button">🧾 إعداد الفاتورة</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#collectionTab" type="button">📋 إعداد كشف التحصيل</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#readingTab" type="button">📖 إعداد كشف القراءة</button>
+        </li>
+      </ul>
+
+      <div class="tab-content">
+
+        <div class="tab-pane fade show active" id="invoiceTab">
+          <div class="style-card p-3 p-lg-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+              <div>
+                <h5 class="mb-1 fw-bold">كل خانات الفاتورة</h5>
+                <div class="preview-note">كل بند مستقل ويمكن تغيير خلفيته ولون النص دون تغيير حجم الفاتورة أو ترتيبها.</div>
+              </div>
+              <button type="button" class="btn btn-outline-secondary btn-sm" data-reset-section="invoice">إعادة ألوان الفاتورة الافتراضية</button>
+            </div>
+
+            {% for key, label in invoice_style_fields %}
+            {% set cfg = print_styles.invoice[key] %}
+            {% set dcfg = style_defaults.invoice[key] %}
+            <div class="style-row" data-style-section="invoice" data-style-key="{{ key }}">
+              <div>
+                <div class="style-name">{{ label }}</div>
+              </div>
+              <div>
+                <div class="small text-muted mb-1">لون الخلية</div>
+                <div class="color-pair">
+                  <input type="color" class="color-picker" name="invoice__{{ key }}__bg" value="{{ cfg.bg }}" data-color-input data-target="invoice__{{ key }}__bg" data-default="{{ dcfg.bg }}" aria-label="لون خلية {{ label }}">
+                  <input type="text" class="form-control form-control-sm hex-value" value="{{ cfg.bg }}" data-color-text="invoice__{{ key }}__bg" maxlength="7" spellcheck="false">
+                </div>
+              </div>
+              <div>
+                <div class="small text-muted mb-1">لون الخط</div>
+                <div class="color-pair">
+                  <input type="color" class="color-picker" name="invoice__{{ key }}__text" value="{{ cfg.text }}" data-color-input data-target="invoice__{{ key }}__text" data-default="{{ dcfg.text }}" aria-label="لون خط {{ label }}">
+                  <input type="text" class="form-control form-control-sm hex-value" value="{{ cfg.text }}" data-color-text="invoice__{{ key }}__text" maxlength="7" spellcheck="false">
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="tab-pane fade" id="collectionTab">
+          <div class="style-card p-3 p-lg-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+              <div>
+                <h5 class="mb-1 fw-bold">الخانات العلوية ورأس كشف التحصيل</h5>
+                <div class="preview-note">هذه الإعدادات تخص الخانات العلوية والملخص ورأس أعمدة كشف التحصيل.</div>
+              </div>
+              <button type="button" class="btn btn-outline-secondary btn-sm" data-reset-section="collection">إعادة الافتراضي</button>
+            </div>
+            {% for key, label in collection_style_fields %}
+            {% set cfg = print_styles.collection[key] %}
+            {% set dcfg = style_defaults.collection[key] %}
+            <div class="style-row" data-style-section="collection" data-style-key="{{ key }}">
+              <div class="style-name">{{ label }}</div>
+              <div>
+                <div class="small text-muted mb-1">لون الخلية</div>
+                <div class="color-pair">
+                  <input type="color" class="color-picker" name="collection__{{ key }}__bg" value="{{ cfg.bg }}" data-color-input data-target="collection__{{ key }}__bg" data-default="{{ dcfg.bg }}" aria-label="لون {{ label }}">
+                  <input type="text" class="form-control form-control-sm hex-value" value="{{ cfg.bg }}" data-color-text="collection__{{ key }}__bg" maxlength="7" spellcheck="false">
+                </div>
+              </div>
+              <div>
+                <div class="small text-muted mb-1">لون الخط</div>
+                <div class="color-pair">
+                  <input type="color" class="color-picker" name="collection__{{ key }}__text" value="{{ cfg.text }}" data-color-input data-target="collection__{{ key }}__text" data-default="{{ dcfg.text }}" aria-label="لون خط {{ label }}">
+                  <input type="text" class="form-control form-control-sm hex-value" value="{{ cfg.text }}" data-color-text="collection__{{ key }}__text" maxlength="7" spellcheck="false">
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="tab-pane fade" id="readingTab">
+          <div class="style-card p-3 p-lg-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+              <div>
+                <h5 class="mb-1 fw-bold">الخانات العلوية ورأس كشف القراءة</h5>
+                <div class="preview-note">تتحكم في عنوان الكشف، خانات القرية والعدد، ورأس جدول القراءات.</div>
+              </div>
+              <button type="button" class="btn btn-outline-secondary btn-sm" data-reset-section="reading">إعادة الافتراضي</button>
+            </div>
+            {% for key, label in reading_style_fields %}
+            {% set cfg = print_styles.reading[key] %}
+            {% set dcfg = style_defaults.reading[key] %}
+            <div class="style-row" data-style-section="reading" data-style-key="{{ key }}">
+              <div class="style-name">{{ label }}</div>
+              <div>
+                <div class="small text-muted mb-1">لون الخلية</div>
+                <div class="color-pair">
+                  <input type="color" class="color-picker" name="reading__{{ key }}__bg" value="{{ cfg.bg }}" data-color-input data-target="reading__{{ key }}__bg" data-default="{{ dcfg.bg }}" aria-label="لون {{ label }}">
+                  <input type="text" class="form-control form-control-sm hex-value" value="{{ cfg.bg }}" data-color-text="reading__{{ key }}__bg" maxlength="7" spellcheck="false">
+                </div>
+              </div>
+              <div>
+                <div class="small text-muted mb-1">لون الخط</div>
+                <div class="color-pair">
+                  <input type="color" class="color-picker" name="reading__{{ key }}__text" value="{{ cfg.text }}" data-color-input data-target="reading__{{ key }}__text" data-default="{{ dcfg.text }}" aria-label="لون خط {{ label }}">
+                  <input type="text" class="form-control form-control-sm hex-value" value="{{ cfg.text }}" data-color-text="reading__{{ key }}__text" maxlength="7" spellcheck="false">
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </form>
+
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-5 mb-2">
+      <div>
+        <h4 class="preview-title mb-1">المعاينة المباشرة</h4>
+        <div class="preview-note">التغييرات هنا للمعاينة فقط حتى تضغط «حفظ كل التعديلات».</div>
+      </div>
+    </div>
+
+    <div class="style-card p-3 p-lg-4 mb-4">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <h5 class="mb-0 fw-bold">معاينة فاتورة فعلية</h5>
+        {% if invoice_options %}
+        <form method="get" class="d-flex gap-2 align-items-center">
+          <label class="small text-muted text-nowrap">الفاتورة المعروضة</label>
+          <select class="form-select form-select-sm" name="invoice_id" onchange="this.form.submit()">
+            {% for item in invoice_options %}
+            <option value="{{ item.id }}" {% if selected_invoice_id == item.id %}selected{% endif %}>
+              {{ item.invoice_no }} — {{ item.subscriber_name }} — {{ item.invoice_date }}
+            </option>
+            {% endfor %}
+          </select>
+        </form>
+        {% endif %}
+      </div>
+      <div id="invoicePreview" class="preview-paper invoice-preview">
+        {% if latest_invoice %}
+          <div style="max-width: 1050px; margin: 0 auto;">
+            {% set invoice = latest_invoice %}
+            {% include "_invoice_card.html" %}
+          </div>
+        {% else %}
+          <div class="text-center text-muted py-5">لا توجد فواتير لعرض معاينة فعلية.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="style-card p-3 p-lg-4 mb-4">
+      <div class="mb-3">
+        <h5 class="mb-1 fw-bold">معاينة رأس كشف التحصيل</h5>
+        <div class="preview-note">يوضح شكل الخانات العلوية ورأس الكشف بعد التلوين.</div>
+      </div>
+      <div id="collectionPreview" class="preview-paper report-preview">
+        <table>
+          <tr>
+            <td data-print-style="topline_label">القرية</td>
+            <td data-print-style="topline_value">القرية النموذجية</td>
+            <td data-print-style="topline_label">كشف شهر</td>
+            <td data-print-style="topline_value">سبتمبر 2026</td>
+            <td data-print-style="topline_label">رمز الشهر</td>
+            <td data-print-style="topline_value">09 / 2026</td>
+          </tr>
+          <tr>
+            <td data-print-style="summary_label">عدد المشتركين</td>
+            <td data-print-style="summary_value">125</td>
+            <td data-print-style="summary_label">إجمالي الاستهلاك</td>
+            <td data-print-style="summary_value">3,850</td>
+            <td data-print-style="summary_label">إجمالي المستلمة</td>
+            <td data-print-style="summary_value">2,450,000</td>
+          </tr>
+        </table>
+        <table class="mt-2">
+          <thead>
+            <tr>
+              <th data-print-style="table_header">م</th>
+              <th data-print-style="table_header">رقم الحساب</th>
+              <th data-print-style="table_header">القرية</th>
+              <th data-print-style="table_header">الحارة</th>
+              <th data-print-style="table_header">اسم المشترك</th>
+              <th data-print-style="table_header">إجمالي الفاتورة</th>
+              <th data-print-style="table_header">المستلم</th>
+              <th data-print-style="table_header">ملاحظات</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="sample-row">
+              <td>1</td><td>10025</td><td>القرية النموذجية</td><td>الحارة 2</td><td>محمد أحمد</td><td>15,000</td><td>10,000</td><td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="style-card p-3 p-lg-4 mb-4">
+      <div class="mb-3">
+        <h5 class="mb-1 fw-bold">معاينة رأس كشف القراءة</h5>
+        <div class="preview-note">عنوان واضح ثم الخانات العلوية ثم رأس جدول القراءات.</div>
+      </div>
+      <div id="readingPreview" class="preview-paper report-preview">
+        <div class="preview-reading-head" data-print-style="title">كشف قراءة سبتمبر 2026م — صفر 1448هـ</div>
+        <table class="mt-2">
+          <tr>
+            <td data-print-style="info_label">القرية</td>
+            <td data-print-style="info_value">القرية النموذجية</td>
+            <td data-print-style="info_label">عدد المشتركين</td>
+            <td data-print-style="info_value">125</td>
+          </tr>
+        </table>
+        <table class="mt-2">
+          <thead>
+            <tr>
+              <th data-print-style="table_header">م</th>
+              <th data-print-style="table_header">رقم الحساب</th>
+              <th data-print-style="table_header">القرية</th>
+              <th data-print-style="table_header">الحارة</th>
+              <th data-print-style="table_header">رقم العداد</th>
+              <th data-print-style="table_header">أسماء المشتركين</th>
+              <th data-print-style="table_header">السابقة</th>
+              <th data-print-style="table_header">الحالية</th>
+              <th data-print-style="table_header">ملاحظة</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="sample-row">
+              <td>1</td><td>10025</td><td>القرية النموذجية</td><td>الحارة 2</td><td>12548</td><td>محمد أحمد</td><td>120</td><td></td><td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="text-center pb-4">
+      <button type="submit" form="printDesignForm" class="btn btn-primary px-5">حفظ كل التعديلات</button>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const validHex = (value) => /^#[0-9a-fA-F]{6}$/.test((value || '').trim());
+
+  function getColor(section, key, part) {
+    const input = document.querySelector('[name="' + section + '__' + key + '__' + part + '"]');
+    return input ? input.value : '#ffffff';
+  }
+
+  function paintPreview(section, root) {
+    if (!root) return;
+    root.querySelectorAll('[data-print-style]').forEach((el) => {
+      const key = el.getAttribute('data-print-style');
+      el.style.backgroundColor = getColor(section, key, 'bg');
+      el.style.color = getColor(section, key, 'text');
+    });
+  }
+
+  function syncTextFromPicker(input) {
+    const target = input.dataset.target;
+    const text = document.querySelector('[data-color-text="' + target + '"]');
+    if (text) text.value = input.value.toUpperCase();
+  }
+
+  function syncPickerFromText(textInput) {
+    const target = textInput.dataset.colorText;
+    const value = textInput.value.trim();
+    const picker = document.querySelector('[data-target="' + target + '"]');
+    if (picker && validHex(value)) {
+      picker.value = value;
+      textInput.value = value.toUpperCase();
+    }
+  }
+
+  function paintAll() {
+    paintPreview('invoice', document.getElementById('invoicePreview'));
+    paintPreview('collection', document.getElementById('collectionPreview'));
+    paintPreview('reading', document.getElementById('readingPreview'));
+  }
+
+  document.querySelectorAll('[data-color-input]').forEach((input) => {
+    input.addEventListener('input', () => {
+      syncTextFromPicker(input);
+      paintAll();
+    });
+    input.addEventListener('change', () => {
+      syncTextFromPicker(input);
+      paintAll();
+    });
+  });
+
+  document.querySelectorAll('[data-color-text]').forEach((input) => {
+    input.addEventListener('input', () => {
+      syncPickerFromText(input);
+      paintAll();
+    });
+    input.addEventListener('blur', () => {
+      syncPickerFromText(input);
+      paintAll();
+    });
+  });
+
+  document.querySelectorAll('[data-reset-section]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const section = button.dataset.resetSection;
+      document.querySelectorAll('[data-style-section="' + section + '"] [data-color-input]').forEach((input) => {
+        input.value = input.dataset.default;
+        syncTextFromPicker(input);
+      });
+      paintAll();
+    });
+  });
+
+  paintAll();
+})();
+</script>
+{% endblock %}
