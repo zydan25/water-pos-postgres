@@ -5,7 +5,9 @@
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
       <h4 class="mb-0">الإعدادات</h4>
       <div class="d-flex gap-2 flex-wrap">
-        <span class="badge text-bg-light">API واتساب + الفواتير + التقارير</span>
+        <a class="btn btn-primary btn-sm" href="{{ url_for('print_design_settings') }}">
+          🎨 فتح إعدادات الفواتير والكشوفات
+        </a>
         <a class="btn btn-outline-dark btn-sm" href="{{ url_for('developer_tools') }}">لوحة المبرمج</a>
       </div>
     </div>
