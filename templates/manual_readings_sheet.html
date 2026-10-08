@@ -105,7 +105,7 @@
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
       <div>
         <div class="small text-muted">{{ organization_name }}</div>
-        <h4 class="mb-0 section-title">كشف قراءة  {{ hijri_month_name }}  {{ hijri_year }}هـ    {{ report_month_name }} {{ report_year }}م</h4>
+        <h4 class="mb-0 section-title" data-print-style="title">كشف قراءة  {{ hijri_month_name }}  {{ hijri_year }}هـ    {{ report_month_name }} {{ report_year }}م</h4>
         <div class="text-muted small">
           قراءة السابقة من آخر فاتورة والقراءة الحالية تُترك فارغة للمتحصل الميداني.
         </div>
@@ -120,20 +120,20 @@
     <div class="row g-2 mt-3">
       <div class="col-md-4">
         <div class="p-2 bg-light rounded-3 text-center">
-          <div class="small text-muted">القرية</div>
-          <div class="fw-bold">{{ village or 'كل القرى' }}</div>
+          <div class="small text-muted" data-print-style="info_label">القرية</div>
+          <div class="fw-bold" data-print-style="info_value">{{ village or 'كل القرى' }}</div>
         </div>
       </div>
       <div class="col-md-4">
         <div class="p-2 bg-light rounded-3 text-center">
-          <div class="small text-muted">عدد المشتركين</div>
-          <div class="fw-bold">{{ flat_rows|length }}</div>
+          <div class="small text-muted" data-print-style="info_label">عدد المشتركين</div>
+          <div class="fw-bold" data-print-style="info_value">{{ flat_rows|length }}</div>
         </div>
       </div>
       <div class="col-md-4">
         <div class="p-2 bg-light rounded-3 text-center">
-          <div class="small text-muted">تاريخ الطباعة</div>
-          <div class="fw-bold">{{ print_date }}</div>
+          <div class="small text-muted" data-print-style="info_label">تاريخ الطباعة</div>
+          <div class="fw-bold" data-print-style="info_value">{{ print_date }}</div>
         </div>
       </div>
     </div>
@@ -156,15 +156,15 @@
           </colgroup>
           <thead class="table-light">
             <tr>
-              <th>م</th>
-              <th>رقم الحساب</th>
-              <th>القرية</th>
-              <th>الحارة</th>
-              <th>رقم العداد</th>
-              <th>أسماء المشتركين</th>
-              <th>السابقة</th>
-              <th>الحالية</th>
-              <th>ملاحظة</th>
+              <th data-print-style="table_header">م</th>
+              <th data-print-style="table_header">رقم الحساب</th>
+              <th data-print-style="table_header">القرية</th>
+              <th data-print-style="table_header">الحارة</th>
+              <th data-print-style="table_header">رقم العداد</th>
+              <th data-print-style="table_header">أسماء المشتركين</th>
+              <th data-print-style="table_header">السابقة</th>
+              <th data-print-style="table_header">الحالية</th>
+              <th data-print-style="table_header">ملاحظة</th>
             </tr>
           </thead>
           <tbody>
