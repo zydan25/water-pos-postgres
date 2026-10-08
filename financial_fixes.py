@@ -605,8 +605,21 @@ def manual_collection_readings_pdf():
 def manual_collection_collections():
     db = get_db()
     village = request.args.get("village", "").strip()
+    show_received = request.args.get("show_received", "0") == "1"
+    try:
+        name_scale = float(request.args.get("name_scale", "100") or 100)
+    except (TypeError, ValueError):
+        name_scale = 100.0
+    name_scale = max(80.0, min(140.0, name_scale))
     ctx = _apply_village_filter(_manual_collection_common_context(db, only_unpaid=True), village)
-    return render_template("manual_collections_sheet.html", print_mode=False, village=village, **ctx)
+    return render_template(
+        "manual_collections_sheet.html",
+        print_mode=False,
+        village=village,
+        show_received=show_received,
+        name_scale=name_scale,
+        **ctx,
+    )
 
 
 @manual_collection_bp.route("/manual-collection/collections/pdf")
@@ -617,6 +630,12 @@ def manual_collection_collections_pdf():
     db = get_db()
     village = request.args.get("village", "").strip()
     mode = (request.args.get("mode", "pdf") or "pdf").strip().lower()
+    show_received = request.args.get("show_received", "0") == "1"
+    try:
+        name_scale = float(request.args.get("name_scale", "100") or 100)
+    except (TypeError, ValueError):
+        name_scale = 100.0
+    name_scale = max(80.0, min(140.0, name_scale))
 
     try:
         ctx = _apply_village_filter(_manual_collection_common_context(db, only_unpaid=True), village)
@@ -632,7 +651,13 @@ def manual_collection_collections_pdf():
                     local_ctx["village_names"] = [village_name]
                     local_ctx["villages_summary"] = {village_name: _summarize_rows(rows)}
                     try:
-                        pdf = _render_pdf_bytes("manual_collections_pdf.html", print_mode=True, **local_ctx)
+                        pdf = _render_pdf_bytes(
+                            "manual_collections_pdf.html",
+                            print_mode=True,
+                            show_received=show_received,
+                            name_scale=name_scale,
+                            **local_ctx,
+                        )
                     except Exception as inner_exc:
                         print(f"[collections/pdf] خطأ أثناء رندرة قرية '{village_name}': {inner_exc}")
                         traceback.print_exc()
@@ -641,7 +666,14 @@ def manual_collection_collections_pdf():
             return _send_zip(build, f"كشف_تحصيل_{_safe_filename(village or 'جميع_القرى')}.zip")
 
         # وضع PDF واحد
-        pdf = _render_pdf_bytes("manual_collections_pdf.html", print_mode=True, village=village, **ctx)
+        pdf = _render_pdf_bytes(
+            "manual_collections_pdf.html",
+            print_mode=True,
+            village=village,
+            show_received=show_received,
+            name_scale=name_scale,
+            **ctx,
+        )
         return _send_pdf(pdf, f"كشف_تحصيل_{_safe_filename(village or 'جميع_القرى')}.pdf")
 
     except Exception as exc:
