@@ -68,6 +68,14 @@ from financial_fixes import (
     _send_pdf,
 )
 
+from print_design import (
+    get_print_style_settings,
+    save_print_style_settings,
+    INVOICE_STYLE_FIELDS,
+    COLLECTION_STYLE_FIELDS,
+    READING_STYLE_FIELDS,
+)
+
 try:
     from playwright.sync_api import sync_playwright
     PLAYWRIGHT_AVAILABLE = True
@@ -1046,6 +1054,7 @@ def create_app():
             "is_staff": user_role and user_role.lower() == "staff",
             "is_collector": user_role and user_role.lower() == "collector",
             "is_technician": user_role and user_role.lower() == "technician",
+            "print_styles": get_print_style_settings(),
         }
 
     @app.teardown_appcontext
@@ -1180,6 +1189,91 @@ def create_app():
             return redirect(url_for("settings"))
         settings_dict = {k: get_setting(k, v) for k, v in DEFAULT_SETTINGS.items()}
         return render_template("settings.html", settings=settings_dict)
+
+
+    @app.route("/settings/print-design", methods=["GET", "POST"])
+    @login_required
+    @role_required(["admin"])
+    def print_design_settings():
+        if request.method == "POST":
+            payload = {"invoice": {}, "collection": {}, "reading": {}}
+            for section, fields in (
+                ("invoice", INVOICE_STYLE_FIELDS),
+                ("collection", COLLECTION_STYLE_FIELDS),
+                ("reading", READING_STYLE_FIELDS),
+            ):
+                for key, _label in fields:
+                    payload[section][key] = {
+                        "bg": request.form.get(f"{section}__{key}__bg", ""),
+                        "text": request.form.get(f"{section}__{key}__text", ""),
+                    }
+            save_print_style_settings(payload)
+            flash("تم حفظ ألوان الفواتير والكشوفات.", "success")
+            return redirect(url_for("print_design_settings"))
+
+        db = get_db()
+        settings_dict = {k: get_setting(k, v) for k, v in DEFAULT_SETTINGS.items()}
+        invoice_options = db.execute(
+            """
+            SELECT i.id, i.invoice_no, i.invoice_date, s.name subscriber_name, s.account_number
+            FROM invoices i
+            JOIN subscribers s ON s.id = i.subscriber_id
+            ORDER BY i.id DESC
+            LIMIT 12
+            """
+        ).fetchall()
+
+        selected_invoice_id = request.args.get("invoice_id", type=int)
+        latest_invoice = None
+        if selected_invoice_id:
+            latest_invoice = db.execute(
+                """
+                SELECT i.*, s.name subscriber_name, s.account_number, s.phone,
+                       s.village, s.address, s.meter_number,
+                       s.active AS subscriber_active,
+                       uc.username AS created_by_name
+                FROM invoices i
+                JOIN subscribers s ON s.id = i.subscriber_id
+                LEFT JOIN users uc ON uc.id = i.created_by
+                WHERE i.id = ?
+                """,
+                (selected_invoice_id,),
+            ).fetchone()
+        if latest_invoice is None and invoice_options:
+            selected_invoice_id = invoice_options[0]["id"]
+            latest_invoice = db.execute(
+                """
+                SELECT i.*, s.name subscriber_name, s.account_number, s.phone,
+                       s.village, s.address, s.meter_number,
+                       s.active AS subscriber_active,
+                       uc.username AS created_by_name
+                FROM invoices i
+                JOIN subscribers s ON s.id = i.subscriber_id
+                LEFT JOIN users uc ON uc.id = i.created_by
+                WHERE i.id = ?
+                """,
+                (selected_invoice_id,),
+            ).fetchone()
+
+        previous_invoice = None
+        qr_data = None
+        if latest_invoice:
+            previous_invoice = fetch_previous_invoice_summary(db, latest_invoice["subscriber_id"], latest_invoice["id"])
+            qr_data = qr_image_uri(make_qr_data(latest_invoice))
+
+        return render_template(
+            "print_design_settings.html",
+            settings=settings_dict,
+            print_styles=get_print_style_settings(),
+            invoice_style_fields=INVOICE_STYLE_FIELDS,
+            collection_style_fields=COLLECTION_STYLE_FIELDS,
+            reading_style_fields=READING_STYLE_FIELDS,
+            invoice_options=invoice_options,
+            selected_invoice_id=selected_invoice_id,
+            latest_invoice=latest_invoice,
+            previous_invoice=previous_invoice,
+            qr_data=qr_data,
+        )
 
     @app.route("/settings/reset-financial", methods=["POST"])
     @login_required
