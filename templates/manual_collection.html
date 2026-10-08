@@ -63,6 +63,34 @@
         <a class="btn btn-outline-secondary" href="{{ url_for('manual_collection.manual_collection_summary') }}">كشف الملخصات</a>
       </div>
     </div>
+
+    <div class="row g-3 mt-1">
+      <div class="col-12">
+        <div class="border rounded-4 p-3 bg-light-subtle">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <div class="fw-bold">خيارات كشف التحصيل</div>
+              <div class="small text-muted">إعدادات اختيارية؛ عند تركها كما هي يبقى الكشف مطابقًا للشكل الحالي.</div>
+            </div>
+            <span class="badge rounded-pill text-bg-light border" id="nameScaleBadge">100%</span>
+          </div>
+
+          <div class="d-flex flex-wrap align-items-center gap-4 mt-3">
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" role="switch" id="showReceived">
+              <label class="form-check-label fw-semibold" for="showReceived">إظهار المستلم للشهر الحالي</label>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+              <span class="small fw-semibold">حجم أسماء المشتركين</span>
+              <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle" id="nameScaleMinus" aria-label="تصغير الخط">−</button>
+              <input type="range" class="form-range m-0" id="nameScale" min="80" max="140" step="5" value="100" style="width:170px;" aria-label="حجم أسماء المشتركين">
+              <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle" id="nameScalePlus" aria-label="تكبير الخط">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="row g-3 mb-3">
@@ -195,21 +223,33 @@ function updateReportLinks() {
 
   const village = villageSelect.value ? encodeURIComponent(villageSelect.value) : '';
   const mode    = printMode.value || 'pdf';
+  const showReceived = document.getElementById('showReceived')?.checked ? '1' : '0';
+  const nameScaleInput = document.getElementById('nameScale');
+  const nameScale = nameScaleInput ? parseFloat(nameScaleInput.value || '100') : 100;
 
-  // كلا المسارين (قراءة + تحصيل) يقبلان ?mode=zip على نفس endpoint الـ PDF
-  // لا يوجد مسار /zip منفصل في الخلفية – نمرّر mode=zip لنفس الدالة
+  // إعدادات كشف التحصيل لا تؤثر على كشف القراءة.
   const baseReadings    = "{{ url_for('manual_collection.manual_collection_readings_pdf') }}";
   const baseCollections = "{{ url_for('manual_collection.manual_collection_collections_pdf') }}";
 
-  const qs           = village ? `?village=${village}&mode=${mode}` : `?mode=${mode}`;
+  const readingQs = village ? `?village=${village}&mode=${mode}` : `?mode=${mode}`;
+  const collectionParts = [];
+  if (village) collectionParts.push(`village=${village}`);
+  collectionParts.push(`mode=${mode}`);
+  collectionParts.push(`show_received=${showReceived}`);
+  collectionParts.push(`name_scale=${nameScale}`);
+  const collectionQs = `?${collectionParts.join('&')}`;
+
   const ext          = mode === 'zip' ? 'zip' : 'pdf';
   const villageLabel = villageSelect.value || 'جميع_القرى';
 
   readingsBtn.onclick = () =>
-    downloadPdf(baseReadings + qs, `كشف_قراءة_${villageLabel}.${ext}`, 'توليد كشف القراءة...');
+    downloadPdf(baseReadings + readingQs, `كشف_قراءة_${villageLabel}.${ext}`, 'توليد كشف القراءة...');
 
   collectionsBtn.onclick = () =>
-    downloadPdf(baseCollections + qs, `كشف_تحصيل_${villageLabel}.${ext}`, 'توليد كشف التحصيل...');
+    downloadPdf(baseCollections + collectionQs, `كشف_تحصيل_${villageLabel}.${ext}`, 'توليد كشف التحصيل...');
+
+  const badge = document.getElementById('nameScaleBadge');
+  if (badge) badge.textContent = `${Math.round(nameScale)}%`;
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -217,6 +257,23 @@ document.addEventListener('DOMContentLoaded', function () {
   const printMode      = document.getElementById('printMode');
   if (villageSelect) villageSelect.addEventListener('change', updateReportLinks);
   if (printMode)     printMode.addEventListener('change', updateReportLinks);
+
+  const showReceived = document.getElementById('showReceived');
+  const nameScale = document.getElementById('nameScale');
+  const minus = document.getElementById('nameScaleMinus');
+  const plus = document.getElementById('nameScalePlus');
+
+  if (showReceived) showReceived.addEventListener('change', updateReportLinks);
+  if (nameScale) nameScale.addEventListener('input', updateReportLinks);
+  if (minus && nameScale) minus.addEventListener('click', () => {
+    nameScale.value = String(Math.max(80, parseFloat(nameScale.value || '100') - 5));
+    updateReportLinks();
+  });
+  if (plus && nameScale) plus.addEventListener('click', () => {
+    nameScale.value = String(Math.min(140, parseFloat(nameScale.value || '100') + 5));
+    updateReportLinks();
+  });
+
   updateReportLinks();
 });
 </script>
