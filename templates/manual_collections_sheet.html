@@ -49,6 +49,18 @@ body {
   font-size: 11px;
 }
 
+.name-cell {
+  text-align: start;
+  font-weight: 700;
+  font-size: {{ "%.2f"|format(11 * ((name_scale or 100) / 100)) }}px !important;
+}
+
+.collection-options {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+}
+
 .report-header {
   border: 1px solid #cbd5e1;
   border-radius: 14px;
@@ -134,6 +146,27 @@ body {
         </a>
       </div>
     </div>
+
+    <div class="collection-options p-3 mt-3 no-print">
+      <div class="row g-3 align-items-center">
+        <div class="col-lg-5">
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="sheetShowReceived" {% if show_received %}checked{% endif %}>
+            <label class="form-check-label fw-semibold" for="sheetShowReceived">إظهار المستلم للشهر الحالي</label>
+          </div>
+        </div>
+        <div class="col-lg-7">
+          <div class="d-flex align-items-center gap-2">
+            <span class="small fw-semibold text-nowrap">حجم أسماء المشتركين</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle" id="sheetNameMinus">−</button>
+            <input type="range" class="form-range m-0 flex-grow-1" id="sheetNameScale" min="80" max="140" step="5" value="{{ name_scale or 100 }}" aria-label="حجم أسماء المشتركين">
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle" id="sheetNamePlus">+</button>
+            <span class="badge rounded-pill text-bg-light border" id="sheetNameBadge">{{ (name_scale or 100)|round|int }}%</span>
+          </div>
+          <div class="small text-muted mt-1">100% هو الحجم الحالي في الكشف.</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- القرى -->
@@ -216,8 +249,8 @@ body {
               <td>{{ row.village_name or '-' }}</td>
               <td>{{ row.hara or '' }}</td>
               <td>{{ row.meter_number or '-' }}</td>
-              <td class="text-start">
-                <div class="fw-semibold">{{ row.name or '-' }}</div>
+              <td class="name-cell">
+                {{ row.name or '-' }}
               </td>
               <td>{{ "{:,.0f}".format(row.previous_reading or 0) }}</td>
               <td>{{ "{:,.0f}".format(row.current_reading or 0) }}</td>
@@ -233,7 +266,7 @@ body {
               <td>{{ "{:,.0f}".format(row.consumption_amount or 0) }}</td>
               <td>{{ "{:,.0f}".format(row.opening_balance or 0) }}</td>
               <td class="fw-bold">{{ "{:,.0f}".format(row.total_amount or 0) }}</td>
-              <td></td>
+              <td>{% if show_received %}{{ "{:,.0f}".format(row.paid_amount or 0) }}{% endif %}</td>
               <td class="blank-line">..</td>
               <td>{{ "{:,.0f}".format(row.previous_paid_amount or 0) }}</td>
             </tr>
@@ -257,16 +290,49 @@ async function downloadPdf(url, filename) {
 
 const villageValue = "{{ village|default('')|replace('"', '\\\\"') }}";
 
+function collectionQuery(mode) {
+  const showReceived = document.getElementById('sheetShowReceived')?.checked ? '1' : '0';
+  const nameScale = document.getElementById('sheetNameScale')?.value || '100';
+  const parts = [];
+  if (villageValue) parts.push(`village=${encodeURIComponent(villageValue)}`);
+  parts.push(`mode=${mode}`);
+  parts.push(`show_received=${showReceived}`);
+  parts.push(`name_scale=${nameScale}`);
+  return '?' + parts.join('&');
+}
+
 document.getElementById('downloadCollectionsPdf')?.addEventListener('click', () => {
-  const url = `{{ url_for('manual_collection.manual_collection_collections_pdf') }}` + 
-              (villageValue ? `?village=${encodeURIComponent(villageValue)}` : '');
+  const url = `{{ url_for('manual_collection.manual_collection_collections_pdf') }}` + collectionQuery('pdf');
   downloadPdf(url, 'كشف_التحصيل.pdf');
 });
 
 document.getElementById('downloadCollectionsZip')?.addEventListener('click', () => {
-  const pdfUrl = `{{ url_for('manual_collection.manual_collection_collections_pdf') }}`;
-  const url = pdfUrl + (villageValue ? `?village=${encodeURIComponent(villageValue)}&mode=zip` : '?mode=zip');
+  const url = `{{ url_for('manual_collection.manual_collection_collections_pdf') }}` + collectionQuery('zip');
   downloadPdf(url, 'كشوفات_القرى.zip');
+});
+
+const sheetNameScale = document.getElementById('sheetNameScale');
+const sheetNameBadge = document.getElementById('sheetNameBadge');
+function syncSheetOptions() {
+  if (sheetNameBadge && sheetNameScale) {
+    sheetNameBadge.textContent = `${Math.round(parseFloat(sheetNameScale.value || '100'))}%`;
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set('name_scale', sheetNameScale?.value || '100');
+  url.searchParams.set('show_received', document.getElementById('sheetShowReceived')?.checked ? '1' : '0');
+  window.location.href = url.toString();
+}
+document.getElementById('sheetShowReceived')?.addEventListener('change', syncSheetOptions);
+sheetNameScale?.addEventListener('change', syncSheetOptions);
+document.getElementById('sheetNameMinus')?.addEventListener('click', () => {
+  if (!sheetNameScale) return;
+  sheetNameScale.value = String(Math.max(80, parseFloat(sheetNameScale.value || '100') - 5));
+  syncSheetOptions();
+});
+document.getElementById('sheetNamePlus')?.addEventListener('click', () => {
+  if (!sheetNameScale) return;
+  sheetNameScale.value = String(Math.min(140, parseFloat(sheetNameScale.value || '100') + 5));
+  syncSheetOptions();
 });
 </script>
 {% include "_progress_modal.html" %}
