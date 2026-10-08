@@ -177,16 +177,16 @@ body {
       <!-- السطر الأول: القرية / كشف شهر / هجري -->
       <div class="headline d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
         <div class="d-flex align-items-center flex-wrap gap-2">
-          <span class="lbl">القرية</span>
-          <span class="val h6 mb-0">{{ village_name }}</span>
+          <span class="lbl" data-print-style="topline_label">القرية</span>
+          <span class="val h6 mb-0" data-print-style="topline_value">{{ village_name }}</span>
         </div>
         <div class="d-flex align-items-center flex-wrap gap-2">
-          <span class="lbl">كشف شهر</span>
-          <span class="val">{{ report_month_name or '' }} {{ report_year or '' }}</span>
+          <span class="lbl" data-print-style="topline_label">كشف شهر</span>
+          <span class="val" data-print-style="topline_value">{{ report_month_name or '' }} {{ report_year or '' }}</span>
         </div>
         <div class="d-flex align-items-center flex-wrap gap-2">
-          <span class="lbl">{{ hijri_month_name or '' }}</span>
-          <span class="val">{{ hijri_year or '' }}</span>
+          <span class="lbl" data-print-style="topline_label">{{ hijri_month_name or '' }}</span>
+          <span class="val" data-print-style="topline_value">{{ hijri_year or '' }}</span>
         </div>
       </div>
 
@@ -194,26 +194,26 @@ body {
       <div class="row g-2 mb-2">
         <div class="col-3">
           <div class="summary-box">
-            <div class="small text-muted">عدد المشتركين</div>
-            <div class="fw-bold">{{ "{:,.0f}".format(s.count or 0) }}</div>
+            <div class="small text-muted" data-print-style="summary_label">عدد المشتركين</div>
+            <div class="fw-bold" data-print-style="summary_value">{{ "{:,.0f}".format(s.count or 0) }}</div>
           </div>
         </div>
         <div class="col-3">
           <div class="summary-box">
-            <div class="small text-muted">اجمالي الاستهلاك</div>
-            <div class="fw-bold">{{ "{:,.0f}".format(s.consumption_amount or 0) }}</div>
+            <div class="small text-muted" data-print-style="summary_label">اجمالي الاستهلاك</div>
+            <div class="fw-bold" data-print-style="summary_value">{{ "{:,.0f}".format(s.consumption_amount or 0) }}</div>
           </div>
         </div>
         <div class="col-3">
           <div class="summary-box">
-            <div class="small text-muted">اجمالي الوحدات</div>
-            <div class="fw-bold">{{ "{:,.0f}".format(s.units or 0) }}</div>
+            <div class="small text-muted" data-print-style="summary_label">اجمالي الوحدات</div>
+            <div class="fw-bold" data-print-style="summary_value">{{ "{:,.0f}".format(s.units or 0) }}</div>
           </div>
         </div>
         <div class="col-3">
           <div class="summary-box">
-            <div class="small text-muted">اجمالي المستلمة</div>
-            <div class="fw-bold">{{ "{:,.0f}".format(s.received or 0) }}</div>
+            <div class="small text-muted" data-print-style="summary_label">اجمالي المستلمة</div>
+            <div class="fw-bold" data-print-style="summary_value">{{ "{:,.0f}".format(s.received or 0) }}</div>
           </div>
         </div>
       </div>
@@ -223,21 +223,21 @@ body {
         <table class="table table-sm table-bordered mb-0 text-center align-middle sheet-table">
           <thead class="table-light">
             <tr>
-              <th style="width:3%">م</th>
-              <th style="width:5%">رقم الحساب</th>
-              <th style="width:6%">القرية</th>
-              <th style="width:6%">الحارة</th>
-              <th style="width:7%">رقم العداد</th>
-              <th style="width:20%">أسماء المشتركين</th>
-              <th style="width:5%">السابقة</th>
-              <th style="width:5%">الحالية</th>
-              <th style="width:6%">إجمالي الوحدات</th>
-              <th style="width:7%">مقدار الاستهلاك</th>
-              <th style="width:7%">المتاخرات</th>
-              <th style="width:7%">إجمالي الفاتورة</th>
-              <th style="width:6%">المستلم</th>
-              <th style="width:4%">ملاحظات</th>
-              <th style="width:6%">{{ received_prev_label }}</th>
+              <th data-print-style="table_header" style="width:3%">م</th>
+              <th data-print-style="table_header" style="width:5%">رقم الحساب</th>
+              <th data-print-style="table_header" style="width:6%">القرية</th>
+              <th data-print-style="table_header" style="width:6%">الحارة</th>
+              <th data-print-style="table_header" style="width:7%">رقم العداد</th>
+              <th data-print-style="table_header" style="width:20%">أسماء المشتركين</th>
+              <th data-print-style="table_header" style="width:5%">السابقة</th>
+              <th data-print-style="table_header" style="width:5%">الحالية</th>
+              <th data-print-style="table_header" style="width:6%">إجمالي الوحدات</th>
+              <th data-print-style="table_header" style="width:7%">مقدار الاستهلاك</th>
+              <th data-print-style="table_header" style="width:7%">المتاخرات</th>
+              <th data-print-style="table_header" style="width:7%">إجمالي الفاتورة</th>
+              <th data-print-style="table_header" style="width:6%">المستلم</th>
+              <th data-print-style="table_header" style="width:4%">ملاحظات</th>
+              <th data-print-style="table_header" style="width:6%">{{ received_prev_label }}</th>
             </tr>
           </thead>
           <tbody>
