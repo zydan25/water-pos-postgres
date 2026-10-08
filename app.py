@@ -74,6 +74,7 @@ from print_design import (
     INVOICE_STYLE_FIELDS,
     COLLECTION_STYLE_FIELDS,
     READING_STYLE_FIELDS,
+    STYLE_DEFAULTS,
 )
 
 try:
@@ -1268,6 +1269,7 @@ def create_app():
             invoice_style_fields=INVOICE_STYLE_FIELDS,
             collection_style_fields=COLLECTION_STYLE_FIELDS,
             reading_style_fields=READING_STYLE_FIELDS,
+            style_defaults=STYLE_DEFAULTS,
             invoice_options=invoice_options,
             selected_invoice_id=selected_invoice_id,
             latest_invoice=latest_invoice,
