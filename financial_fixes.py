@@ -675,6 +675,7 @@ def manual_collection_collections():
     month_keys, selected_month = _resolve_collection_month(db, request.args.get("month"))
     invoice_months = [{"key": key, "label": _month_display_label(key)} for key in month_keys]
     show_received = request.args.get("show_received", "0") == "1"
+    repeat_header = _is_truthy(request.args.get("repeat_header", "1"))
     try:
         name_scale = float(request.args.get("name_scale", "100") or 100)
     except (TypeError, ValueError):
@@ -689,6 +690,7 @@ def manual_collection_collections():
         print_mode=False,
         village=village,
         show_received=show_received,
+        repeat_header=repeat_header,
         name_scale=name_scale,
         invoice_months=invoice_months,
         selected_month=selected_month,
@@ -706,6 +708,7 @@ def manual_collection_collections_pdf():
     month_keys, selected_month = _resolve_collection_month(db, request.args.get("month"))
     mode = (request.args.get("mode", "pdf") or "pdf").strip().lower()
     show_received = request.args.get("show_received", "0") == "1"
+    repeat_header = _is_truthy(request.args.get("repeat_header", "1"))
     try:
         name_scale = float(request.args.get("name_scale", "100") or 100)
     except (TypeError, ValueError):
@@ -733,6 +736,7 @@ def manual_collection_collections_pdf():
                             "manual_collections_pdf.html",
                             print_mode=True,
                             show_received=show_received,
+                            repeat_header=repeat_header,
                             name_scale=name_scale,
                             **local_ctx,
                         )
@@ -749,6 +753,7 @@ def manual_collection_collections_pdf():
             print_mode=True,
             village=village,
             show_received=show_received,
+            repeat_header=repeat_header,
             name_scale=name_scale,
             **ctx,
         )
@@ -937,4 +942,8 @@ def bulk_payments():
         LIMIT 50
         """
     ).fetchall()
-    return render_template("manual_bulk_payments.html", invoices=invoices)
+    return render_template(
+        "manual_bulk_payments.html",
+        invoices=invoices,
+        currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]),
+    )

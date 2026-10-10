@@ -181,6 +181,15 @@ body {
           <div class="small text-muted mt-1">100% هو الحجم الحالي في الكشف.</div>
         </div>
       </div>
+      <div class="row g-3 mt-1">
+        <div class="col-12">
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="sheetRepeatHeader" {% if repeat_header %}checked{% endif %}>
+            <label class="form-check-label fw-semibold" for="sheetRepeatHeader">تكرار الهيدر كاملاً في كل صفحة PDF (اسم القرية، الشهر، الملخص وعناوين الأعمدة)</label>
+            <div class="small text-muted mt-1">مفعّل تلقائيًا. ألغِ التحديد إذا رغبت في إظهار الهيدر الكامل في بداية كشف كل قرية فقط.</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -314,6 +323,7 @@ function collectionQuery(mode) {
   if (selectedMonth) parts.push(`month=${encodeURIComponent(selectedMonth)}`);
   parts.push(`mode=${mode}`);
   parts.push(`show_received=${showReceived}`);
+  parts.push(`repeat_header=${document.getElementById('sheetRepeatHeader')?.checked ? '1' : '0'}`);
   parts.push(`name_scale=${nameScale}`);
   return '?' + parts.join('&');
 }
@@ -337,9 +347,11 @@ function syncSheetOptions() {
   const url = new URL(window.location.href);
   url.searchParams.set('name_scale', sheetNameScale?.value || '100');
   url.searchParams.set('show_received', document.getElementById('sheetShowReceived')?.checked ? '1' : '0');
+  url.searchParams.set('repeat_header', document.getElementById('sheetRepeatHeader')?.checked ? '1' : '0');
   window.location.href = url.toString();
 }
 document.getElementById('sheetShowReceived')?.addEventListener('change', syncSheetOptions);
+document.getElementById('sheetRepeatHeader')?.addEventListener('change', syncSheetOptions);
 sheetNameScale?.addEventListener('change', syncSheetOptions);
 document.getElementById('sheetMonthSelect')?.addEventListener('change', function () {
   const url = new URL(window.location.href);
