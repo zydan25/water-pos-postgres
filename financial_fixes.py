@@ -26,6 +26,8 @@ except Exception as _playwright_import_error:
     print("playwright unavailable:", _playwright_import_error)
     PLAYWRIGHT_AVAILABLE = False
 
+from modules.meter_management.services import location_children_map, flatten_locations
+
 from database import (
     DEFAULT_SETTINGS,
     get_db,
