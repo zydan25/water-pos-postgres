@@ -1,87 +1,276 @@
-
 {% extends "base.html" %}
+{% block title %}تسجيل تسديدات متعددة{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/bulk_readings.css') }}">
+<style>
+  .bulk-payment-page .bulk-reading-subtitle{max-width:780px}
+  .bulk-payment-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%}
+  .bulk-payment-search{flex:1;min-width:240px}
+  .bulk-payment-select-all{display:flex;align-items:center;gap:8px;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;background:#f8fafc;font-size:.75rem;font-weight:800;color:#435169;white-space:nowrap}
+  .bulk-payment-select-all input,.bulk-payment-select{width:20px;height:20px;accent-color:#2563eb;flex:0 0 auto}
+  .bulk-reading-card.payment-selected{border-color:#83aaf4;box-shadow:0 0 0 3px rgba(37,99,235,.08),0 8px 24px rgba(15,23,42,.06)}
+  .bulk-payment-card-top{display:flex;align-items:flex-start;gap:10px;min-width:0}
+  .bulk-payment-check-wrap{padding-top:2px}
+  .bulk-payment-invoice{font-size:.68rem;color:#64748b;margin-top:4px}
+  .bulk-payment-location{display:flex;align-items:center;gap:5px}
+  .bulk-payment-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  .bulk-payment-metrics .bulk-reading-metric strong{overflow-wrap:anywhere}
+  .bulk-payment-metric-remaining{background:#fff8eb;border-color:#f5e4bd}
+  .bulk-payment-metric-remaining strong{color:#a96800}
+  .bulk-payment-field{min-width:0}
+  .bulk-payment-field label{display:block;font-size:.68rem;font-weight:800;color:#69778a;margin-bottom:5px}
+  .bulk-payment-field .form-control,.bulk-payment-field .form-select{min-height:44px;border-radius:12px;border-color:#d7e0ec;font-size:.82rem}
+  .bulk-payment-field .form-control:focus,.bulk-payment-field .form-select:focus{border-color:#7da8ef;box-shadow:0 0 0 4px rgba(37,99,235,.08)}
+  .bulk-payment-fields{display:grid;grid-template-columns:minmax(105px,.8fr) minmax(0,1.2fr);gap:9px}
+  .bulk-payment-amount-label{display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .bulk-payment-amount-label small{font-size:.63rem;color:#7b8798;font-weight:600}
+  .bulk-payment-amount{height:50px!important;text-align:center;font-size:1.08rem!important;font-weight:900}
+  .bulk-payment-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;font-size:.66rem;color:#7c8899}
+  .bulk-payment-foot .selected-mark{color:#2563eb;font-weight:900}
+  .bulk-payment-foot .not-selected-mark{color:#8a96a8}
+  .bulk-payment-actions{position:sticky}
+  .bulk-payment-empty{grid-column:1/-1}
+  @media(max-width:760px){
+    .bulk-payment-search{min-width:100%}
+    .bulk-payment-select-all{width:100%;justify-content:center}
+    .bulk-payment-fields{grid-template-columns:1fr}
+    .bulk-payment-metrics{gap:6px}
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
-  <div class="card p-4 rounded-4 shadow-sm">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+<div class="container-fluid bulk-reading-page bulk-payment-page">
+  <div class="bulk-reading-hero">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
       <div>
-        <h4 class="mb-0">تسجيل تسديدات متعددة</h4>
-        <div class="text-muted small">تظهر أحدث فاتورة غير مسددة لكل مشترك. حدّد الفواتير التي تريد تسديدها فقط ثم احفظ.</div>
+        <div class="bulk-reading-eyebrow">التحصيل · إدارة المدفوعات</div>
+        <div class="bulk-reading-title"><i class="bi bi-cash-coin me-1"></i>تسجيل تسديدات متعددة</div>
+        <div class="bulk-reading-subtitle">كل بطاقة تعرض أحدث فاتورة غير مسددة للمشترك. اختر البطاقات التي تريد التسديد لها، راجع المبلغ وطريقة السداد، ثم احفظ المحدد فقط.</div>
       </div>
-      <a class="btn btn-outline-secondary" href="{{ url_for('manual_collection.manual_collection_home') }}">رجوع</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('manual_collection.manual_collection_home') }}">
+        <i class="bi bi-arrow-return-right me-1"></i>رجوع
+      </a>
+    </div>
+    <div class="bulk-summary">
+      <div class="bulk-summary-item primary">
+        <small>الفواتير الظاهرة</small><strong id="paymentTotal">{{ invoices|length }}</strong>
+      </div>
+      <div class="bulk-summary-item success">
+        <small>الفواتير المحددة</small><strong id="paymentSelected">0</strong>
+      </div>
+      <div class="bulk-summary-item warning">
+        <small>مجموع مبالغ المحدد</small><strong id="paymentAmountTotal">0</strong>
+      </div>
+      <div class="bulk-summary-item">
+        <small>العملة</small><strong>{{ currency or currency_name or 'حسب إعدادات النظام' }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="bulk-reading-toolbar">
+    <div class="bulk-payment-tools">
+      <div class="bulk-search-wrap bulk-payment-search">
+        <i class="bi bi-search"></i>
+        <input id="paymentSearch" type="search" class="bulk-search" placeholder="ابحث بالاسم أو رقم الحساب أو الفاتورة أو القرية...">
+        <button type="button" id="paymentSearchClear" class="bulk-search-clear" hidden aria-label="مسح البحث">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <select id="paymentSort" class="form-select form-select-sm" style="height:44px;border-radius:12px;min-width:155px">
+        <option value="date">فرز حسب: الأحدث</option>
+        <option value="name">فرز حسب: اسم المشترك</option>
+        <option value="account">فرز حسب: رقم الحساب</option>
+        <option value="location">فرز حسب: القرية</option>
+        <option value="remaining">فرز حسب: المتبقي الأعلى</option>
+      </select>
+      <label class="bulk-payment-select-all">
+        <input type="checkbox" id="selectAllInvoices" aria-label="تحديد كل البطاقات الظاهرة">
+        <span>تحديد كل البطاقات الظاهرة</span>
+      </label>
+    </div>
+    <div class="bulk-results-count" id="paymentResultsCount">{{ invoices|length }} فاتورة</div>
+  </div>
+
+  <form method="post" id="bulkPaymentsForm">
+    <div id="bulkPaymentGrid" class="bulk-reading-grid">
+      {% for inv in invoices %}
+      <article class="bulk-reading-card"
+        data-search="{{ (inv.subscriber_name ~ ' ' ~ (inv.account_number or '') ~ ' ' ~ (inv.invoice_no or '') ~ ' ' ~ (inv.village or '') ~ ' ' ~ (inv.address or '') ~ ' ' ~ (inv.month_label or inv.invoice_date or ''))|lower }}"
+        data-name="{{ (inv.subscriber_name or '')|lower }}"
+        data-account="{{ (inv.account_number or '')|lower }}"
+        data-location="{{ (inv.village or inv.address or '')|lower }}"
+        data-remaining="{{ inv.remaining_amount or 0 }}"
+        data-date="{{ inv.invoice_date or '' }}">
+        <input type="hidden" name="invoice_id" value="{{ inv.id }}">
+        <div class="bulk-reading-card-head">
+          <div class="bulk-payment-card-top">
+            <div class="bulk-payment-check-wrap">
+              <input type="checkbox" class="form-check-input bulk-payment-select invoice-select" name="selected_invoice_id" value="{{ inv.id }}" aria-label="اختيار فاتورة {{ inv.invoice_no }}">
+            </div>
+            <div class="flex-grow-1 min-w-0">
+              <div class="bulk-reading-name" title="{{ inv.subscriber_name }}">{{ inv.subscriber_name or 'مشترك بدون اسم' }}</div>
+              <div class="bulk-reading-account">حساب {{ inv.account_number or '—' }}{% if inv.phone %} · {{ inv.phone }}{% endif %}</div>
+            </div>
+            <span class="badge rounded-pill text-bg-light border">أحدث فاتورة</span>
+          </div>
+          <div class="bulk-reading-location bulk-payment-location" title="{{ inv.village or inv.address or 'غير مصنف' }}">
+            <i class="bi bi-geo-alt"></i>{{ inv.village or inv.address or 'غير مصنف' }}
+          </div>
+        </div>
+
+        <div class="bulk-reading-body">
+          <div class="bulk-payment-metrics">
+            <div class="bulk-reading-metric">
+              <small>رقم الفاتورة</small><strong>{{ inv.invoice_no or ('#' ~ inv.id) }}</strong>
+            </div>
+            <div class="bulk-reading-metric">
+              <small>الشهر</small><strong>{{ inv.month_label or inv.invoice_date or '—' }}</strong>
+            </div>
+            <div class="bulk-reading-metric bulk-payment-metric-remaining">
+              <small>المبلغ المتبقي</small><strong>{{ "{:,.2f}".format(inv.remaining_amount or 0).rstrip('0').rstrip('.') }}</strong>
+            </div>
+            <div class="bulk-reading-metric">
+              <small>تاريخ الفاتورة</small><strong>{{ inv.invoice_date or '—' }}</strong>
+            </div>
+          </div>
+
+          <div class="bulk-payment-field mb-3">
+            <label class="bulk-payment-amount-label" for="paymentAmount{{ inv.id }}">
+              <span>مبلغ التسديد</span><small>يمكن تعديله قبل الحفظ</small>
+            </label>
+            <input id="paymentAmount{{ inv.id }}" class="form-control bulk-reading-input bulk-payment-amount" type="number" min="0.01" step="0.01" inputmode="decimal" name="amount" value="{{ inv.remaining_amount or 0 }}" placeholder="أدخل مبلغ التسديد">
+          </div>
+
+          <div class="bulk-payment-fields">
+            <div class="bulk-payment-field">
+              <label for="paymentMethod{{ inv.id }}">طريقة السداد</label>
+              <select id="paymentMethod{{ inv.id }}" class="form-select" name="method">
+                <option value="نقداً" selected>نقداً</option>
+                <option value="تحويل">تحويل</option>
+                <option value="شيك">شيك</option>
+              </select>
+            </div>
+            <div class="bulk-payment-field">
+              <label for="paymentNote{{ inv.id }}">ملاحظة (اختياري)</label>
+              <input id="paymentNote{{ inv.id }}" class="form-control" name="note" placeholder="أضف ملاحظة إن لزم">
+            </div>
+          </div>
+
+          <div class="bulk-payment-foot">
+            <span>حدّد البطاقة لإدراجها في الحفظ</span>
+            <span class="selected-mark d-none"><i class="bi bi-check-circle-fill me-1"></i>محدد</span>
+            <span class="not-selected-mark">غير محدد</span>
+          </div>
+        </div>
+      </article>
+      {% else %}
+      <div class="bulk-reading-empty bulk-payment-empty">
+        <div class="fs-2 mb-2"><i class="bi bi-receipt"></i></div>
+        <div class="fw-bold mb-1">لا توجد فواتير غير مسددة</div>
+        <div class="small">ستظهر هنا أحدث فاتورة عليها مبلغ متبقٍ لكل مشترك.</div>
+      </div>
+      {% endfor %}
     </div>
 
-    <form method="post">
-      <div class="table-responsive">
-        <table class="table table-hover align-middle">
-          <thead class="table-light">
-            <tr>
-              <th style="width:52px">
-                <input type="checkbox" class="form-check-input" id="selectAllInvoices" aria-label="تحديد كل الفواتير الظاهرة">
-              </th>
-              <th>المشترك</th>
-              <th>القرية</th>
-              <th>الفاتورة</th>
-              <th>الشهر</th>
-              <th>المتبقي</th>
-              <th style="width:150px">المبلغ</th>
-              <th style="width:160px">الطريقة</th>
-              <th>ملاحظة</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for inv in invoices %}
-            <tr>
-              <td>
-                <input type="checkbox" class="form-check-input invoice-select" name="selected_invoice_id" value="{{ inv.id }}" aria-label="اختيار فاتورة {{ inv.invoice_no }}">
-              </td>
-              <td>
-                <div class="fw-semibold">{{ inv.subscriber_name }}</div>
-                <div class="small text-muted">{{ inv.account_number }} • {{ inv.address or '-' }}</div>
-              </td>
-              <td>{{ inv.village or inv.address or '-' }}</td>
-              <td>
-                <input type="hidden" name="invoice_id" value="{{ inv.id }}">
-                {{ inv.invoice_no }}
-              </td>
-              <td>{{ inv.month_label or inv.invoice_date or '-' }}</td>
-              <td class="fw-bold">{{ "%.0f"|format(inv.remaining_amount or 0) }}</td>
-              <td>
-                <input class="form-control" type="text" inputmode="decimal" name="amount" value="{{ inv.remaining_amount or 0 }}" placeholder="0">
-              </td>
-              <td>
-                <select class="form-select" name="method">
-                  <option value="نقداً" selected>نقداً</option>
-                  <option value="تحويل">تحويل</option>
-                  <option value="شيك">شيك</option>
-                </select>
-              </td>
-              <td><input class="form-control" name="note" placeholder="اختياري"></td>
-            </tr>
-            {% else %}
-            <tr><td colspan="9" class="text-center text-muted py-4">لا توجد فواتير غير مسددة</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+    {% if invoices %}
+    <div class="bulk-reading-actions bulk-payment-actions">
+      <div class="hint" id="paymentSaveHint">لم يتم تحديد أي فاتورة بعد. لن يتم تسجيل أي دفعة غير محددة.</div>
+      <div class="buttons">
+        <button type="button" class="btn btn-outline-secondary" id="clearPaymentSelection">
+          <i class="bi bi-x-circle me-1"></i>إلغاء التحديد
+        </button>
+        <button type="submit" class="btn btn-primary" id="saveSelectedPayments">
+          <i class="bi bi-save me-1"></i>حفظ التسديدات المحددة
+        </button>
       </div>
-      <div class="d-flex justify-content-end gap-2 mt-3">
-        <button class="btn btn-primary">حفظ التسديدات المحددة</button>
-      </div>
-    </form>
-  </div>
+    </div>
+    {% endif %}
+  </form>
 </div>
+
 <script>
-document.getElementById('selectAllInvoices')?.addEventListener('change', function () {
-  document.querySelectorAll('.invoice-select').forEach(function (box) {
-    box.checked = this.checked;
-  }, this);
-});
-document.querySelectorAll('.invoice-select').forEach(function (box) {
-  box.addEventListener('change', function () {
-    const all = document.getElementById('selectAllInvoices');
-    const boxes = Array.from(document.querySelectorAll('.invoice-select'));
-    if (all) all.checked = boxes.length > 0 && boxes.every(function (item) { return item.checked; });
+(function(){
+  const grid=document.getElementById('bulkPaymentGrid');
+  if(!grid)return;
+  const cards=Array.from(grid.querySelectorAll('.bulk-reading-card'));
+  const boxes=Array.from(grid.querySelectorAll('.invoice-select'));
+  const selectAll=document.getElementById('selectAllInvoices');
+  const search=document.getElementById('paymentSearch');
+  const clearSearch=document.getElementById('paymentSearchClear');
+  const sort=document.getElementById('paymentSort');
+  const selectedCount=document.getElementById('paymentSelected');
+  const amountTotal=document.getElementById('paymentAmountTotal');
+  const resultsCount=document.getElementById('paymentResultsCount');
+  const saveHint=document.getElementById('paymentSaveHint');
+
+  function visibleCards(){return cards.filter(card=>card.style.display!=='none')}
+  function formatMoney(value){return (Number(value)||0).toLocaleString('en-US',{maximumFractionDigits:2})}
+  function updateSelection(){
+    let count=0,total=0;
+    cards.forEach(card=>{
+      const box=card.querySelector('.invoice-select');
+      const selected=!!box?.checked;
+      card.classList.toggle('payment-selected',selected);
+      card.querySelector('.selected-mark')?.classList.toggle('d-none',!selected);
+      const notSelected=card.querySelector('.not-selected-mark');
+      if(notSelected)notSelected.classList.toggle('d-none',selected);
+      if(selected){
+        count++;
+        total+=Math.max(0,Number(card.querySelector('input[name="amount"]')?.value)||0);
+      }
+    });
+    if(selectedCount)selectedCount.textContent=String(count);
+    if(amountTotal)amountTotal.textContent=formatMoney(total);
+    if(saveHint)saveHint.textContent=count
+      ? 'تم تحديد '+count+' فاتورة بإجمالي مبالغ '+formatMoney(total)+'. سيتم حفظ هذه الفواتير فقط.'
+      : 'لم يتم تحديد أي فاتورة بعد. لن يتم تسجيل أي دفعة غير محددة.';
+    if(selectAll){
+      const visible=visibleCards().map(card=>card.querySelector('.invoice-select')).filter(Boolean);
+      const checked=visible.filter(box=>box.checked).length;
+      selectAll.checked=visible.length>0&&checked===visible.length;
+      selectAll.indeterminate=checked>0&&checked<visible.length;
+    }
+  }
+  function applySearch(){
+    const term=(search?.value||'').trim().toLowerCase();
+    cards.forEach(card=>{card.style.display=(!term||(card.dataset.search||'').includes(term))?'':'none'});
+    if(clearSearch)clearSearch.hidden=!term;
+    if(resultsCount)resultsCount.textContent=String(visibleCards().length)+' فاتورة';
+    updateSelection();
+  }
+  function sortCards(){
+    const key=sort?.value||'date';
+    cards.sort((a,b)=>{
+      if(key==='remaining')return (Number(b.dataset.remaining)||0)-(Number(a.dataset.remaining)||0);
+      if(key==='date')return (b.dataset.date||'').localeCompare(a.dataset.date||'');
+      return (a.dataset[key]||'').localeCompare(b.dataset[key]||'','ar',{numeric:true,sensitivity:'base'});
+    });
+    cards.forEach(card=>grid.appendChild(card));
+    applySearch();
+  }
+  boxes.forEach(box=>box.addEventListener('change',updateSelection));
+  grid.querySelectorAll('input[name="amount"]').forEach(input=>input.addEventListener('input',updateSelection));
+  selectAll?.addEventListener('change',function(){
+    visibleCards().forEach(card=>{const box=card.querySelector('.invoice-select');if(box)box.checked=this.checked});
+    updateSelection();
   });
-});
+  search?.addEventListener('input',applySearch);
+  clearSearch?.addEventListener('click',function(){search.value='';applySearch();search.focus()});
+  sort?.addEventListener('change',sortCards);
+  document.getElementById('clearPaymentSelection')?.addEventListener('click',function(){
+    boxes.forEach(box=>box.checked=false);updateSelection();
+  });
+  document.getElementById('bulkPaymentsForm')?.addEventListener('submit',function(e){
+    if(!boxes.some(box=>box.checked)){
+      e.preventDefault();
+      alert('حدد فاتورة واحدة على الأقل قبل حفظ التسديدات.');
+      return;
+    }
+    const button=document.getElementById('saveSelectedPayments');
+    if(button){button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>جارٍ حفظ التسديدات...'}
+  });
+  updateSelection();
+})();
 </script>
 {% endblock %}
