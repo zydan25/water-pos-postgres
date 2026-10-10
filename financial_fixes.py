@@ -876,7 +876,10 @@ def bulk_payments():
 
         if not selected_invoice_ids:
             flash("حدد الفواتير التي تريد تسديدها أولاً.", "warning")
-            return redirect(url_for("manual_collection.bulk_payments"))
+            redirect_location_id = request.form.get("location_id", type=int)
+        if redirect_location_id:
+            return redirect(url_for("manual_collection.bulk_payments", location_id=redirect_location_id))
+        return redirect(url_for("manual_collection.bulk_payments"))
 
         for idx, invoice_id in enumerate(invoice_ids):
             try:
@@ -941,21 +944,71 @@ def bulk_payments():
             )
         return redirect(url_for("manual_collection.bulk_payments"))
 
-    invoices = db.execute(
+    location_tree = location_children_map()
+    location_rows = flatten_locations(location_tree)
+    location_by_id = {int(row["id"]): row for row in location_rows}
+    location_id = request.args.get("location_id", type=int)
+    selected_location = location_by_id.get(location_id) if location_id else None
+    if selected_location and not selected_location.get("active"):
+        location_id = None
+        selected_location = None
+
+    location_ids = []
+    if location_id:
+        location_ids = [
+            int(row["id"])
+            for row in db.execute(
+                """
+                WITH RECURSIVE locs(id) AS (
+                    SELECT id FROM water_locations WHERE id=? AND active=1
+                    UNION ALL
+                    SELECT wl.id
+                    FROM water_locations wl
+                    JOIN locs ON wl.parent_id=locs.id
+                )
+                SELECT id FROM locs
+                """,
+                (location_id,),
+            ).fetchall()
+        ]
+
+    location_filter = ""
+    query_params = []
+    if location_ids:
+        location_filter = " AND s.location_id IN (" + ",".join("?" for _ in location_ids) + ")"
+        query_params.extend(location_ids)
+
+    invoice_rows = db.execute(
         """
         SELECT i.id, i.invoice_no, i.invoice_date, i.month_label,
                i.total_amount, i.paid_amount, i.remaining_amount,
-               s.name subscriber_name, s.account_number, s.village, s.address, s.phone
+               s.id AS subscriber_id, s.name subscriber_name, s.account_number,
+               s.village, s.address, s.phone, s.location_id,
+               wl.name AS water_location_name
         FROM invoices i
         JOIN subscribers s ON s.id = i.subscriber_id
+        LEFT JOIN water_locations wl ON wl.id = s.location_id
         WHERE i.id = (
             SELECT MAX(i2.id)
             FROM invoices i2
             WHERE i2.subscriber_id = i.subscriber_id
         )
+        """ + location_filter + """
         ORDER BY i.invoice_date DESC, i.id DESC
-        """
+        """,
+        query_params,
     ).fetchall()
+
+    invoices = []
+    for row in invoice_rows:
+        invoice = dict(row)
+        location = location_by_id.get(int(invoice["location_id"])) if invoice.get("location_id") else None
+        invoice["location_path"] = (
+            location.get("path") if location else
+            (invoice.get("water_location_name") or invoice.get("village") or invoice.get("address") or "")
+        )
+        invoices.append(invoice)
+
     outstanding_invoice_count = sum(
         1 for invoice in invoices if float(invoice["remaining_amount"] or 0) > 0
     )
@@ -966,4 +1019,7 @@ def bulk_payments():
         outstanding_invoice_count=outstanding_invoice_count,
         paid_invoice_count=paid_invoice_count,
         currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]),
+        location_tree=location_tree,
+        location_id=location_id,
+        selected_location_path=selected_location.get("path", "") if selected_location else "",
     )
