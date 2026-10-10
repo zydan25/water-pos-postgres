@@ -942,4 +942,8 @@ def bulk_payments():
         LIMIT 50
         """
     ).fetchall()
-    return render_template("manual_bulk_payments.html", invoices=invoices)
+    return render_template(
+        "manual_bulk_payments.html",
+        invoices=invoices,
+        currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]),
+    )
