@@ -76,9 +76,20 @@
           </div>
 
           <div class="d-flex flex-wrap align-items-center gap-4 mt-3">
+            <div class="d-flex align-items-center gap-2">
+              <label class="form-label fw-semibold mb-0 text-nowrap" for="collectionMonthSelect">شهر كشف التحصيل</label>
+              <select class="form-select form-select-sm" id="collectionMonthSelect" style="min-width:155px">
+                {% for month in invoice_months %}
+                <option value="{{ month.key }}" {% if month.key == selected_month %}selected{% endif %}>{{ month.label }}</option>
+                {% else %}
+                <option value="">لا توجد فواتير</option>
+                {% endfor %}
+              </select>
+            </div>
+
             <div class="form-check form-switch mb-0">
               <input class="form-check-input" type="checkbox" role="switch" id="showReceived">
-              <label class="form-check-label fw-semibold" for="showReceived">إظهار المستلم للشهر الحالي</label>
+              <label class="form-check-label fw-semibold" for="showReceived">إظهار المستلم للشهر المحدد</label>
             </div>
 
             <div class="d-flex align-items-center gap-2">
@@ -104,7 +115,7 @@
       </a>
     </div>
     <div class="col-md-3">
-      <a href="{{ url_for('manual_collection.manual_collection_collections') }}" class="text-decoration-none">
+      <a id="openCollectionsSheet" href="{{ url_for('manual_collection.manual_collection_collections', month=selected_month) }}" class="text-decoration-none">
         <div class="card action-card p-3 h-100 rounded-4 shadow-sm">
           <div class="fs-3">💰</div>
           <div class="fw-bold">كشف تحصيل</div>
@@ -216,12 +227,15 @@ async function downloadPdf(url, filename, title) {
 function updateReportLinks() {
   const villageSelect  = document.getElementById('villageSelect');
   const printMode      = document.getElementById('printMode');
+  const monthSelect    = document.getElementById('collectionMonthSelect');
   const readingsBtn    = document.getElementById('readingsBtn');
   const collectionsBtn = document.getElementById('collectionsBtn');
+  const sheetLink      = document.getElementById('openCollectionsSheet');
 
   if (!villageSelect || !printMode || !readingsBtn || !collectionsBtn) return;
 
   const village = villageSelect.value ? encodeURIComponent(villageSelect.value) : '';
+  const selectedMonth = monthSelect ? monthSelect.value : '';
   const mode    = printMode.value || 'pdf';
   const showReceived = document.getElementById('showReceived')?.checked ? '1' : '0';
   const nameScaleInput = document.getElementById('nameScale');
@@ -235,9 +249,15 @@ function updateReportLinks() {
   const collectionParts = [];
   if (village) collectionParts.push(`village=${village}`);
   collectionParts.push(`mode=${mode}`);
+  if (selectedMonth) collectionParts.push(`month=${encodeURIComponent(selectedMonth)}`);
   collectionParts.push(`show_received=${showReceived}`);
   collectionParts.push(`name_scale=${nameScale}`);
   const collectionQs = `?${collectionParts.join('&')}`;
+  if (sheetLink) {
+    sheetLink.href = selectedMonth
+      ? `{{ url_for('manual_collection.manual_collection_collections') }}?month=${encodeURIComponent(selectedMonth)}`
+      : `{{ url_for('manual_collection.manual_collection_collections') }}`;
+  }
 
   const ext          = mode === 'zip' ? 'zip' : 'pdf';
   const villageLabel = villageSelect.value || 'جميع_القرى';
@@ -257,6 +277,8 @@ document.addEventListener('DOMContentLoaded', function () {
   const printMode      = document.getElementById('printMode');
   if (villageSelect) villageSelect.addEventListener('change', updateReportLinks);
   if (printMode)     printMode.addEventListener('change', updateReportLinks);
+  const monthSelect = document.getElementById('collectionMonthSelect');
+  if (monthSelect) monthSelect.addEventListener('change', updateReportLinks);
 
   const showReceived = document.getElementById('showReceived');
   const nameScale = document.getElementById('nameScale');

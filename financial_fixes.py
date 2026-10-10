@@ -309,6 +309,52 @@ _AR_HJ_MONTHS = (
 )
 
 
+def _available_invoice_months(db) -> list[str]:
+    """الشهور الموجودة فعليًا في الفواتير، من الأحدث إلى الأقدم."""
+    rows = db.execute(
+        """
+        SELECT DISTINCT substr(
+            COALESCE(NULLIF(TRIM(month_label), ''), invoice_date), 1, 7
+        ) AS month_key
+        FROM invoices
+        WHERE COALESCE(NULLIF(TRIM(month_label), ''), invoice_date) IS NOT NULL
+        ORDER BY month_key DESC
+        """
+    ).fetchall()
+
+    months = []
+    for row in rows:
+        key = str(row["month_key"] or "").strip()
+        if len(key) != 7 or key[4:5] != "-" or not key[:4].isdigit() or not key[5:].isdigit():
+            continue
+        try:
+            month_number = int(key[5:7])
+        except ValueError:
+            continue
+        if 1 <= month_number <= 12 and key not in months:
+            months.append(key)
+    return months
+
+
+def _resolve_collection_month(db, requested_month: str | None = None):
+    """اعتماد الشهر المطلوب، أو أحدث شهر توجد فيه فواتير عند عدم الاختيار."""
+    months = _available_invoice_months(db)
+    requested = (requested_month or "").strip()
+    selected = requested if requested in months else (months[0] if months else None)
+    return months, selected
+
+
+def _month_display_label(month_key: str) -> str:
+    try:
+        year = int(month_key[:4])
+        month_number = int(month_key[5:7])
+        if 1 <= month_number <= 12:
+            return f"{_AR_GR_MONTHS[month_number - 1]} {year}"
+    except (TypeError, ValueError):
+        pass
+    return month_key
+
+
 def _gregorian_to_hijri(year: int, month: int, day: int):
     """تحويل تاريخ ميلادي إلى هجري (تقويم إسلامي مدني يقارب أم القرى)."""
     gy, gm, gd = year, month, day
@@ -348,9 +394,9 @@ def _split_village_hara(row) -> tuple[str, str]:
     return address, ""
 
 
-def _report_header_info(rows) -> dict:
-    """معلومات ترويسة الكشف: شهر الميلادي، السنة، الشهر الهجري وسنته، وشهر التحصيل السابق."""
-    month_key = None
+def _report_header_info(rows, selected_month: str | None = None) -> dict:
+    """معلومات ترويسة الكشف وفق الشهر المختار، أو وفق بيانات الصفوف عند عدم تحديده."""
+    month_key = (selected_month or "").strip() or None
     sample_date = None
     for row in rows:
         if not row.get("invoice_id"):
@@ -443,10 +489,21 @@ def _report_prev_month_key(db) -> str:
     return f"{year:04d}-{month:02d}"
 
 
-def _village_rows(db, only_unpaid: bool = False):
+def _village_rows(db, only_unpaid: bool = False, month_key: str | None = None):
     where = "WHERE 1=1"
     if only_unpaid:
         where += " AND COALESCE(i.remaining_amount, 0) > 0"
+
+    invoice_month_filter = ""
+    params = []
+    if month_key:
+        invoice_month_filter = """
+            AND substr(
+                COALESCE(NULLIF(TRIM(i2.month_label), ''), i2.invoice_date), 1, 7
+            ) = ?
+        """
+        params.append(month_key)
+
     rows = db.execute(
         f"""
         SELECT
@@ -488,12 +545,14 @@ def _village_rows(db, only_unpaid: bool = False):
             SELECT i2.id
             FROM invoices i2
             WHERE i2.subscriber_id = s.id
+            {invoice_month_filter}
             ORDER BY i2.id DESC
             LIMIT 1
         )
         {where}
         ORDER BY COALESCE(s.address, s.name), s.account_number
-        """
+        """,
+        params,
     ).fetchall()
     bucket = defaultdict(list)
     for row in rows:
@@ -505,8 +564,8 @@ def _village_rows(db, only_unpaid: bool = False):
     return bucket
 
 
-def _manual_collection_common_context(db, only_unpaid: bool = False):
-    villages = _village_rows(db, only_unpaid=only_unpaid)
+def _manual_collection_common_context(db, only_unpaid: bool = False, month_key: str | None = None):
+    villages = _village_rows(db, only_unpaid=only_unpaid, month_key=month_key)
     village_names = sorted(villages.keys())
     total_subscribers = sum(len(v) for v in villages.values())
     total_invoices = db.execute("SELECT COUNT(*) c FROM invoices").fetchone()["c"]
@@ -514,7 +573,7 @@ def _manual_collection_common_context(db, only_unpaid: bool = False):
     total_paid = db.execute("SELECT COALESCE(SUM(paid_amount), 0) s FROM invoices").fetchone()["s"]
     total_remaining = db.execute("SELECT COALESCE(SUM(remaining_amount), 0) s FROM invoices").fetchone()["s"]
     all_rows = [r for rows in villages.values() for r in rows]
-    header_info = _report_header_info(all_rows)
+    header_info = _report_header_info(all_rows, selected_month=month_key)
     return {
         "villages": villages,
         "village_names": village_names,
@@ -538,6 +597,8 @@ def _manual_collection_common_context(db, only_unpaid: bool = False):
 def manual_collection_home():
     db = get_db()
     ctx = _manual_collection_common_context(db, only_unpaid=False)
+    month_keys, selected_month = _resolve_collection_month(db, request.args.get("month"))
+    invoice_months = [{"key": key, "label": _month_display_label(key)} for key in month_keys]
     latest_unpaid = db.execute(
         """
         SELECT i.id, i.invoice_no, i.invoice_date, i.month_label, i.remaining_amount,
@@ -549,7 +610,13 @@ def manual_collection_home():
         LIMIT 20
         """
     ).fetchall()
-    return render_template("manual_collection.html", latest_unpaid=latest_unpaid, **ctx)
+    return render_template(
+        "manual_collection.html",
+        latest_unpaid=latest_unpaid,
+        invoice_months=invoice_months,
+        selected_month=selected_month,
+        **ctx,
+    )
 
 
 @manual_collection_bp.route("/manual-collection/readings")
@@ -605,19 +672,26 @@ def manual_collection_readings_pdf():
 def manual_collection_collections():
     db = get_db()
     village = request.args.get("village", "").strip()
+    month_keys, selected_month = _resolve_collection_month(db, request.args.get("month"))
+    invoice_months = [{"key": key, "label": _month_display_label(key)} for key in month_keys]
     show_received = request.args.get("show_received", "0") == "1"
     try:
         name_scale = float(request.args.get("name_scale", "100") or 100)
     except (TypeError, ValueError):
         name_scale = 100.0
     name_scale = max(80.0, min(140.0, name_scale))
-    ctx = _apply_village_filter(_manual_collection_common_context(db, only_unpaid=True), village)
+    ctx = _apply_village_filter(
+        _manual_collection_common_context(db, only_unpaid=True, month_key=selected_month),
+        village,
+    )
     return render_template(
         "manual_collections_sheet.html",
         print_mode=False,
         village=village,
         show_received=show_received,
         name_scale=name_scale,
+        invoice_months=invoice_months,
+        selected_month=selected_month,
         **ctx,
     )
 
@@ -629,6 +703,7 @@ def manual_collection_collections_pdf():
     import traceback
     db = get_db()
     village = request.args.get("village", "").strip()
+    month_keys, selected_month = _resolve_collection_month(db, request.args.get("month"))
     mode = (request.args.get("mode", "pdf") or "pdf").strip().lower()
     show_received = request.args.get("show_received", "0") == "1"
     try:
@@ -638,7 +713,10 @@ def manual_collection_collections_pdf():
     name_scale = max(80.0, min(140.0, name_scale))
 
     try:
-        ctx = _apply_village_filter(_manual_collection_common_context(db, only_unpaid=True), village)
+        ctx = _apply_village_filter(
+            _manual_collection_common_context(db, only_unpaid=True, month_key=selected_month),
+            village,
+        )
 
         if mode == "zip":
             def build(zf):
@@ -776,14 +854,27 @@ def bulk_payments():
     db = get_db()
     if request.method == "POST":
         invoice_ids = request.form.getlist("invoice_id")
+        selected_invoice_ids = set()
+        for value in request.form.getlist("selected_invoice_id"):
+            try:
+                selected_invoice_ids.add(int(value))
+            except (TypeError, ValueError):
+                continue
         amounts = request.form.getlist("amount")
         methods = request.form.getlist("method")
         notes_list = request.form.getlist("note")
         processed = 0
+
+        if not selected_invoice_ids:
+            flash("حدد الفواتير التي تريد تسديدها أولاً.", "warning")
+            return redirect(url_for("manual_collection.bulk_payments"))
+
         for idx, invoice_id in enumerate(invoice_ids):
             try:
                 inv_id = int(invoice_id)
             except Exception:
+                continue
+            if inv_id not in selected_invoice_ids:
                 continue
             try:
                 amount = float((amounts[idx] if idx < len(amounts) else "") or 0)
@@ -793,8 +884,22 @@ def bulk_payments():
                 continue
             method = (methods[idx] if idx < len(methods) else "نقداً") or "نقداً"
             note = (notes_list[idx] if idx < len(notes_list) else "") or ""
-            invoice = db.execute("SELECT * FROM invoices WHERE id=?", (inv_id,)).fetchone()
+            invoice = db.execute(
+                """
+                SELECT i.*
+                FROM invoices i
+                WHERE i.id = ?
+                  AND COALESCE(i.remaining_amount, 0) > 0
+                  AND i.id = (
+                      SELECT MAX(i2.id)
+                      FROM invoices i2
+                      WHERE i2.subscriber_id = i.subscriber_id
+                  )
+                """,
+                (inv_id,),
+            ).fetchone()
             if not invoice:
+                flash(f"تم تجاهل الفاتورة المحددة رقم {inv_id} لأنها لم تعد الأحدث أو لا يوجد عليها متبقٍ.", "warning")
                 continue
             try:
                 process_invoice_payment(
@@ -819,10 +924,15 @@ def bulk_payments():
     invoices = db.execute(
         """
         SELECT i.id, i.invoice_no, i.invoice_date, i.month_label, i.remaining_amount,
-               s.name subscriber_name, s.account_number, s.address, s.phone
+               s.name subscriber_name, s.account_number, s.village, s.address, s.phone
         FROM invoices i
         JOIN subscribers s ON s.id = i.subscriber_id
         WHERE COALESCE(i.remaining_amount, 0) > 0
+          AND i.id = (
+              SELECT MAX(i2.id)
+              FROM invoices i2
+              WHERE i2.subscriber_id = i.subscriber_id
+          )
         ORDER BY i.invoice_date DESC, i.id DESC
         LIMIT 50
         """
