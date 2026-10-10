@@ -4,179 +4,111 @@
   <meta charset="utf-8">
   <title>كشف تحصيل</title>
   <style>
-    @page {
-      size: A4 landscape;
-      margin: 6mm;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    html,
-    body {
-      margin: 0;
-      padding: 0;
-      direction: rtl;
+    @page { size: A4 landscape; margin: 6mm; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; direction: rtl;
       font-family: Tahoma, "Segoe UI", "Noto Naskh Arabic", "DejaVu Sans", Arial, sans-serif;
-      color: #111827;
-      background: #fff;
-      font-size: 10px;
-      line-height: 1.3;
+      color: #111827; background: #fff; font-size: 10px; line-height: 1.3;
     }
-
-    table {
-      border-collapse: collapse;
-      width: 100%;
-    }
-
-    td,
-    th {
-      border: 1px solid #94a3b8;
-      padding: 3px 4px;
-      vertical-align: middle;
-      text-align: center;
-    }
-
-    .sheet {
-      width: 100%;
-    }
-
-    .page-break {
-      page-break-after: always;
-      break-after: page;
-    }
-
-    /* ── سطر الترويسة الأول: القرية / كشف شهر / هجري ── */
-    .topline td {
-      font-size: 12px;
-    }
-
-    .topline .lbl {
-      background: #e2e8f0;
-      font-weight: 800;
-      color: #334155;
-      white-space: nowrap;
-    }
-
-    .topline .val {
-      font-weight: 800;
-      white-space: nowrap;
-    }
-
-    /* ── سطر الملخص: أشبه بسطر عدد المشتركين/الاستهلاك/الوحدات/المستلمة ── */
-    .summary td {
-      font-size: 11px;
-    }
-
-    .summary .lbl {
-      background: #f1f5f9;
-      font-weight: 800;
-      color: #475569;
-      white-space: nowrap;
-    }
-
-    .summary .val {
-      font-weight: 800;
-      white-space: nowrap;
-    }
-
-    /* ── جدول البيانات ── */
-    .data {
-      margin-top: 5px;
-    }
-
-    .data th {
-      background: #e2e8f0;
-      font-weight: 800;
-      font-size: 10px;
-      color: #1e293b;
-      overflow-wrap: anywhere;
-    }
-
-    .data td {
-      font-size: 9.5px;
-    }
-
-    .data td.name {
-      text-align: right;
-      font-weight: 700;
-      font-size: {{ "%.2f"|format(9.5 * ((name_scale or 100) / 100)) }}px;
-    }
-
-    .data td.strong {
-      font-weight: 800;
-    }
-
-    .data tr:nth-child(even) td {
-      background: #f8fafc;
-    }
-
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border: 1px solid #94a3b8; padding: 3px 4px; vertical-align: middle; text-align: center; }
+    .sheet { width: 100%; }
+    .page-break { page-break-after: always; break-after: page; }
+    .topline td { font-size: 12px; }
+    .topline .lbl { background: #e2e8f0; font-weight: 800; color: #334155; white-space: nowrap; }
+    .topline .val { font-weight: 800; white-space: nowrap; }
+    .summary { margin-top: 2px; }
+    .summary td { font-size: 11px; }
+    .summary .lbl { background: #f1f5f9; font-weight: 800; color: #475569; white-space: nowrap; }
+    .summary .val { font-weight: 800; white-space: nowrap; }
+    .data { margin-top: 5px; table-layout: fixed; }
+    .data thead { display: table-header-group; }
+    .data tbody { display: table-row-group; }
+    .data tr { break-inside: avoid; page-break-inside: avoid; }
+    .data th { background: #e2e8f0; font-weight: 800; font-size: 10px; color: #1e293b; overflow-wrap: anywhere; }
+    .data td { font-size: 9.5px; }
+    .data td.name { text-align: right; font-weight: 700; font-size: {{ "%.2f"|format(9.5 * ((name_scale or 100) / 100)) }}px; }
+    .data td.strong { font-weight: 800; }
+    .data tr:nth-child(even) td { background: #f8fafc; }
+    .data .header-container { border: 0 !important; padding: 0 0 4px !important; background: #fff !important; }
+    .data .header-container > table { margin: 0; }
+    .data .column-head th { break-inside: avoid; page-break-inside: avoid; }
     {% if print_styles is defined %}{% for key, cfg in print_styles.collection.items() %}
     [data-print-style="{{ key }}"] { background-color: {{ cfg.bg }} !important; color: {{ cfg.text }} !important; }
-    {% endfor %}{% endif %}
-    .received {
-      background: #fff7ed !important;
-    }
-    {% if print_styles is defined %}{% for key, cfg in print_styles.collection.items() %}
     .data th[data-print-style="{{ key }}"] { background-color: {{ cfg.bg }} !important; color: {{ cfg.text }} !important; }
     {% endfor %}{% endif %}
+    .received { background: #fff7ed !important; }
   </style>
 </head>
 <body>
-
 {% for village_name, rows in villages.items() %}
   {% set s = villages_summary.get(village_name, {'count': 0, 'units': 0, 'consumption_amount': 0, 'received': 0}) %}
   <div class="sheet">
+    {% if not (repeat_header|default(true)) %}
+      <table class="topline">
+        <tr>
+          <td class="lbl" data-print-style="topline_label">القرية</td>
+          <td class="val" data-print-style="topline_value">{{ village_name }}</td>
+          <td class="lbl" data-print-style="topline_label">كشف شهر</td>
+          <td class="val" data-print-style="topline_value">{{ report_month_name }}</td>
+          <td class="val" data-print-style="topline_value">{{ report_year }}</td>
+          <td class="lbl" data-print-style="topline_label">{{ hijri_month_name }}</td>
+          <td class="val" data-print-style="topline_value">{{ hijri_year }}</td>
+        </tr>
+      </table>
+      <table class="summary">
+        <tr>
+          <td class="lbl" data-print-style="summary_label">عدد المشتركين</td>
+          <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.count or 0) }}</td>
+          <td class="lbl" data-print-style="summary_label">اجمالي الاستهلاك</td>
+          <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.consumption_amount or 0) }}</td>
+          <td class="lbl" data-print-style="summary_label">اجمالي الوحدات</td>
+          <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.units or 0) }}</td>
+          <td class="lbl" data-print-style="summary_label">اجمالي المستلمة</td>
+          <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.received or 0) }}</td>
+        </tr>
+      </table>
+    {% endif %}
 
-    <!-- السطر الأول: القرية / كشف شهر / الهجري -->
-    <table class="topline">
-      <tr>
-        <td class="lbl" data-print-style="topline_label">القرية</td>
-        <td class="val" data-print-style="topline_value">{{ village_name }}</td>
-        <td class="lbl" data-print-style="topline_label">كشف شهر</td>
-        <td class="val" data-print-style="topline_value">{{ report_month_name }}</td>
-        <td class="val" data-print-style="topline_value">{{ report_year }}</td>
-        <td class="lbl" data-print-style="topline_label">{{ hijri_month_name }}</td>
-        <td class="val" data-print-style="topline_value">{{ hijri_year }}</td>
-      </tr>
-    </table>
-
-    <!-- السطر الثاني: الملخص -->
-    <table class="summary" style="margin-top:2px">
-      <tr>
-        <td class="lbl" data-print-style="summary_label">عدد المشتركين</td>
-        <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.count or 0) }}</td>
-        <td class="lbl" data-print-style="summary_label">اجمالي الاستهلاك</td>
-        <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.consumption_amount or 0) }}</td>
-        <td class="lbl" data-print-style="summary_label">اجمالي الوحدات</td>
-        <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.units or 0) }}</td>
-        <td class="lbl" data-print-style="summary_label">اجمالي المستلمة</td>
-        <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.received or 0) }}</td>
-      </tr>
-    </table>
-
-    <!-- جدول البيانات -->
     <table class="data">
       <colgroup>
-        <col style="width:3%">
-        <col style="width:5%">
-        <col style="width:6%">
-        <col style="width:6%">
-        <col style="width:7%">
-        <col style="width:20%">
-        <col style="width:5%">
-        <col style="width:5%">
-        <col style="width:6%">
-        <col style="width:7%">
-        <col style="width:7%">
-        <col style="width:7%">
-        <col style="width:6%">
-        <col style="width:4%">
-        <col style="width:6%">
+        <col style="width:3%"><col style="width:5%"><col style="width:6%"><col style="width:6%">
+        <col style="width:7%"><col style="width:20%"><col style="width:5%"><col style="width:5%">
+        <col style="width:6%"><col style="width:7%"><col style="width:7%"><col style="width:7%">
+        <col style="width:6%"><col style="width:4%"><col style="width:6%">
       </colgroup>
       <thead>
+        {% if repeat_header|default(true) %}
         <tr>
+          <th colspan="15" class="header-container">
+            <table class="topline">
+              <tr>
+                <td class="lbl" data-print-style="topline_label">القرية</td>
+                <td class="val" data-print-style="topline_value">{{ village_name }}</td>
+                <td class="lbl" data-print-style="topline_label">كشف شهر</td>
+                <td class="val" data-print-style="topline_value">{{ report_month_name }}</td>
+                <td class="val" data-print-style="topline_value">{{ report_year }}</td>
+                <td class="lbl" data-print-style="topline_label">{{ hijri_month_name }}</td>
+                <td class="val" data-print-style="topline_value">{{ hijri_year }}</td>
+              </tr>
+            </table>
+            <table class="summary">
+              <tr>
+                <td class="lbl" data-print-style="summary_label">عدد المشتركين</td>
+                <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.count or 0) }}</td>
+                <td class="lbl" data-print-style="summary_label">اجمالي الاستهلاك</td>
+                <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.consumption_amount or 0) }}</td>
+                <td class="lbl" data-print-style="summary_label">اجمالي الوحدات</td>
+                <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.units or 0) }}</td>
+                <td class="lbl" data-print-style="summary_label">اجمالي المستلمة</td>
+                <td class="val" data-print-style="summary_value">{{ "{:,.0f}".format(s.received or 0) }}</td>
+              </tr>
+            </table>
+          </th>
+        </tr>
+        {% endif %}
+        <tr class="column-head">
           <th data-print-style="table_header">م</th>
           <th data-print-style="table_header">رقم الحساب</th>
           <th data-print-style="table_header">القرية</th>
@@ -218,13 +150,8 @@
         {% endfor %}
       </tbody>
     </table>
-
   </div>
-
-  {% if not loop.last %}
-    <div class="page-break"></div>
-  {% endif %}
+  {% if not loop.last %}<div class="page-break"></div>{% endif %}
 {% endfor %}
-
 </body>
 </html>
