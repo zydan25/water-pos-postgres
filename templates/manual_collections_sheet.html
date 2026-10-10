@@ -154,13 +154,23 @@ body {
 
     <div class="collection-options p-3 mt-3 no-print">
       <div class="row g-3 align-items-center">
-        <div class="col-lg-5">
+        <div class="col-lg-4">
+          <label class="form-label fw-semibold mb-1" for="sheetMonthSelect">شهر كشف التحصيل</label>
+          <select class="form-select" id="sheetMonthSelect">
+            {% for month in invoice_months %}
+            <option value="{{ month.key }}" {% if month.key == selected_month %}selected{% endif %}>{{ month.label }}</option>
+            {% else %}
+            <option value="">لا توجد فواتير</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-lg-3">
           <div class="form-check form-switch mb-0">
             <input class="form-check-input" type="checkbox" role="switch" id="sheetShowReceived" {% if show_received %}checked{% endif %}>
-            <label class="form-check-label fw-semibold" for="sheetShowReceived">إظهار المستلم للشهر الحالي</label>
+            <label class="form-check-label fw-semibold" for="sheetShowReceived">إظهار المستلم للشهر المحدد</label>
           </div>
         </div>
-        <div class="col-lg-7">
+        <div class="col-lg-5">
           <div class="d-flex align-items-center gap-2">
             <span class="small fw-semibold text-nowrap">حجم أسماء المشتركين</span>
             <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle" id="sheetNameMinus">−</button>
@@ -298,8 +308,10 @@ const villageValue = "{{ village|default('')|replace('"', '\\\\"') }}";
 function collectionQuery(mode) {
   const showReceived = document.getElementById('sheetShowReceived')?.checked ? '1' : '0';
   const nameScale = document.getElementById('sheetNameScale')?.value || '100';
+  const selectedMonth = document.getElementById('sheetMonthSelect')?.value || '';
   const parts = [];
   if (villageValue) parts.push(`village=${encodeURIComponent(villageValue)}`);
+  if (selectedMonth) parts.push(`month=${encodeURIComponent(selectedMonth)}`);
   parts.push(`mode=${mode}`);
   parts.push(`show_received=${showReceived}`);
   parts.push(`name_scale=${nameScale}`);
@@ -329,6 +341,12 @@ function syncSheetOptions() {
 }
 document.getElementById('sheetShowReceived')?.addEventListener('change', syncSheetOptions);
 sheetNameScale?.addEventListener('change', syncSheetOptions);
+document.getElementById('sheetMonthSelect')?.addEventListener('change', function () {
+  const url = new URL(window.location.href);
+  if (this.value) url.searchParams.set('month', this.value);
+  else url.searchParams.delete('month');
+  window.location.href = url.toString();
+});
 document.getElementById('sheetNameMinus')?.addEventListener('click', () => {
   if (!sheetNameScale) return;
   sheetNameScale.value = String(Math.max(80, parseFloat(sheetNameScale.value || '100') - 5));
