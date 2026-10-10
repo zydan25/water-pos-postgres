@@ -877,9 +877,9 @@ def bulk_payments():
         if not selected_invoice_ids:
             flash("حدد الفواتير التي تريد تسديدها أولاً.", "warning")
             redirect_location_id = request.form.get("location_id", type=int)
-        if redirect_location_id:
-            return redirect(url_for("manual_collection.bulk_payments", location_id=redirect_location_id))
-        return redirect(url_for("manual_collection.bulk_payments"))
+            if redirect_location_id:
+                return redirect(url_for("manual_collection.bulk_payments", location_id=redirect_location_id))
+            return redirect(url_for("manual_collection.bulk_payments"))
 
         for idx, invoice_id in enumerate(invoice_ids):
             try:
@@ -942,6 +942,9 @@ def bulk_payments():
                 f"لم يُسجل التسديد للفواتير {invalid_list}{suffix} لأن مبلغ التسديد فارغ أو غير صحيح. أدخل مبلغًا موجبًا لكل فاتورة محددة.",
                 "warning",
             )
+        redirect_location_id = request.form.get("location_id", type=int)
+        if redirect_location_id:
+            return redirect(url_for("manual_collection.bulk_payments", location_id=redirect_location_id))
         return redirect(url_for("manual_collection.bulk_payments"))
 
     location_tree = location_children_map()
