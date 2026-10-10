@@ -952,7 +952,7 @@ def bulk_payments():
     location_by_id = {int(row["id"]): row for row in location_rows}
     location_id = request.args.get("location_id", type=int)
     selected_location = location_by_id.get(location_id) if location_id else None
-    if selected_location and not selected_location.get("active"):
+    if location_id and (not selected_location or not selected_location.get("active")):
         location_id = None
         selected_location = None
 
