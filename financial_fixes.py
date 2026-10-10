@@ -7,6 +7,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Iterable
 import io
+import math
 import zipfile
 
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, send_file, session, url_for
@@ -869,6 +870,7 @@ def bulk_payments():
         methods = request.form.getlist("method")
         notes_list = request.form.getlist("note")
         processed = 0
+        invalid_amount_ids = []
 
         if not selected_invoice_ids:
             flash("حدد الفواتير التي تريد تسديدها أولاً.", "warning")
@@ -885,7 +887,8 @@ def bulk_payments():
                 amount = float((amounts[idx] if idx < len(amounts) else "") or 0)
             except Exception:
                 amount = 0
-            if amount <= 0:
+            if not math.isfinite(amount) or amount <= 0:
+                invalid_amount_ids.append(inv_id)
                 continue
             method = (methods[idx] if idx < len(methods) else "نقداً") or "نقداً"
             note = (notes_list[idx] if idx < len(notes_list) else "") or ""
@@ -923,27 +926,42 @@ def bulk_payments():
             except Exception as exc:
                 flash(f"تعذر تسجيل السداد للفاتورة {invoice['invoice_no']}: {exc}", "danger")
         db.commit()
-        flash(f"تم تسجيل {processed} سداد/سداداً متعددًا بنجاح.", "success" if processed else "warning")
+        if processed:
+            flash(f"تم تسجيل {processed} سداد/سداداً متعددًا بنجاح.", "success")
+        elif not invalid_amount_ids:
+            flash("لم يتم تسجيل أي دفعة.", "warning")
+        if invalid_amount_ids:
+            invalid_list = "، ".join(str(value) for value in invalid_amount_ids[:20])
+            suffix = " ..." if len(invalid_amount_ids) > 20 else ""
+            flash(
+                f"لم يُسجل التسديد للفواتير {invalid_list}{suffix} لأن مبلغ التسديد فارغ أو غير صحيح. أدخل مبلغًا موجبًا لكل فاتورة محددة.",
+                "warning",
+            )
         return redirect(url_for("manual_collection.bulk_payments"))
 
     invoices = db.execute(
         """
-        SELECT i.id, i.invoice_no, i.invoice_date, i.month_label, i.remaining_amount,
+        SELECT i.id, i.invoice_no, i.invoice_date, i.month_label,
+               i.total_amount, i.paid_amount, i.remaining_amount,
                s.name subscriber_name, s.account_number, s.village, s.address, s.phone
         FROM invoices i
         JOIN subscribers s ON s.id = i.subscriber_id
-        WHERE COALESCE(i.remaining_amount, 0) > 0
-          AND i.id = (
-              SELECT MAX(i2.id)
-              FROM invoices i2
-              WHERE i2.subscriber_id = i.subscriber_id
-          )
+        WHERE i.id = (
+            SELECT MAX(i2.id)
+            FROM invoices i2
+            WHERE i2.subscriber_id = i.subscriber_id
+        )
         ORDER BY i.invoice_date DESC, i.id DESC
-        LIMIT 50
         """
     ).fetchall()
+    outstanding_invoice_count = sum(
+        1 for invoice in invoices if float(invoice["remaining_amount"] or 0) > 0
+    )
+    paid_invoice_count = len(invoices) - outstanding_invoice_count
     return render_template(
         "manual_bulk_payments.html",
         invoices=invoices,
+        outstanding_invoice_count=outstanding_invoice_count,
+        paid_invoice_count=paid_invoice_count,
         currency=get_setting("currency_name", DEFAULT_SETTINGS["currency_name"]),
     )
