@@ -2,27 +2,63 @@
 {% extends "base.html" %}
 {% block head %}
 <style>
-.hero-card {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-  color: #fff;
+.manual-collection-page{
+  --mc-ink:#172033;--mc-muted:#718096;--mc-border:#e5ebf3;--mc-blue:#2563eb;
+  padding-bottom:32px;
 }
-.action-card {
-  transition: transform .15s ease, box-shadow .15s ease;
-  border: 0;
+.manual-collection-page .card{border-color:var(--mc-border);box-shadow:0 7px 24px rgba(15,23,42,.045)!important}
+.manual-collection-page .manual-hero{
+  position:relative;overflow:hidden;border:0!important;
+  background:radial-gradient(circle at 8% 0%,rgba(59,130,246,.22),transparent 34%),linear-gradient(125deg,#111827 0%,#1e293b 54%,#263b5e 100%);
+  color:#fff;padding:clamp(20px,3vw,32px)!important
 }
-.action-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 26px rgba(15, 23, 42, .12);
+.manual-collection-page .manual-hero:after{
+  content:"";position:absolute;left:-60px;bottom:-110px;width:260px;height:260px;border:1px solid rgba(255,255,255,.09);border-radius:50%;
+  box-shadow:0 0 0 26px rgba(255,255,255,.025),0 0 0 56px rgba(255,255,255,.02);pointer-events:none
 }
-.badge-soft {
-  background: rgba(255,255,255,.14);
-  color: #fff;
+.manual-collection-page .manual-hero h3{font-weight:900;letter-spacing:-.025em;font-size:clamp(1.35rem,2.5vw,2rem)}
+.manual-collection-page .manual-hero .d-flex{position:relative;z-index:1}
+.manual-collection-page .badge-soft{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);color:#f8fafc;padding:9px 12px;font-size:.76rem;font-weight:750;backdrop-filter:blur(8px)}
+.manual-collection-page .manual-report-controls{padding:clamp(15px,2.2vw,24px)!important;border-radius:22px!important;background:#fff}
+.manual-collection-page .manual-report-controls>.row:first-child{row-gap:12px}
+.manual-collection-page .form-label{color:#46546a;font-size:.8rem}
+.manual-collection-page .form-select,.manual-collection-page .form-control{min-height:44px;border:1px solid #dce4ef;border-radius:12px;box-shadow:0 1px 2px rgba(15,23,42,.02)}
+.manual-collection-page .form-select:focus,.manual-collection-page .form-control:focus{border-color:#93b8fb;box-shadow:0 0 0 3px rgba(37,99,235,.09)}
+.manual-collection-page .manual-option-panel{background:linear-gradient(145deg,#f8fafc,#f5f8fc)!important;border:1px solid #e4eaf2!important;border-radius:17px!important;padding:18px!important}
+.manual-collection-page .manual-option-panel .form-check{background:#fff;border:1px solid #e4eaf2;border-radius:12px;padding:10px 12px}
+.manual-collection-page .manual-option-panel .form-check-input{float:none;margin:0}
+.manual-collection-page .manual-option-panel .form-check-label{font-size:.76rem;color:#435169}
+.manual-collection-page .manual-option-panel .form-range{accent-color:var(--mc-blue)}
+.manual-collection-page .btn{border-radius:11px;font-weight:750;transition:transform .15s ease,box-shadow .15s ease}
+.manual-collection-page .btn-primary{box-shadow:0 5px 12px rgba(37,99,235,.14)}
+.manual-collection-page .manual-actions-grid{margin-bottom:20px!important}
+.manual-collection-page .manual-action-tile{border:1px solid var(--mc-border)!important;border-radius:19px!important;padding:19px!important;min-height:155px;display:flex;flex-direction:column;align-items:flex-start;gap:5px;background:linear-gradient(150deg,#fff,#fbfcff);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.manual-collection-page .manual-action-tile:hover{transform:translateY(-3px);border-color:#bfd2f7!important;box-shadow:0 14px 30px rgba(37,99,235,.09)!important}
+.manual-collection-page .manual-action-icon{width:48px;height:48px;border-radius:15px;background:#eef4ff;display:flex;align-items:center;justify-content:center;font-size:1.55rem!important;margin-bottom:7px}
+.manual-collection-page .manual-action-tile .fw-bold{font-size:.96rem;color:var(--mc-ink)}
+.manual-collection-page .manual-section-card{padding:clamp(16px,2.2vw,24px)!important;border-radius:20px!important}
+.manual-collection-page .manual-section-heading{font-weight:900;color:var(--mc-ink);letter-spacing:-.01em}
+.manual-collection-page .manual-invoice-list table{margin-bottom:0}
+.manual-collection-page .manual-invoice-list thead th{background:#f5f8fc;color:#65748a;font-size:.75rem;font-weight:850;border-bottom:1px solid #e3eaf3;white-space:nowrap;padding:13px 11px}
+.manual-collection-page .manual-invoice-list tbody td{padding:12px 11px;border-color:#edf1f6;color:#334155;font-size:.82rem}
+.manual-collection-page .manual-invoice-list tbody tr:hover{background:#f8fbff}
+.manual-collection-page .manual-invoice-list .table-responsive{border:1px solid #e7edf4;border-radius:14px}
+.manual-collection-page .manual-reset-card{background:linear-gradient(145deg,#fffafa,#fff)!important;border:1px solid #fecaca!important}
+.manual-collection-page .manual-village-chip{border-radius:10px!important;text-align:right!important;padding:9px 11px!important;background:#f8fafc!important;border-color:#e4eaf2!important;color:#44536b!important}
+.manual-collection-page .manual-village-chip:hover{background:#edf4ff!important;border-color:#c7d9fa!important;color:#1d4ed8!important}
+@media(max-width:767px){
+ .manual-collection-page{padding-left:4px;padding-right:4px}
+ .manual-collection-page .manual-hero{border-radius:19px!important;padding:18px!important}
+ .manual-collection-page .manual-hero .badge{font-size:.68rem}
+ .manual-collection-page .manual-option-panel .form-check{width:100%}
+ .manual-collection-page .manual-action-tile{min-height:130px;padding:15px!important}
+ .manual-collection-page .manual-action-icon{width:42px;height:42px;border-radius:13px}
 }
 </style>
 {% endblock %}
 {% block content %}
-<div class="container-fluid">
-  <div class="card hero-card p-4 mb-3 rounded-4 shadow-sm">
+<div class="container-fluid manual-collection-page">
+  <div class="card hero-card manual-hero p-4 mb-3 rounded-4 shadow-sm">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
       <div>
         <div class="opacity-75 small">{{ organization_name }}</div>
@@ -39,7 +75,7 @@
     </div>
   </div>
 
-  <div class="card rounded-4 p-3 mb-3 border-0 shadow-sm">
+  <div class="card manual-report-controls rounded-4 p-3 mb-3 border-0 shadow-sm">
     <div class="row g-3 align-items-end">
       <div class="col-lg-4">
         <label class="form-label fw-semibold mb-1">اختر القرية / المنطقة</label>
@@ -66,7 +102,7 @@
 
     <div class="row g-3 mt-1">
       <div class="col-12">
-        <div class="border rounded-4 p-3 bg-light-subtle">
+        <div class="border rounded-4 p-3 bg-light-subtle manual-option-panel">
           <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
             <div>
               <div class="fw-bold">خيارات كشف التحصيل</div>
@@ -109,11 +145,11 @@
     </div>
   </div>
 
-  <div class="row g-3 mb-3">
+  <div class="row g-3 mb-3 manual-actions-grid">
     <div class="col-md-3">
       <a href="{{ url_for('manual_collection.manual_collection_readings') }}" class="text-decoration-none">
-        <div class="card action-card p-3 h-100 rounded-4 shadow-sm">
-          <div class="fs-3">🧾</div>
+        <div class="card action-card manual-action-tile p-3 h-100 rounded-4 shadow-sm">
+          <div class="fs-3 manual-action-icon">🧾</div>
           <div class="fw-bold">كشف قراءة</div>
           <div class="small text-muted">عرض مرتب حسب القرية ثم طباعة PDF.</div>
         </div>
@@ -121,8 +157,8 @@
     </div>
     <div class="col-md-3">
       <a id="openCollectionsSheet" href="{{ url_for('manual_collection.manual_collection_collections', month=selected_month) }}" class="text-decoration-none">
-        <div class="card action-card p-3 h-100 rounded-4 shadow-sm">
-          <div class="fs-3">💰</div>
+        <div class="card action-card manual-action-tile p-3 h-100 rounded-4 shadow-sm">
+          <div class="fs-3 manual-action-icon">💰</div>
           <div class="fw-bold">كشف تحصيل</div>
           <div class="small text-muted">إظهار الفواتير غير المسددة فقط.</div>
         </div>
@@ -130,8 +166,8 @@
     </div>
     <div class="col-md-3">
       <a href="{{ url_for('invoices_bulk_readings') }}" class="text-decoration-none">
-        <div class="card action-card p-3 h-100 rounded-4 shadow-sm">
-          <div class="fs-3">📡</div>
+        <div class="card action-card manual-action-tile p-3 h-100 rounded-4 shadow-sm">
+          <div class="fs-3 manual-action-icon">📡</div>
           <div class="fw-bold">تسجيل قراءات متعددة</div>
           <div class="small text-muted">انتقال مباشر لواجهة القراءات الجماعية.</div>
         </div>
@@ -139,8 +175,8 @@
     </div>
     <div class="col-md-3">
       <a href="{{ url_for('manual_collection.bulk_payments') }}" class="text-decoration-none">
-        <div class="card action-card p-3 h-100 rounded-4 shadow-sm">
-          <div class="fs-3">🧮</div>
+        <div class="card action-card manual-action-tile p-3 h-100 rounded-4 shadow-sm">
+          <div class="fs-3 manual-action-icon">🧮</div>
           <div class="fw-bold">تسديدات متعددة</div>
           <div class="small text-muted">تسجيل الدفعات عبر جدول واحد.</div>
         </div>
@@ -150,15 +186,15 @@
 
   <div class="row g-3 mb-3">
     <div class="col-lg-7">
-      <div class="card p-4 rounded-4 shadow-sm">
+      <div class="card manual-section-card p-4 rounded-4 shadow-sm">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-          <h5 class="mb-0">كشف ملخصات حسب القرية</h5>
+          <h5 class="mb-0 manual-section-heading">كشف ملخصات حسب القرية</h5>
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('manual_collection.manual_collection_summary') }}">عرض الملخصات</a>
         </div>
         <div class="row g-2">
           {% for village in village_names %}
           <div class="col-md-4 col-lg-3">
-            <a class="btn btn-light border w-100 text-start" href="{{ url_for('manual_collection.manual_collection_readings', village=village) }}">{{ village }}</a>
+            <a class="btn btn-light border w-100 text-start manual-village-chip" href="{{ url_for('manual_collection.manual_collection_readings', village=village) }}">{{ village }}</a>
           </div>
           {% endfor %}
         </div>
@@ -166,7 +202,7 @@
     </div>
     <div class="col-lg-5">
       {% if g.user and g.user.role and g.user.role|lower == 'admin' %}
-      <div class="card p-4 rounded-4 shadow-sm border-danger">
+      <div class="card manual-section-card manual-reset-card p-4 rounded-4 shadow-sm border-danger">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h5 class="mb-0 text-danger">تصفير مالي آمن</h5>
           <span class="badge text-bg-danger">Admin</span>
@@ -189,8 +225,8 @@
     </div>
   </div>
 
-  <div class="card p-4 rounded-4 shadow-sm mb-3">
-    <h5 class="mb-3">آخر الفواتير غير المسددة</h5>
+  <div class="card manual-section-card manual-invoice-list p-4 rounded-4 shadow-sm mb-3">
+    <h5 class="mb-3 manual-section-heading">آخر الفواتير غير المسددة</h5>
     <div class="table-responsive">
       <table class="table table-sm align-middle">
         <thead>

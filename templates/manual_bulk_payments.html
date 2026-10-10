@@ -4,6 +4,11 @@
 <link rel="stylesheet" href="{{ url_for('meter_management.static', filename='css/bulk_readings.css') }}">
 <style>
   .bulk-payment-page .bulk-reading-subtitle{max-width:780px}
+  .bulk-payment-location-filter{position:relative;margin-top:16px;max-width:720px}
+  .bulk-payment-location-filter .bulk-control-label{font-size:.72rem;font-weight:800;color:#637187;margin-bottom:6px}
+  .bulk-payment-location-filter{margin-bottom:0}
+  .bulk-payment-location-filter .bulk-location-menu{max-height:420px}
+  .bulk-payment-location-filter .bulk-location-select{min-width:0}
   .bulk-payment-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%}
   .bulk-payment-search{flex:1;min-width:240px}
   .bulk-payment-select-all{display:flex;align-items:center;gap:8px;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;background:#f8fafc;font-size:.75rem;font-weight:800;color:#435169;white-space:nowrap}
@@ -54,6 +59,28 @@
         <i class="bi bi-arrow-return-right me-1"></i>رجوع
       </a>
     </div>
+    <form method="get" id="paymentLocationFilterForm" class="bulk-payment-location-filter">
+      <div class="bulk-control-label">تصفية حسب الموقع</div>
+      <div class="bulk-location-wrap">
+        <button type="button" id="paymentLocationTrigger" class="bulk-location-trigger">
+          <span class="bulk-location-value">
+            <i class="bi bi-geo-alt me-1"></i>
+            <span id="paymentLocationValue">{{ selected_location_path or 'كل المواقع' }}</span>
+          </span>
+          <i class="bi bi-chevron-down"></i>
+        </button>
+        <input type="hidden" name="location_id" id="paymentLocationId" value="{{ location_id or '' }}">
+        <div id="paymentLocationMenu" class="bulk-location-menu" hidden>
+          <input id="paymentLocationSearch" class="form-control bulk-location-search" placeholder="ابحث عن الوحدة أو القرية أو المنطقة...">
+          <button type="button" class="bulk-location-all" id="paymentLocationAll">
+            <span><i class="bi bi-grid-3x3-gap me-1"></i>كل المواقع</span>
+            <span class="bulk-location-count">الكل</span>
+          </button>
+          <div id="paymentLocationTree"></div>
+        </div>
+      </div>
+    </form>
+
     <div class="bulk-summary">
       <div class="bulk-summary-item primary">
         <small>أحدث فواتير المشتركين</small><strong id="paymentTotal">{{ invoices|length }}</strong>
@@ -82,7 +109,6 @@
         </button>
       </div>
       <select id="paymentSort" class="form-select form-select-sm bulk-payment-sort" aria-label="فرز بطاقات التسديدات">
-        <option value="location">فرز حسب: القرية / المنطقة</option>
         <option value="remaining_desc">الأكثر متبقيًا</option>
         <option value="remaining_asc">الأقل متبقيًا</option>
         <option value="paid_desc">الأكثر تسديدًا</option>
@@ -103,13 +129,14 @@
   </div>
 
   <form method="post" id="bulkPaymentsForm">
+    <input type="hidden" name="location_id" value="{{ location_id or '' }}">
     <div id="bulkPaymentGrid" class="bulk-reading-grid">
       {% for inv in invoices %}
       <article class="bulk-reading-card"
-        data-search="{{ (inv.subscriber_name ~ ' ' ~ (inv.account_number or '') ~ ' ' ~ (inv.invoice_no or '') ~ ' ' ~ (inv.village or '') ~ ' ' ~ (inv.address or '') ~ ' ' ~ (inv.month_label or inv.invoice_date or ''))|lower }}"
+        data-search="{{ (inv.subscriber_name ~ ' ' ~ (inv.account_number or '') ~ ' ' ~ (inv.invoice_no or '') ~ ' ' ~ (inv.location_path or inv.water_location_name or inv.village or '') ~ ' ' ~ (inv.address or '') ~ ' ' ~ (inv.month_label or inv.invoice_date or ''))|lower }}"
         data-name="{{ (inv.subscriber_name or '')|lower }}"
         data-account="{{ (inv.account_number or '')|lower }}"
-        data-location="{{ (inv.village or inv.address or '')|lower }}"
+        data-location="{{ (inv.location_path or inv.water_location_name or inv.village or inv.address or '')|lower }}"
         data-remaining="{{ inv.remaining_amount or 0 }}"
         data-paid="{{ inv.paid_amount or 0 }}"
         data-total="{{ inv.total_amount or 0 }}"
@@ -134,8 +161,8 @@
             <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">مسددة بالكامل</span>
             {% endif %}
           </div>
-          <div class="bulk-reading-location bulk-payment-location" title="{{ inv.village or inv.address or 'غير مصنف' }}">
-            <i class="bi bi-geo-alt"></i>{{ inv.village or inv.address or 'غير مصنف' }}
+          <div class="bulk-reading-location bulk-payment-location" title="{{ inv.location_path or inv.water_location_name or inv.village or inv.address or 'غير مصنف' }}">
+            <i class="bi bi-geo-alt"></i>{{ inv.location_path or inv.water_location_name or inv.village or inv.address or 'غير مصنف' }}
           </div>
         </div>
 
@@ -231,6 +258,14 @@
   const amountTotal=document.getElementById('paymentAmountTotal');
   const resultsCount=document.getElementById('paymentResultsCount');
   const saveHint=document.getElementById('paymentSaveHint');
+  const locationTrigger=document.getElementById('paymentLocationTrigger');
+  const locationMenu=document.getElementById('paymentLocationMenu');
+  const locationSearch=document.getElementById('paymentLocationSearch');
+  const locationTree=document.getElementById('paymentLocationTree');
+  const locationIdInput=document.getElementById('paymentLocationId');
+  const locationFilterForm=document.getElementById('paymentLocationFilterForm');
+  const locationValue=document.getElementById('paymentLocationValue');
+  const treeData={{ location_tree|tojson }};
 
   function visibleCards(){return cards.filter(card=>card.style.display!=='none')}
   function formatMoney(value){return (Number(value)||0).toLocaleString('en-US',{maximumFractionDigits:2})}
@@ -268,7 +303,7 @@
     updateSelection();
   }
   function sortCards(){
-    const key=sort?.value||'location';
+    const key=sort?.value||'remaining_desc';
     const number=(card,field)=>Number(card.dataset[field]||0)||0;
     cards.sort((a,b)=>{
       if(key==='remaining_desc')return number(b,'remaining')-number(a,'remaining');
@@ -284,6 +319,79 @@
     cards.forEach(card=>grid.appendChild(card));
     applySearch();
   }
+  function closeLocationMenu(){if(locationMenu)locationMenu.hidden=true}
+  locationTrigger?.addEventListener('click',function(){
+    locationMenu.hidden=!locationMenu.hidden;
+    if(!locationMenu.hidden)locationSearch?.focus();
+  });
+  document.addEventListener('click',function(e){
+    if(!e.target.closest('.bulk-payment-location-filter'))closeLocationMenu();
+  });
+  function escapeHtml(value){
+    return String(value).replace(/[&<>"']/g,function(ch){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch];
+    });
+  }
+  function nodeMatches(node,term,path){
+    const hay=(path+' '+(node.name||'')+' '+(node.code||'')+' '+(node.location_type||'')).toLowerCase();
+    return !term||hay.includes(term);
+  }
+  function subtreeMatches(node,term,path){
+    return nodeMatches(node,term,path)||(node.children||[]).some(child=>subtreeMatches(child,term,path+' / '+(child.name||'')));
+  }
+  function buildLocationNode(node,parent,path){
+    const fullPath=path?path+' / '+node.name:node.name;
+    const wrap=document.createElement('div');wrap.className='bulk-location-node';
+    const row=document.createElement('div');row.className='bulk-location-row';
+    row.style.paddingRight=Math.min(6+((node.depth||0)*6),42)+'px';
+    const children=node.children||[];
+    const toggle=document.createElement('button');toggle.type='button';toggle.className='bulk-location-toggle';
+    toggle.innerHTML=children.length?'<i class="bi bi-chevron-left"></i>':'<span></span>';
+    row.appendChild(toggle);
+    const choose=document.createElement('button');choose.type='button';choose.className='bulk-location-select';
+    choose.innerHTML='<i class="bi bi-geo-alt me-1"></i><span>'+escapeHtml(node.name||'')+'</span>';
+    choose.title=fullPath;row.appendChild(choose);
+    const type=document.createElement('span');type.className='bulk-location-type';type.textContent=node.location_type||'موقع';row.appendChild(type);
+    const count=document.createElement('span');count.className='bulk-location-count';count.textContent=String(node.subscriber_count||0);row.appendChild(count);
+    wrap.appendChild(row);
+    if(children.length){
+      const childrenWrap=document.createElement('div');childrenWrap.className='bulk-location-children';childrenWrap.hidden=true;
+      children.forEach(child=>buildLocationNode(child,childrenWrap,fullPath));wrap.appendChild(childrenWrap);
+      toggle.addEventListener('click',function(e){
+        e.preventDefault();e.stopPropagation();
+        const closed=childrenWrap.hidden;childrenWrap.hidden=!closed;
+        toggle.innerHTML=closed?'<i class="bi bi-chevron-down"></i>':'<i class="bi bi-chevron-left"></i>';
+      });
+    }else toggle.disabled=true;
+    choose.addEventListener('click',function(){
+      locationIdInput.value=node.id;
+      locationValue.textContent=fullPath;
+      closeLocationMenu();
+      locationFilterForm?.requestSubmit();
+    });
+    parent.appendChild(wrap);
+  }
+  function renderLocationTree(term){
+    if(!locationTree)return;
+    locationTree.innerHTML='';const normalized=(term||'').trim().toLowerCase();
+    treeData.forEach(node=>{if(subtreeMatches(node,normalized,node.name||''))buildLocationNode(node,locationTree,'')});
+    if(normalized){
+      locationTree.querySelectorAll('.bulk-location-children').forEach(el=>el.hidden=false);
+      locationTree.querySelectorAll('.bulk-location-toggle').forEach(btn=>{if(!btn.disabled)btn.innerHTML='<i class="bi bi-chevron-down"></i>'});
+    }
+    if(!locationTree.children.length){
+      const empty=document.createElement('div');empty.className='small text-muted text-center py-3';empty.textContent='لا توجد نتائج.';locationTree.appendChild(empty);
+    }
+  }
+  renderLocationTree('');
+  locationSearch?.addEventListener('input',function(){renderLocationTree(this.value)});
+  document.getElementById('paymentLocationAll')?.addEventListener('click',function(){
+    locationIdInput.value='';
+    locationValue.textContent='كل المواقع';
+    closeLocationMenu();
+    locationFilterForm?.requestSubmit();
+  });
+
   boxes.forEach(box=>box.addEventListener('change',updateSelection));
   grid.querySelectorAll('input[name="amount"]').forEach(input=>input.addEventListener('input',updateSelection));
   selectAll?.addEventListener('change',function(){
